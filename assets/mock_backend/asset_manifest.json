@@ -1,0 +1,15 @@
+{
+  "halloween_2026": {
+    "banner": "assets/themes/halloween_banner.png",
+    "particles": "assets/themes/halloween_embers.png"
+  },
+  "default": {
+    "banner": "assets/themes/default_banner.png"
+  },
+  "comeback": {
+    "banner": "assets/themes/comeback_banner.png"
+  },
+  "whale": {
+    "banner": "assets/themes/whale_banner.png"
+  }
+}

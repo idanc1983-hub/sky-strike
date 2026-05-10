@@ -1,0 +1,42 @@
+name: skystrike
+description: Sky Strike — Aerial Combat Mobile Game
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flame: ^1.18.0
+  shared_preferences: ^2.3.2
+  provider: ^6.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/backgrounds/
+    - assets/jets/
+    - assets/enemies/
+    - assets/ui/
+    - assets/bullets/
+    - assets/themes/
+    - assets/mock_backend/
+    # Power-up drop orbs (256×256 source → rendered 56×56 on canvas)
+    - assets/ui/pu_bomb_drop.png
+    - assets/ui/pu_laser_drop.png
+    - assets/ui/pu_magnet_drop.png
+    - assets/ui/pu_ghost_drop.png
+    - assets/ui/pu_freeze_drop.png
+    # Power-up tray slot icons (128×128 source → rendered 34×34 in slot)
+    - assets/ui/pu_bomb_slot.png
+    - assets/ui/pu_laser_slot.png
+    - assets/ui/pu_magnet_slot.png
+    - assets/ui/pu_ghost_slot.png
+    - assets/ui/pu_freeze_slot.png

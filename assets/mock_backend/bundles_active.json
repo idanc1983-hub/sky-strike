@@ -1,0 +1,240 @@
+{
+  "fetchedAt": "2026-05-06T00:00:00Z",
+  "bundles": [
+    {
+      "id": "halloween_2026_starter",
+      "localizationKey": "bundle.halloween.starter.title",
+      "displayName": "Halloween Hunt Starter",
+      "displaySubtitle": "Limited-time spooky kit",
+      "theme": {
+        "themeId": "halloween_2026",
+        "bannerAsset": "assets/themes/halloween_banner.png",
+        "accentColorHex": "#EF9F27",
+        "backgroundColorHex": "#1a0a2a",
+        "particleEffect": "embers"
+      },
+      "contents": [
+        {
+          "type": "gems",
+          "count": 500,
+          "iconAsset": "assets/ui/icon_gem.png"
+        },
+        {
+          "type": "powerup",
+          "itemId": "bomb",
+          "count": 3,
+          "iconAsset": "assets/ui/pu_bomb_slot.png"
+        },
+        {
+          "type": "jet_skin",
+          "itemId": "phantom_halloween",
+          "count": 1,
+          "iconAsset": "assets/jets/jet_phantom.png"
+        }
+      ],
+      "price": {
+        "type": "iap",
+        "iapProductId": "com.skystrike.halloween_starter",
+        "usdEquivalent": 4.99,
+        "compareUsd": 14.99
+      },
+      "startsAt": "2026-04-25T00:00:00Z",
+      "endsAt": "2026-05-31T23:59:59Z",
+      "targetSegments": [],
+      "purchaseLimit": 1,
+      "cooldownAfterPurchaseHours": null,
+      "priority": 100,
+      "assetManifest": [
+        "assets/themes/halloween_banner.png",
+        "assets/themes/halloween_embers.png"
+      ],
+      "experimentKey": "halloween_hero_v2",
+      "analyticsTag": "shop_bundle_halloween_starter",
+      "prerequisites": [],
+      "badgeText": "LIMITED"
+    },
+    {
+      "id": "daily_gem_pack",
+      "localizationKey": "bundle.daily.gem_pack.title",
+      "displayName": "Daily Coin Crate",
+      "displaySubtitle": "Refresh your stockpile",
+      "theme": {
+        "themeId": "default",
+        "bannerAsset": "assets/themes/default_banner.png",
+        "accentColorHex": "#3B6D11",
+        "backgroundColorHex": "#0a1a0a"
+      },
+      "contents": [
+        {
+          "type": "coins",
+          "count": 1000,
+          "iconAsset": "assets/ui/icon_coin.png"
+        },
+        {
+          "type": "powerup",
+          "itemId": "freeze",
+          "count": 1,
+          "iconAsset": "assets/ui/pu_freeze_slot.png"
+        }
+      ],
+      "price": {
+        "type": "gems",
+        "gemCost": 80,
+        "compareGems": 150
+      },
+      "startsAt": "2026-05-01T00:00:00Z",
+      "endsAt": "2030-12-31T23:59:59Z",
+      "targetSegments": [],
+      "purchaseLimit": null,
+      "cooldownAfterPurchaseHours": 24,
+      "priority": 60,
+      "assetManifest": [
+        "assets/themes/default_banner.png"
+      ],
+      "experimentKey": null,
+      "analyticsTag": "shop_bundle_daily_gem_pack",
+      "prerequisites": [],
+      "badgeText": null
+    },
+    {
+      "id": "lapsed_player_comeback",
+      "localizationKey": "bundle.comeback.title",
+      "displayName": "Welcome Back, Pilot",
+      "displaySubtitle": "Catch up fast",
+      "theme": {
+        "themeId": "comeback",
+        "bannerAsset": "assets/themes/comeback_banner.png",
+        "accentColorHex": "#FAC775",
+        "backgroundColorHex": "#1a1206"
+      },
+      "contents": [
+        {
+          "type": "gems",
+          "count": 1500,
+          "iconAsset": "assets/ui/icon_gem.png"
+        },
+        {
+          "type": "coins",
+          "count": 5000,
+          "iconAsset": "assets/ui/icon_coin.png"
+        },
+        {
+          "type": "xp_boost",
+          "count": 2,
+          "iconAsset": "assets/ui/icon_xp_boost.png"
+        }
+      ],
+      "price": {
+        "type": "iap",
+        "iapProductId": "com.skystrike.comeback_pack",
+        "usdEquivalent": 1.99,
+        "compareUsd": 9.99
+      },
+      "startsAt": "2026-05-01T00:00:00Z",
+      "endsAt": "2026-05-31T23:59:59Z",
+      "targetSegments": ["lapsed_7d", "lapsed_14d"],
+      "purchaseLimit": 1,
+      "cooldownAfterPurchaseHours": null,
+      "priority": 90,
+      "assetManifest": [
+        "assets/themes/comeback_banner.png"
+      ],
+      "experimentKey": null,
+      "analyticsTag": "shop_bundle_comeback",
+      "prerequisites": [],
+      "badgeText": "80% OFF"
+    },
+    {
+      "id": "whale_mega_bundle",
+      "localizationKey": "bundle.whale.mega.title",
+      "displayName": "Mega Sky Commander",
+      "displaySubtitle": "Max-tier loadout",
+      "theme": {
+        "themeId": "whale",
+        "bannerAsset": "assets/themes/whale_banner.png",
+        "accentColorHex": "#9B6BFF",
+        "backgroundColorHex": "#0c0418"
+      },
+      "contents": [
+        {
+          "type": "gems",
+          "count": 12000,
+          "iconAsset": "assets/ui/icon_gem.png"
+        },
+        {
+          "type": "jet",
+          "itemId": "wraith_x",
+          "count": 1,
+          "iconAsset": "assets/jets/jet_wraith_x.png"
+        },
+        {
+          "type": "powerup",
+          "itemId": "laser",
+          "count": 10,
+          "iconAsset": "assets/ui/pu_laser_slot.png"
+        },
+        {
+          "type": "powerup",
+          "itemId": "bomb",
+          "count": 10,
+          "iconAsset": "assets/ui/pu_bomb_slot.png"
+        }
+      ],
+      "price": {
+        "type": "iap",
+        "iapProductId": "com.skystrike.whale_mega",
+        "usdEquivalent": 99.99,
+        "compareUsd": 199.99
+      },
+      "startsAt": "2026-05-01T00:00:00Z",
+      "endsAt": "2026-12-31T23:59:59Z",
+      "targetSegments": ["whales"],
+      "purchaseLimit": 1,
+      "cooldownAfterPurchaseHours": null,
+      "priority": 110,
+      "assetManifest": [
+        "assets/themes/whale_banner.png"
+      ],
+      "experimentKey": null,
+      "analyticsTag": "shop_bundle_whale_mega",
+      "prerequisites": [
+        { "type": "min_level", "value": 30 }
+      ],
+      "badgeText": "VIP"
+    },
+    {
+      "id": "expired_easter_event",
+      "localizationKey": "bundle.easter.expired.title",
+      "displayName": "Easter Hunt (expired)",
+      "displaySubtitle": "Filtered by service",
+      "theme": {
+        "themeId": "default",
+        "bannerAsset": "assets/themes/default_banner.png",
+        "accentColorHex": "#3B6D11",
+        "backgroundColorHex": "#0a1a0a"
+      },
+      "contents": [
+        {
+          "type": "gems",
+          "count": 100,
+          "iconAsset": "assets/ui/icon_gem.png"
+        }
+      ],
+      "price": {
+        "type": "gems",
+        "gemCost": 50
+      },
+      "startsAt": "2026-03-25T00:00:00Z",
+      "endsAt": "2026-04-15T23:59:59Z",
+      "targetSegments": [],
+      "purchaseLimit": null,
+      "cooldownAfterPurchaseHours": null,
+      "priority": 10,
+      "assetManifest": [],
+      "experimentKey": null,
+      "analyticsTag": "shop_bundle_easter_expired",
+      "prerequisites": [],
+      "badgeText": null
+    }
+  ]
+}

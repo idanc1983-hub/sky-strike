@@ -1,0 +1,9 @@
+{
+  "playerId": "mock_player_001",
+  "segments": ["new_player", "world_1_active"],
+  "level": 14,
+  "totalSpendUsd": 0.0,
+  "lastActiveDaysAgo": 0,
+  "ownedJets": ["jet_player", "viper"],
+  "completedWorld": 0
+}
