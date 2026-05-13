@@ -10,6 +10,7 @@ import 'economy/ui/daily_reward_screen.dart';
 import 'screens/game_screen.dart';
 import 'screens/loading_screen.dart';
 import 'screens/main_shell.dart';
+import 'screens/splash_screen.dart';
 import 'shop/services/bundle_cache.dart';
 import 'shop/services/bundle_service.dart';
 import 'shop/services/bundle_validator.dart';
@@ -102,8 +103,9 @@ class _SkyStrikeAppState extends State<SkyStrikeApp>
             brightness: Brightness.dark,
           ),
         ),
-        initialRoute: '/home',
+        initialRoute: '/splash',
         routes: {
+          '/splash': (_) => const SplashScreen(),
           '/home': (_) => const MainShell(),
           '/game': (_) => const GameScreen(),
           '/daily-rewards': (_) => const DailyRewardScreen(),

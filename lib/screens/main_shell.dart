@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../economy/constants/ace_dialogue_catalog.dart';
+import '../economy/services/ftue_triggers.dart';
+import '../economy/state/economy_state.dart';
 import '../economy/ui/ace_dialogue_overlay.dart';
 import 'home_screen.dart';
 import 'shop_screen.dart';
@@ -16,7 +20,21 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
+  static const int _shopIndex = 1;
   int _index = 0;
+
+  void _onTabSelected(int newIndex) {
+    setState(() => _index = newIndex);
+    // FTUE: first time the player opens the Shop tab AFTER clearing
+    // Stage 1, Ace nudges them to take a peek. One-shot via the
+    // `ftue_*` prefix in the catalog.
+    if (newIndex == _shopIndex) {
+      final economy = context.read<EconomyState>();
+      if (economy.isFtueTriggerFired(FtueTriggers.stage1Completed)) {
+        economy.requestAceLine(AceLineKeys.ftueShopIntro);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +55,7 @@ class _MainShellState extends State<MainShell> {
         indicatorColor: _cGreen,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: _onTabSelected,
         destinations: const [
           NavigationDestination(icon: _HomeIcon(), label: 'Home'),
           NavigationDestination(icon: _ShopIcon(), label: 'Shop'),

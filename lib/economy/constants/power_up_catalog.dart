@@ -27,6 +27,14 @@ class PowerUpCatalog {
   /// All power-up ids in canonical (unlock-order) listing order.
   static final List<String> allIds = unlockBiome.keys.toList();
 
+  /// Stackable / collectible-only ids — the subset that appears in the
+  /// shop and in pre-mission quick-add rows. Instant power-ups are
+  /// activated via gameplay paths only and are not shop-purchasable.
+  /// Derived from [isCollectible] so the catalog stays the single
+  /// source of truth.
+  static final List<String> stackableIds =
+      allIds.where((id) => isCollectible[id] == true).toList();
+
   /// Display name for the given id (used by popups + shop).
   static const Map<String, String> displayName = <String, String>{
     'rapid_fire': 'Rapid Fire',

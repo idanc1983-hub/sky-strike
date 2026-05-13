@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import '../constants/ace_dialogue_catalog.dart';
 import '../constants/ad_placement_catalog.dart';
 import '../constants/economy_constants.dart';
 import '../constants/iap_catalog.dart';
@@ -734,11 +735,14 @@ class EconomyState extends ChangeNotifier {
     if (isFirstThreeStar) _threeStarStages.add(stageId);
     if (isFirstBoss) _defeatedBosses.add('w$_currentWorld');
 
-    // FTUE: mark Stage 1 completion → unblocks home-screen coin chip.
+    // FTUE: mark Stage 1 completion → unblocks home-screen coin chip,
+    // fires Ace's celebration line + the shop-intro suggestion.
     if (_currentWorld == 1 &&
         _currentStage == 1 &&
         !_firedFtueTriggers.contains(FtueTriggers.stage1Completed)) {
       _firedFtueTriggers.add(FtueTriggers.stage1Completed);
+      // "Hell yes! That's how it's done!" — one-shot via shownAceLines.
+      requestAceLine(AceLineKeys.ftueStage1Clear);
     }
 
     // Stage 3 challenge reveal trigger (one-time per account).
@@ -1367,6 +1371,115 @@ class EconomyState extends ChangeNotifier {
   /// Whether [triggerId] has already fired this account's lifetime.
   bool isFtueTriggerFired(String triggerId) =>
       _firedFtueTriggers.contains(triggerId);
+
+  // ---------------------------------------------------------------------------
+  // Debug-only resets — used by the hidden dev-tools sheet in Settings.
+  // Each method below mutates state directly and persists.
+  // ---------------------------------------------------------------------------
+
+  /// Clears all FTUE-track flags so Ace's intro lines fire again on the
+  /// next pre-mission popup, the coin chip hides until Stage 1 first
+  /// clear, and the Stage 3 reveal can replay. Does NOT touch wallets or
+  /// progression.
+  void debugReplayFtue() {
+    _firedFtueTriggers.clear();
+    _shownAceLines.clear();
+    _challengeRevealed = false;
+    _activeChallengeType = null;
+    _challengeStartedAt = null;
+    _challengeProgress = 0;
+    _challengeTarget = 0;
+    _challenge50ClaimedThisCycle = false;
+    _challenge100ClaimedThisCycle = false;
+    _pendingAceLine = null;
+    _pendingMilestoneToast = null;
+    _aceDialogueEnabled = true;
+    _scheduleSync();
+    notifyListeners();
+  }
+
+  /// Debug-only: simulates a Stage 1 clear so the player gets the
+  /// Stage 1 reward + the FTUE "Hell yes!" Ace line + home-screen
+  /// coin chip visibility flip without having to play through.
+  StageClearOutcome debugSimulateStage1Clear() {
+    return debugSimulateStageClear(
+      world: 1,
+      stage: 1,
+      stars: 3,
+      isBossDefeat: false,
+      diedDuringRun: false,
+      simulatedRunCoins: 448,
+    );
+  }
+
+  /// Wipes the active challenge cycle only (keeps `challengeRevealed`
+  /// true). Long-press LAUNCH still re-fires the reveal because that
+  /// path early-returns on `challengeRevealed`, so this resets that flag
+  /// too.
+  void debugResetChallengeCycle() {
+    _challengeRevealed = false;
+    _activeChallengeType = null;
+    _challengeStartedAt = null;
+    _challengeProgress = 0;
+    _challengeTarget = 0;
+    _challenge50ClaimedThisCycle = false;
+    _challenge100ClaimedThisCycle = false;
+    _scheduleSync();
+    notifyListeners();
+  }
+
+  /// Wipes the entire economy back to first-launch defaults (coins,
+  /// gems, level, streak, loadouts, FTUE flags, challenge, IAP records,
+  /// install date). Equivalent to deleting + reinstalling the app
+  /// without actually reinstalling.
+  Future<void> debugHardReset() async {
+    _coins = 0;
+    _gems = 0;
+    _xp = 0;
+    _xpMax = 1000;
+    _level = 1;
+    _currentWorld = 1;
+    _maxWorldReached = 1;
+    _powerUpInventory.clear();
+    _unlockedLoadoutSlots = EconomyConstants.defaultUnlockedLoadoutSlots;
+    _loadouts = List<Loadout>.generate(
+      EconomyConstants.maxLoadoutSlots,
+      Loadout.defaultFor,
+    );
+    _activeLoadoutIndex = 0;
+    _streakDay = 1;
+    _streakWeeksCompleted = 0;
+    _longestStreak = 0;
+    _lastClaimDate = null;
+    _dailyAdWatchCount = 0;
+    _dailyAdWatchDate = null;
+    _completedStages.clear();
+    _threeStarStages.clear();
+    _defeatedBosses.clear();
+    _accumulatedRunCoins = 0;
+    _stageRevivesUsed = 0;
+    _currentStage = 1;
+    _playerDiedThisStage = false;
+    _pickupQueue.clear();
+    _adsRemoved = false;
+    _packsPurchased.clear();
+    _pendingNextJetDiscountPct = 0;
+    _installDate = _now();
+    _activeChallengeType = null;
+    _challengeStartedAt = null;
+    _challengeProgress = 0;
+    _challengeTarget = 0;
+    _challenge50ClaimedThisCycle = false;
+    _challenge100ClaimedThisCycle = false;
+    _challengeRevealed = false;
+    _aceDialogueEnabled = true;
+    _firedFtueTriggers.clear();
+    _shownAceLines.clear();
+    _pendingAceLine = null;
+    _pendingMilestoneToast = null;
+    await _persist();
+    notifyListeners();
+  }
 
   @override
   void dispose() {

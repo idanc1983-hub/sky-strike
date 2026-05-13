@@ -62,3 +62,8 @@ android/key.properties
 # Env / secrets
 .env
 .env.local
+
+# Remote Config build outputs (Firebase upload payload). The committed
+# artifact is `assets/config/defaults.json`; the XLSX workbooks live in
+# `../remote_config/` and are versioned alongside this repo.
+tools/out/

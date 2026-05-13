@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../economy/ui/ace_settings_tile.dart';
+import '../economy/ui/dev_tools_sheet.dart';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const _cGreen      = Color(0xFF3B6D11);
@@ -587,11 +589,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ─── Version string ────────────────────────────────────────────────────────
   Widget _buildVersionString() {
-    return const Center(
-      child: Text(
-        'SKY STRIKE v1.0.0 · Build 1',
-        style: TextStyle(
-            color: Color(0xFF27500A), fontSize: 9, letterSpacing: 1.2),
+    // ignore: prefer_const_declarations
+    final label = kDebugMode
+        ? 'SKY STRIKE v1.0.0 · Build 1 · debug'
+        : 'SKY STRIKE v1.0.0 · Build 1';
+    return Center(
+      child: GestureDetector(
+        // Long-press opens the hidden DEV TOOLS sheet in debug builds.
+        // In release builds [DevToolsSheet.show] is a no-op.
+        onLongPress: () => DevToolsSheet.show(context),
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 24),
+          child: Text(
+            label,
+            style: const TextStyle(
+                color: Color(0xFF27500A), fontSize: 9, letterSpacing: 1.2),
+          ),
+        ),
       ),
     );
   }

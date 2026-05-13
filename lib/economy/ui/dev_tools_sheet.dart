@@ -1,0 +1,486 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
+import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/app_typography.dart';
+import '../state/economy_state.dart';
+
+/// Soft gate against accidental opens. Stored in source for dev
+/// convenience — this is **not** real security; anyone with the binary
+/// can decompile and find this string. It's a friction layer, not a
+/// secret-keeping device.
+const _devToolsPasscode = 'Nala';
+
+/// Session-only unlock flag. Set to true after a successful passcode
+/// entry; reset on app kill or hot-restart. Keeping it static (rather
+/// than persisted) means the gate re-asserts itself across full app
+/// relaunches without bothering the dev between bottom-sheet opens.
+bool _sessionUnlocked = false;
+
+/// Hidden developer-only bottom sheet. Surfaced by long-pressing the
+/// version string at the bottom of the Settings screen. Wrapped in
+/// [kDebugMode] so it never appears in release builds.
+///
+/// Gated by a passcode on first open per app session. Once the correct
+/// code is entered, subsequent opens skip the prompt until the next
+/// full launch.
+class DevToolsSheet extends StatelessWidget {
+  const DevToolsSheet({super.key});
+
+  /// Shows the sheet. In release builds this is a no-op. In debug
+  /// builds the user is prompted for the passcode unless already
+  /// unlocked this session.
+  static Future<void> show(BuildContext context) async {
+    if (!kDebugMode) return;
+    if (!_sessionUnlocked) {
+      final granted = await _DevPasscodePrompt.show(context);
+      if (!granted) return;
+      _sessionUnlocked = true;
+    }
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.cardBg,
+      isScrollControlled: true,
+      builder: (_) => const DevToolsSheet(),
+    );
+  }
+
+  /// Forcibly relocks the session — exposed for tests or future
+  /// "log out" affordance.
+  @visibleForTesting
+  static void lockForTest() => _sessionUnlocked = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.amber,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'DEBUG',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('DEV TOOLS', style: AppTypography.title),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close,
+                      color: AppColors.greenLabel),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'kDebugMode only — never shipped to release. Each action '
+              'is confirmation-gated.',
+              style: AppTypography.label,
+            ),
+            const SizedBox(height: 16),
+            _DevAction(
+              title: 'Replay FTUE',
+              subtitle:
+                  "Clears Ace dialogue history + Stage 3 reveal + Stage 1 "
+                  'completion flag. Wallets, level and progression preserved.',
+              onConfirmed: (economy) async => economy.debugReplayFtue(),
+              confirmLabel: 'REPLAY',
+            ),
+            const SizedBox(height: 10),
+            _DevAction(
+              title: 'Reset challenge cycle',
+              subtitle:
+                  'Wipes the active 72h cycle so long-press LAUNCH re-fires '
+                  'the Stage 3 reveal sequence.',
+              onConfirmed: (economy) async => economy.debugResetChallengeCycle(),
+              confirmLabel: 'RESET',
+            ),
+            const SizedBox(height: 10),
+            _DevAction(
+              title: 'Sim Stage 1 clear',
+              subtitle:
+                  'Awards a 3★ Stage 1 clear (≈600 coins + 2 gems) and '
+                  "fires Ace's \"Hell yes!\" line + the home-screen "
+                  'coin chip reveal.',
+              onConfirmed: (economy) async => economy.debugSimulateStage1Clear(),
+              confirmLabel: 'CLEAR',
+            ),
+            const SizedBox(height: 10),
+            _DevAction(
+              title: 'Hard reset economy',
+              subtitle:
+                  'Factory reset: coins, gems, level, streak, loadouts, '
+                  'IAP history, FTUE flags — everything goes back to '
+                  'first-install defaults.',
+              danger: true,
+              onConfirmed: (economy) => economy.debugHardReset(),
+              confirmLabel: 'WIPE',
+            ),
+            const SizedBox(height: 16),
+            _StateSummary(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DevAction extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final String confirmLabel;
+  final bool danger;
+  final Future<void> Function(EconomyState economy) onConfirmed;
+
+  const _DevAction({
+    required this.title,
+    required this.subtitle,
+    required this.confirmLabel,
+    required this.onConfirmed,
+    this.danger = false,
+  });
+
+  @override
+  State<_DevAction> createState() => _DevActionState();
+}
+
+class _DevActionState extends State<_DevAction> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardBg,
+        title: Text(widget.title, style: AppTypography.title),
+        content: Text(widget.subtitle, style: AppTypography.bodyPale),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  widget.danger ? AppColors.danger : AppColors.amber,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(widget.confirmLabel),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    await widget.onConfirmed(context.read<EconomyState>());
+    if (!mounted) return;
+    setState(() => _busy = false);
+    messenger.showSnackBar(
+      SnackBar(content: Text('${widget.title} — done.')),
+    );
+    navigator.pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: widget.danger ? AppColors.danger : AppColors.greenTrack,
+          width: 0.6,
+        ),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.title,
+                  style: AppTypography.bodyPale.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: widget.danger
+                        ? AppColors.danger
+                        : AppColors.greenPale,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(widget.subtitle, style: AppTypography.label),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  widget.danger ? AppColors.danger : AppColors.amber,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 8),
+              minimumSize: Size.zero,
+            ),
+            onPressed: _busy ? null : _run,
+            child: _busy
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(widget.confirmLabel),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small live-summary panel so the dev can see current state at a glance
+/// without bouncing back to the home screen.
+class _StateSummary extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final economy = context.watch<EconomyState>();
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.greenDeep,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.greenTrack, width: 0.5),
+      ),
+      child: DefaultTextStyle.merge(
+        style: AppTypography.label.copyWith(fontSize: 11),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'CURRENT STATE',
+              style: AppTypography.label,
+            ),
+            const SizedBox(height: 4),
+            Text('coins / gems: ${economy.coins} / ${economy.gems}'),
+            Text(
+              'level: ${economy.level} (xp ${economy.xp}/${economy.xpMax})',
+            ),
+            Text(
+              'world: ${economy.currentWorld} (max reached '
+              '${economy.maxWorldReached})',
+            ),
+            Text(
+              'challenge: ${economy.challengeRevealed ? "revealed" : "hidden"}'
+              '${economy.activeChallengeType == null ? "" : " · ${economy.activeChallengeType!.name} ${economy.challengeProgress}/${economy.challengeTarget}"}',
+            ),
+            Text('streak: day ${economy.streakDay} (longest '
+                '${economy.longestStreak})'),
+            Text('ace lines shown: ${economy.shownAceLines.length}'),
+            Text('FTUE triggers fired: ${economy.firedFtueTriggers.length}'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Passcode prompt shown before the dev tools sheet opens (gating the
+/// first open per app session). Resolves to `true` on correct entry,
+/// `false` on cancel or wrong code.
+class _DevPasscodePrompt extends StatefulWidget {
+  const _DevPasscodePrompt();
+
+  static Future<bool> show(BuildContext context) async {
+    final granted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _DevPasscodePrompt(),
+    );
+    return granted ?? false;
+  }
+
+  @override
+  State<_DevPasscodePrompt> createState() => _DevPasscodePromptState();
+}
+
+class _DevPasscodePromptState extends State<_DevPasscodePrompt>
+    with SingleTickerProviderStateMixin {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  late final AnimationController _shake;
+  String? _error;
+  int _wrongAttempts = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _shake = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    // Auto-focus the field so the keyboard opens immediately.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    _shake.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_controller.text == _devToolsPasscode) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    _wrongAttempts += 1;
+    setState(() {
+      _error = _wrongAttempts >= 3
+          ? 'Nope. Cancel and try again later.'
+          : 'Incorrect code.';
+    });
+    _shake.forward(from: 0);
+    HapticFeedback.lightImpact();
+    _controller.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _shake,
+      builder: (ctx, child) {
+        final v = _shake.value;
+        final dx = v == 0
+            ? 0.0
+            : 8.0 *
+                (v < 0.5 ? v * 2 : (1 - v) * 2) *
+                ((v * 8).floor().isEven ? 1 : -1);
+        return Transform.translate(offset: Offset(dx, 0), child: child);
+      },
+      child: AlertDialog(
+        backgroundColor: AppColors.cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: AppColors.amber, width: 0.6),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.amber,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'DEBUG',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text('DEV TOOLS LOCKED', style: AppTypography.title),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the developer passcode to continue.',
+              style: AppTypography.bodyPale,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              autocorrect: false,
+              enableSuggestions: false,
+              obscureText: true,
+              onSubmitted: (_) => _submit(),
+              style: const TextStyle(
+                  color: AppColors.greenPale, fontSize: 16),
+              decoration: InputDecoration(
+                hintText: 'Passcode',
+                hintStyle: AppTypography.label,
+                filled: true,
+                fillColor: AppColors.surfaceDark,
+                errorText: _error,
+                errorStyle: const TextStyle(
+                    color: AppColors.danger, fontSize: 11),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(
+                      color: AppColors.greenTrack, width: 0.6),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(
+                      color: AppColors.amber, width: 0.8),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(
+                      color: AppColors.danger, width: 0.8),
+                ),
+                focusedErrorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(
+                      color: AppColors.danger, width: 0.8),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.amber,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: _submit,
+            child: const Text('UNLOCK'),
+          ),
+        ],
+      ),
+    );
+  }
+}

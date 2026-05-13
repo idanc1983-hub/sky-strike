@@ -12,6 +12,9 @@ dependencies:
   flame: ^1.18.0
   shared_preferences: ^2.3.2
   provider: ^6.1.0
+  firebase_core: ^3.6.0
+  firebase_remote_config: ^5.1.3
+  firebase_analytics: ^11.3.3
 
 dev_dependencies:
   flutter_test:
@@ -25,9 +28,11 @@ flutter:
     - assets/jets/
     - assets/enemies/
     - assets/ui/
+    - assets/ui/home/
     - assets/bullets/
     - assets/themes/
     - assets/mock_backend/
+    - assets/config/
     # Power-up drop orbs (256×256 source → rendered 56×56 on canvas)
     - assets/ui/pu_bomb_drop.png
     - assets/ui/pu_laser_drop.png
@@ -40,3 +45,5 @@ flutter:
     - assets/ui/pu_magnet_slot.png
     - assets/ui/pu_ghost_slot.png
     - assets/ui/pu_freeze_slot.png
+    # Ace tutorial portrait spritesheet (1024×1024, 4×4 grid of 256×256 frames)
+    - assets/ui/ace_spritesheet.png

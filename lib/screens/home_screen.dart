@@ -6,10 +6,13 @@ import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import '../economy/constants/ace_dialogue_catalog.dart';
 import '../economy/state/economy_state.dart';
+import '../economy/ui/challenge_prizes_popup.dart';
 import '../economy/ui/challenge_reveal_sequence.dart';
-import '../economy/ui/operation_banner.dart';
 import '../economy/ui/pre_mission_popup.dart';
+import '../economy/ui/three_plus_one_offer_popup.dart';
+import '../economy/ui/vapor_trail_popup.dart';
 import '../game/models.dart';
+import '../shared/widgets/asset_placeholder.dart';
 
 // ---------------------------------------------------------------------------
 // Biome config
@@ -83,8 +86,25 @@ const _cGreenLight = Color(0xFF97C459);
 const _cGreenPale = Color(0xFFC0DD97);
 const _cGreenDeep = Color(0xFF0a1a0a);
 const _cAmber = Color(0xFFEF9F27);
-const _cGreenLabel = Color(0xFF639922);
-const _cGreenTrack = Color(0xFF0d1f0d);
+const _cChallengeBg = Color(0xFF040C04);
+const _cChallengeBarTrack = Color(0xFF0d1a0d);
+
+// ---------------------------------------------------------------------------
+// Placeholder challenge cycle data
+//
+// The real values come from the active cycle's remote-config entry —
+// `display_name`, `bg_asset`, `bar_color`, and the 100% milestone prize.
+// Until the cycle plumbing is in place we render the screenshot's
+// "Iron Skies" + coin-prize sample so the home screen is reviewable in
+// the simulator.
+// ---------------------------------------------------------------------------
+const String _kPlaceholderCycleDisplayName = 'Iron Skies';
+const String _kPlaceholderPrize50Asset = 'assets/ui/icon_coin.png';
+const int _kPlaceholderPrize50Amount = 300;
+const String _kPlaceholderPrize100Asset = 'assets/ui/icon_coin.png';
+const int _kPlaceholderPrize100Amount = 800;
+const int _kPlaceholderProgress = 216;
+const int _kPlaceholderTarget = 350;
 
 // ---------------------------------------------------------------------------
 // Enemy state
@@ -427,10 +447,10 @@ class _HomeScreenState extends State<HomeScreen>
             child: Column(
               children: [
                 _buildTopBar(economy),
-                _buildLeaderboardRow(),
-                Expanded(child: _buildCentreContent(economy, biome, screenW)),
-                const OperationBanner(),
-                const SizedBox(height: 4),
+                _buildOffersRow(),
+                Expanded(child: _buildCentreContent()),
+                _buildChallengeAndLaunch(economy),
+                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -440,69 +460,92 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ---------------------------------------------------------------------------
-  // Top bar
+  // Top bar — level pill on the left, coins + gems on the right
   // ---------------------------------------------------------------------------
   Widget _buildTopBar(EconomyState economy) {
     return Padding(
-      padding: const EdgeInsets.all(9),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _chip('Lv ${economy.level}',
-              bg: const Color(0xFF173404),
-              opacity: 0.85,
-              textColor: _cGreenLight),
-          // FTUE: coin chip is hidden until Stage 1 first clear.
-          if (economy.showHomeBalance)
-            _chip('★ ${economy.coins}',
-                bg: const Color(0xFF173404),
-                opacity: 0.85,
-                textColor: _cGreenPale),
-          _chip('💎 ${economy.gems}',
-              bg: const Color(0xFF412402),
-              opacity: 0.85,
-              textColor: _cAmber),
+          _levelChip(economy.level),
+          Row(
+            children: [
+              // FTUE: coin chip is hidden until Stage 1 first clear.
+              if (economy.showHomeBalance)
+                _currencyChip(
+                  amount: economy.coins,
+                  asset: 'assets/ui/icon_coin.png',
+                  placeholderLabel: 'coin',
+                  placeholderColor: _cAmber,
+                ),
+              if (economy.showHomeBalance) const SizedBox(width: 8),
+              _currencyChip(
+                amount: economy.gems,
+                asset: 'assets/ui/icon_gem.png',
+                placeholderLabel: 'gem',
+                placeholderColor: const Color(0xFF7BB8FF),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _chip(String text,
-      {required Color bg, required double opacity, required Color textColor}) {
+  Widget _levelChip(int level) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        color: bg.withValues(alpha: opacity),
-        borderRadius: BorderRadius.circular(5),
+        color: const Color(0xFF0A1606).withValues(alpha: 0.92),
+        border: Border.all(color: _cAmber.withValues(alpha: 0.55), width: 0.6),
+        borderRadius: BorderRadius.circular(7),
       ),
-      child: Text(text,
-          style: TextStyle(color: textColor, fontSize: 11)),
+      child: Text(
+        'Lv. $level',
+        style: const TextStyle(
+          color: _cGreenPale,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Leaderboard row
-  // ---------------------------------------------------------------------------
-  Widget _buildLeaderboardRow() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 9),
+  Widget _currencyChip({
+    required int amount,
+    required String asset,
+    required String placeholderLabel,
+    required Color placeholderColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A1606).withValues(alpha: 0.92),
+        border: Border.all(color: _cAmber.withValues(alpha: 0.55), width: 0.6),
+        borderRadius: BorderRadius.circular(7),
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          GestureDetector(
-            onTap: () => ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Coming soon'))),
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFF050A05).withValues(alpha: 0.8),
-                border: Border.all(color: _cGreen, width: 0.5),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text(
-                '🏆 Leaderboard',
-                style: TextStyle(color: _cGreenLight, fontSize: 11),
+          Text(
+            '$amount',
+            style: const TextStyle(
+              color: _cGreenPale,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: Image.asset(
+              asset,
+              errorBuilder: AssetPlaceholder.image(
+                color: placeholderColor,
+                label: placeholderLabel,
+                borderRadius: 3,
               ),
             ),
           ),
@@ -512,20 +555,41 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ---------------------------------------------------------------------------
-  // Centre content
+  // Offers row — small icons docked under the top bar that open the
+  // limited-time sales popups. Both use placeholder styling today; swap
+  // the inner `Container`s for `Image.asset(...)` once the icon art lands.
   // ---------------------------------------------------------------------------
-  Widget _buildCentreContent(EconomyState economy, _Biome biome, double screenW) {
-    // Defensive divisor — if a corrupt save or backend bug ever pushed
-    // xpMax to 0, the bar would render NaN and the FractionallySizedBox
-    // assertion would crash the home tab.
-    final xpMaxSafe = economy.xpMax > 0 ? economy.xpMax : 1;
-    final xpFraction = economy.xp / xpMaxSafe;
+  Widget _buildOffersRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          _OfferIcon(
+            asset: 'assets/ui/home/1plus3_lobby_iron_skies.png',
+            placeholderLabel: '1+3',
+            onTap: () => ThreePlusOneOfferPopup.show(context),
+          ),
+          const SizedBox(width: 10),
+          _OfferIcon(
+            asset: 'assets/ui/home/snake_lobby_iron_skies.png',
+            placeholderLabel: 'SNAKE',
+            onTap: () => VaporTrailPopup.show(context),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return Column(
+  // ---------------------------------------------------------------------------
+  // Centre content — title block only. Challenge card + CTA live in
+  // [_buildChallengeAndLaunch] and dock to the bottom of the column.
+  // ---------------------------------------------------------------------------
+  Widget _buildCentreContent() {
+    return const Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Title
-        const Text(
+        Text(
           'SKYSTRIKE',
           style: TextStyle(
             color: Colors.white,
@@ -534,9 +598,8 @@ class _HomeScreenState extends State<HomeScreen>
             letterSpacing: 4,
           ),
         ),
-        const SizedBox(height: 4),
-        // Subtitle
-        const Text(
+        SizedBox(height: 4),
+        Text(
           'AERIAL COMBAT',
           style: TextStyle(
             color: Color(0xFFaaaaaa),
@@ -544,109 +607,52 @@ class _HomeScreenState extends State<HomeScreen>
             letterSpacing: 8,
           ),
         ),
-        const SizedBox(height: 10),
-
-        // Mission badge
-        Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF050F05).withValues(alpha: 0.82),
-            border: Border.all(color: _cGreen, width: 0.5),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Column(
-            children: [
-              const Text(
-                'CURRENT MISSION',
-                style: TextStyle(color: _cGreenLabel, fontSize: 10),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${biome.worldName} · Stage ${economy.currentStage}',
-                style: const TextStyle(
-                  color: _cGreenPale,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        // XP label row
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Level ${economy.level}',
-                  style:
-                      const TextStyle(color: _cGreenLabel, fontSize: 10)),
-              Text('${economy.xp} / ${economy.xpMax} XP',
-                  style:
-                      const TextStyle(color: _cGreenLabel, fontSize: 10)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-
-        // XP bar
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: LayoutBuilder(builder: (ctx, constraints) {
-            return Container(
-              height: 5,
-              decoration: BoxDecoration(
-                color: _cGreenTrack,
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: xpFraction.clamp(0.0, 1.0),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: _cGreen,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
-        ),
-        const SizedBox(height: 10),
-
-        // Launch Mission button — long-press for debug Stage-3-clear sim.
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: GestureDetector(
-              onLongPress: () => _onLaunchLongPressed(economy),
-              child: TextButton(
-                style: TextButton.styleFrom(
-                  backgroundColor: _cGreen,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-                onPressed: () => _onLaunchPressed(economy),
-                child: const Text(
-                  'LAUNCH MISSION',
-                  style: TextStyle(
-                    color: _cGreenPale,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
       ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Challenge card + Launch CTA stack (docked above the bottom nav)
+  // ---------------------------------------------------------------------------
+  Widget _buildChallengeAndLaunch(EconomyState economy) {
+    final view = economy.challengeView;
+    // Pre-Stage-3 (or any state where no real challenge exists) the card
+    // still renders so the home screen has its hero element. Placeholder
+    // numbers are used so the simulator preview matches the design mock.
+    final progress = view?.progress ?? _kPlaceholderProgress;
+    final target = view?.target ?? _kPlaceholderTarget;
+    final fraction = target > 0
+        ? (progress / target).clamp(0.0, 1.0).toDouble()
+        : 0.0;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ChallengeCard(
+            displayName: _kPlaceholderCycleDisplayName,
+            progress: progress,
+            target: target,
+            fraction: fraction,
+            milestone50Claimed: economy.challenge50Claimed,
+            prize50Asset: _kPlaceholderPrize50Asset,
+            prize50Amount: _kPlaceholderPrize50Amount,
+            prize100Asset: _kPlaceholderPrize100Asset,
+            prize100Amount: _kPlaceholderPrize100Amount,
+            onTap: () => ChallengePrizesPopup.show(context),
+            // Cycle bg + bar colour are dynamic via remote config. Until
+            // the cycle plumbing lands, render the styled fallback.
+            bgAsset: null,
+            barColor: _cGreen,
+          ),
+          const SizedBox(height: 14),
+          _LaunchMissionCta(
+            onPressed: () => _onLaunchPressed(economy),
+            onLongPress: () => _onLaunchLongPressed(economy),
+          ),
+        ],
+      ),
     );
   }
 
@@ -901,5 +907,465 @@ class _BackgroundPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BackgroundPainter old) => true;
+}
+
+// ---------------------------------------------------------------------------
+// Challenge card — "Iron Skies" hero block with progress bar, 50% / 100%
+// milestone markers, and an overlapping prize icon at the 100% end.
+//
+// Three things are designed to be dynamic (driven by the active cycle's
+// remote-config entry). The widget already accepts them as constructor
+// params — the call site just needs to swap the placeholder constants
+// for real `EconomyState` getters once the cycle plumbing lands:
+//   1. Card background — `bgAsset` ⇒ `assets/ui/home/challenge_card_bg.png`.
+//   2. Progress-bar fill colour — `barColor`.
+//   3. Prize icon — `prizeAsset` (already wired to existing currency /
+//      chest assets so no new art is needed).
+// ---------------------------------------------------------------------------
+class _ChallengeCard extends StatelessWidget {
+  final String displayName;
+  final int progress;
+  final int target;
+  final double fraction;
+  final bool milestone50Claimed;
+  final String prize50Asset;
+  final int prize50Amount;
+  final String prize100Asset;
+  final int prize100Amount;
+
+  /// Tap target for the whole card. Opens the prize-ladder popup.
+  final VoidCallback onTap;
+
+  /// When non-null, this PNG replaces the styled `Container` background.
+  /// Wire it from the cycle's remote-config entry when ready.
+  final String? bgAsset;
+
+  /// Progress-bar fill colour. Defaults to the existing in-game green.
+  final Color barColor;
+
+  const _ChallengeCard({
+    required this.displayName,
+    required this.progress,
+    required this.target,
+    required this.fraction,
+    required this.milestone50Claimed,
+    required this.prize50Asset,
+    required this.prize50Amount,
+    required this.prize100Asset,
+    required this.prize100Amount,
+    required this.onTap,
+    this.bgAsset,
+    this.barColor = _cGreen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _cChallengeBg.withValues(alpha: 0.94),
+          border: Border.all(
+            color: _cAmber.withValues(alpha: 0.55),
+            width: 0.7,
+          ),
+          borderRadius: BorderRadius.circular(10),
+          image: bgAsset == null
+              ? null
+              : DecorationImage(
+                  image: AssetImage(bgAsset!),
+                  fit: BoxFit.cover,
+                  onError: (_, __) {},
+                ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                displayName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 10),
+              _ChallengeBar(
+                fraction: fraction,
+                progress: progress,
+                target: target,
+                milestone50Claimed: milestone50Claimed,
+                prize50Asset: prize50Asset,
+                prize50Amount: prize50Amount,
+                prize100Asset: prize100Asset,
+                prize100Amount: prize100Amount,
+                barColor: barColor,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Progress bar with prize overlays at both the 50% and 100% milestones.
+//
+// Layout rules (per design):
+//   - 100% prize sits at the right end of the bar; the icon's left 10%
+//     overlaps the bar (the bar is shortened by 90% of the icon width).
+//   - 50% prize is centred horizontally on the 50% milestone tick
+//     (halfway across the visible bar).
+//   - Under each prize icon sits an amount badge; the top 10% of the
+//     badge overlaps the bottom of the icon.
+// ---------------------------------------------------------------------------
+class _ChallengeBar extends StatelessWidget {
+  static const double _barHeight = 14;
+  static const double _prizeIconSize = 34;
+  static const double _amountBadgeHeight = 14;
+  // Fraction of the icon's width that overlaps the bar at the 100% end.
+  static const double _barOverlapFraction = 0.10;
+  // Fraction of the amount badge's height that overlaps the prize icon.
+  static const double _badgeOverlapFraction = 0.10;
+
+  final double fraction;
+  final int progress;
+  final int target;
+  final bool milestone50Claimed;
+  final String prize50Asset;
+  final int prize50Amount;
+  final String prize100Asset;
+  final int prize100Amount;
+  final Color barColor;
+
+  const _ChallengeBar({
+    required this.fraction,
+    required this.progress,
+    required this.target,
+    required this.milestone50Claimed,
+    required this.prize50Asset,
+    required this.prize50Amount,
+    required this.prize100Asset,
+    required this.prize100Amount,
+    required this.barColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // The bar stops short of the row's right edge by (1 - overlap) × icon
+    // size so the icon's right edge lands at the row's right edge while
+    // its left 10% overlaps the bar.
+    const barRightInset = _prizeIconSize * (1 - _barOverlapFraction);
+    // Total height = icon stack + (1 - overlap) × badge height. Lets the
+    // amount badge sit fully under the icon with exactly 10% overlap and
+    // without bleeding past this widget's bounds.
+    const totalHeight =
+        _prizeIconSize + _amountBadgeHeight * (1 - _badgeOverlapFraction);
+    const barTop = (_prizeIconSize - _barHeight) / 2;
+
+    return SizedBox(
+      height: totalHeight,
+      child: LayoutBuilder(builder: (ctx, constraints) {
+        final stackW = constraints.maxWidth;
+        // X position of the 50% milestone tick — at the halfway point of
+        // the visible bar (which itself is shortened by barRightInset).
+        final midX = (stackW - barRightInset) * 0.5;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Bar
+            Positioned(
+              left: 0,
+              right: barRightInset,
+              top: barTop,
+              height: _barHeight,
+              child: _BarTrack(
+                fraction: fraction,
+                barColor: barColor,
+                progressText: '$progress/$target',
+                milestone50Claimed: milestone50Claimed,
+              ),
+            ),
+            // 50% milestone prize — centred on the orange tick.
+            Positioned(
+              left: midX - _prizeIconSize / 2,
+              top: 0,
+              width: _prizeIconSize,
+              child: _PrizeOverlay(
+                asset: prize50Asset,
+                amount: prize50Amount,
+                iconSize: _prizeIconSize,
+                badgeHeight: _amountBadgeHeight,
+                badgeOverlapFraction: _badgeOverlapFraction,
+              ),
+            ),
+            // 100% milestone prize — right end, 10% overlap with bar.
+            Positioned(
+              right: 0,
+              top: 0,
+              width: _prizeIconSize,
+              child: _PrizeOverlay(
+                asset: prize100Asset,
+                amount: prize100Amount,
+                iconSize: _prizeIconSize,
+                badgeHeight: _amountBadgeHeight,
+                badgeOverlapFraction: _badgeOverlapFraction,
+              ),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+}
+
+class _BarTrack extends StatelessWidget {
+  final double fraction;
+  final Color barColor;
+  final String progressText;
+
+  /// When true the player has collected the 50% reward, so the progress
+  /// label moves from the left half (before the 50% prize) to the right
+  /// half (between the 50% and 100% prizes).
+  final bool milestone50Claimed;
+
+  const _BarTrack({
+    required this.fraction,
+    required this.barColor,
+    required this.progressText,
+    required this.milestone50Claimed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Alignment maps [-1, 1] across the bar: -0.5 = 25% from left,
+    // +0.5 = 75% from left. The text's centre lands at that x.
+    final labelAlignmentX = milestone50Claimed ? 0.5 : -0.5;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(7),
+      child: Stack(
+        children: [
+          Container(color: _cChallengeBarTrack),
+          LayoutBuilder(builder: (ctx, constraints) {
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 350),
+              width: constraints.maxWidth * fraction,
+              decoration: BoxDecoration(color: barColor),
+            );
+          }),
+          // 50% milestone tick
+          LayoutBuilder(builder: (ctx, constraints) {
+            return Padding(
+              padding: EdgeInsets.only(left: constraints.maxWidth * 0.5 - 1),
+              child: Container(
+                width: 2,
+                color: _cAmber.withValues(alpha: 0.75),
+              ),
+            );
+          }),
+          // Progress label
+          Align(
+            alignment: Alignment(labelAlignmentX, 0),
+            child: Text(
+              progressText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                height: 1.0,
+                shadows: [
+                  Shadow(
+                    color: Color(0xCC000000),
+                    offset: Offset(0, 1),
+                    blurRadius: 2,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrizeOverlay extends StatelessWidget {
+  final String asset;
+  final int amount;
+  final double iconSize;
+  final double badgeHeight;
+  final double badgeOverlapFraction;
+
+  const _PrizeOverlay({
+    required this.asset,
+    required this.amount,
+    required this.iconSize,
+    required this.badgeHeight,
+    required this.badgeOverlapFraction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final totalH = iconSize + badgeHeight * (1 - badgeOverlapFraction);
+    // Badge's top edge — sits at (iconSize - 10% of badge height) so its
+    // top 10% overlaps the bottom of the prize icon.
+    final badgeTop = iconSize - badgeHeight * badgeOverlapFraction;
+
+    return SizedBox(
+      width: iconSize,
+      height: totalH,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Prize icon — anchored to the top of the overlay box.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: iconSize,
+            child: Image.asset(
+              asset,
+              errorBuilder: AssetPlaceholder.image(
+                color: _cAmber,
+                label: 'prize',
+                borderRadius: 4,
+              ),
+            ),
+          ),
+          // Amount badge — centred horizontally below the icon.
+          Positioned(
+            top: badgeTop,
+            left: 0,
+            right: 0,
+            height: badgeHeight,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Container(
+                height: badgeHeight,
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0A1606),
+                  border: Border.all(color: _cAmber, width: 0.6),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '$amount',
+                  style: const TextStyle(
+                    color: _cGreenPale,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Offer icon — small docked badge at the top of the home screen, rendered
+// from cycle-specific art. Falls back to the AssetPlaceholder badge if
+// the file is missing so missing assets are visible in dev builds.
+// ---------------------------------------------------------------------------
+class _OfferIcon extends StatelessWidget {
+  final String asset;
+  final String placeholderLabel;
+  final VoidCallback onTap;
+
+  const _OfferIcon({
+    required this.asset,
+    required this.placeholderLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 64,
+        height: 64,
+        child: Image.asset(
+          asset,
+          errorBuilder: AssetPlaceholder.image(
+            color: _cAmber,
+            label: placeholderLabel,
+            borderRadius: 10,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Launch Mission CTA. Coded as a styled button for the simulator preview;
+// when the dynamic CTA artwork lands, swap the inner Container for an
+// `Image.asset('assets/ui/home/cta_launch_mission.png')` and the gesture
+// detector keeps working unchanged.
+// ---------------------------------------------------------------------------
+class _LaunchMissionCta extends StatelessWidget {
+  final VoidCallback onPressed;
+  final VoidCallback onLongPress;
+
+  const _LaunchMissionCta({
+    required this.onPressed,
+    required this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      onLongPress: onLongPress,
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF6FAD1F), _cGreen],
+          ),
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: _cGreenLight, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: _cGreen.withValues(alpha: 0.55),
+              blurRadius: 16,
+              spreadRadius: 1,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.play_arrow_rounded, color: Colors.white, size: 26),
+            SizedBox(width: 6),
+            Text(
+              'Launch Mission',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 

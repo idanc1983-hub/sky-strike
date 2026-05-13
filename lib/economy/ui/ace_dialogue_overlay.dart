@@ -3,10 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_typography.dart';
-import '../../shared/widgets/asset_placeholder.dart';
 import '../constants/ace_dialogue_catalog.dart';
 import '../services/ftue_triggers.dart';
 import '../state/economy_state.dart';
+import 'ace_animated_portrait.dart';
 
 /// Listener widget that watches `EconomyState.pendingAceLine` and shows
 /// the bubble whenever a line is queued. Mount once near the top of the
@@ -88,15 +88,7 @@ class _AceBubbleDialog extends StatelessWidget {
                 SizedBox(
                   width: 88,
                   height: 88,
-                  child: Image.asset(
-                    line.expression.assetPath,
-                    fit: BoxFit.contain,
-                    errorBuilder: AssetPlaceholder.image(
-                      color: AppColors.amber,
-                      label: 'ace_${line.expression.name}',
-                      borderRadius: 8,
-                    ),
-                  ),
+                  child: AceAnimatedPortrait(expression: line.expression),
                 ),
                 const SizedBox(width: 8),
                 Expanded(

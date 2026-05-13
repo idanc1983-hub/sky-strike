@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../economy/constants/power_up_catalog.dart';
 
 // ---------------------------------------------------------------------------
 // Palette
@@ -130,33 +131,20 @@ class _PuData {
   });
 }
 
-const _powerUps = <_PuData>[
-  _PuData(
-      id: 'shield',
-      name: 'Shield Burst',
-      description: 'Absorbs 1 hit · lasts 1 wave',
-      coinPrice: 150),
-  _PuData(
-      id: 'rapidfire',
-      name: 'Rapid Fire',
-      description: '3× bullet rate · 20 seconds',
-      coinPrice: 200),
-  _PuData(
-      id: 'speed',
-      name: 'Speed Surge',
-      description: '2× movement · 15 seconds',
-      coinPrice: 120),
-  _PuData(
-      id: 'bomb',
-      name: 'Bomb Drop',
-      description: 'Clears all enemies on screen',
-      coinPrice: 350),
-  _PuData(
-      id: 'hp',
-      name: 'HP Pack',
-      description: 'Restores 1 HP mid-wave',
-      coinPrice: 80),
-];
+/// Shop-visible power-ups — strictly the stackable / collectible ones.
+/// Instant power-ups (Rapid Fire, Speed Boost, Shield, Split Shot, Drone
+/// Wingman) are not sold here; they're triggered via gameplay only.
+/// The list is derived from [PowerUpCatalog.stackableIds] so the
+/// catalog stays the single source of truth — adding a new collectible
+/// to the catalog auto-surfaces it here.
+final List<_PuData> _powerUps = PowerUpCatalog.stackableIds
+    .map((id) => _PuData(
+          id: id,
+          name: PowerUpCatalog.displayName[id] ?? id,
+          description: PowerUpCatalog.shortDescription[id] ?? '',
+          coinPrice: PowerUpCatalog.singlePrice[id] ?? 0,
+        ))
+    .toList();
 
 class _DealData {
   final String item;
@@ -261,12 +249,14 @@ class _ShopScreenState extends State<ShopScreen> {
   int _coins = 4200;
   int _gems = 80;
   final Set<String> _ownedJets = {'viper'};
+  // Seeded for legacy demo state — real counts come from
+  // EconomyState.powerUpInventory once gameplay drives purchases.
   final Map<String, int> _powerUpCounts = {
-    'shield': 3,
-    'rapidfire': 1,
-    'speed': 0,
     'bomb': 2,
-    'hp': 5,
+    'magnet': 1,
+    'laser': 0,
+    'ghost_mode': 0,
+    'freeze_time': 0,
   };
   int _storedRevives = 0;
   final int _currentStreak = 4;
@@ -1169,7 +1159,7 @@ class _ShopScreenState extends State<ShopScreen> {
             width: 36,
             height: 36,
             child: Image.asset(
-              'assets/ui/pu_${pu.id}.png',
+              PowerUpCatalog.slotIcon(pu.id),
               fit: BoxFit.contain,
               errorBuilder: (_, __, ___) => _PuPlaceholder(id: pu.id),
             ),
