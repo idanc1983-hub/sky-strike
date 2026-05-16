@@ -1,7 +1,7 @@
 name: skystrike
 description: Sky Strike — Aerial Combat Mobile Game
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -20,6 +20,13 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter_launcher_icons:
+  android: false
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/icon/App_icon.png"
 
 flutter:
   uses-material-design: true

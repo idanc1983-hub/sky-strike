@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../economy/state/economy_state.dart';
 import '../models/jet_model.dart';
+import '../shared/widgets/asset_placeholder.dart';
 import '../widgets/jet_card.dart';
 
 // ---------------------------------------------------------------------------
@@ -10,11 +13,15 @@ const _cGreenPale = Color(0xFFC0DD97);
 const _cGreenMid = Color(0xFF639922);
 const _cAmber = Color(0xFFEF9F27);
 const _cAmberBg = Color(0xFF412402);
-const _cDivider = Color(0xFF1a2a1a);
 const _cCardBg = Color(0xFF0d1f0d);
 
 // ---------------------------------------------------------------------------
 // Initial jets data
+//
+// Placeholder seed for the simulator preview. Once the jet-tab plumbing is
+// wired to remote config, both the list order and the per-jet `price` will
+// come from `remote_config.jets[]` and this seed becomes a default fallback.
+//
 // Asset paths map to existing shop jet images:
 //   scout   → jet_viper.png   (starter / Recon Tier 1)
 //   phantom → jet_phantom.png
@@ -34,7 +41,7 @@ const _kInitialJets = <JetModel>[
     accentColor: Color(0xFF1D9E75),
     bgColor: Color(0xFF0F2A18),
     status: JetStatus.equipped,
-    price: 0,
+    price: 50,
     assetPath: 'assets/jets/jet_viper.png',
   ),
   JetModel(
@@ -47,7 +54,7 @@ const _kInitialJets = <JetModel>[
     accentColor: Color(0xFF378ADD),
     bgColor: Color(0xFF0D1A30),
     status: JetStatus.owned,
-    price: 0,
+    price: 75,
     assetPath: 'assets/jets/jet_phantom.png',
   ),
   JetModel(
@@ -60,7 +67,7 @@ const _kInitialJets = <JetModel>[
     accentColor: Color(0xFFEF9F27),
     bgColor: Color(0xFF2A1200),
     status: JetStatus.purchasable,
-    price: 300,
+    price: 100,
     assetPath: 'assets/jets/jet_inferno.png',
   ),
   JetModel(
@@ -73,7 +80,7 @@ const _kInitialJets = <JetModel>[
     accentColor: Color(0xFFD85A30),
     bgColor: Color(0xFF2A0D0D),
     status: JetStatus.purchasable,
-    price: 600,
+    price: 340,
     assetPath: 'assets/jets/jet_wraith_x.png',
   ),
   JetModel(
@@ -87,7 +94,7 @@ const _kInitialJets = <JetModel>[
     bgColor: Color(0xFF141414),
     status: JetStatus.locked,
     unlockCondition: 'Reach World 6',
-    price: 0,
+    price: 800,
     assetPath: 'assets/jets/jet_specter.png',
   ),
   JetModel(
@@ -101,7 +108,7 @@ const _kInitialJets = <JetModel>[
     bgColor: Color(0xFF141414),
     status: JetStatus.locked,
     unlockCondition: 'Reach World 8',
-    price: 0,
+    price: 1200,
     assetPath: 'assets/jets/jet_player.png',
   ),
 ];
@@ -118,7 +125,6 @@ class JetsScreen extends StatefulWidget {
 
 class _JetsScreenState extends State<JetsScreen> {
   late List<JetModel> _jets;
-  int _gems = 80;
 
   @override
   void initState() {
@@ -159,7 +165,8 @@ class _JetsScreenState extends State<JetsScreen> {
   }
 
   void _buyJet(JetModel jet) {
-    if (_gems < jet.price) {
+    final economy = context.read<EconomyState>();
+    if (economy.gems < jet.price) {
       _showSnackBar('Not enough gems');
       return;
     }
@@ -185,7 +192,7 @@ class _JetsScreenState extends State<JetsScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'This will cost 💎 ${jet.price} gems.',
+                'This will cost ${jet.price} gems.',
                 style: const TextStyle(color: _cGreenMid, fontSize: 13),
               ),
               const SizedBox(height: 24),
@@ -215,12 +222,16 @@ class _JetsScreenState extends State<JetsScreen> {
                     child: GestureDetector(
                       onTap: () async {
                         Navigator.pop(ctx);
+                        final ok = economy.spendGems(jet.price);
+                        if (!ok) {
+                          if (mounted) _showSnackBar('Not enough gems');
+                          return;
+                        }
                         final prefs =
                             await SharedPreferences.getInstance();
                         await prefs.setString('equipped_jet', jet.id);
                         if (!mounted) return;
                         setState(() {
-                          _gems -= jet.price;
                           _jets = _jets.map((j) {
                             if (j.status == JetStatus.equipped) {
                               return j.copyWith(status: JetStatus.owned);
@@ -273,6 +284,7 @@ class _JetsScreenState extends State<JetsScreen> {
   // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
+    final economy = context.watch<EconomyState>();
     return Scaffold(
       body: Stack(
         children: [
@@ -287,8 +299,8 @@ class _JetsScreenState extends State<JetsScreen> {
           SafeArea(
             child: Column(
               children: [
-                _buildTopBar(),
-                Expanded(child: _buildGrid()),
+                _buildTopBar(economy),
+                Expanded(child: _buildList()),
               ],
             ),
           ),
@@ -298,60 +310,107 @@ class _JetsScreenState extends State<JetsScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Top bar
+  // Top bar — level pill on the left, coin + gem chips on the right.
+  // Mirrors the home screen so currencies feel consistent across tabs.
   // ---------------------------------------------------------------------------
-  Widget _buildTopBar() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildTopBar(EconomyState economy) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _levelChip(economy.level),
+          Row(
             children: [
-              const SizedBox(width: 48),
-              const Text(
-                'JETS',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: _cGreenPale,
-                  letterSpacing: 2,
-                ),
+              _currencyChip(
+                amount: economy.coins,
+                asset: 'assets/ui/icon_coin.png',
+                placeholderLabel: 'coin',
+                placeholderColor: _cAmber,
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _cAmberBg,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  '💎 $_gems',
-                  style: const TextStyle(fontSize: 10, color: _cAmber),
-                ),
+              const SizedBox(width: 8),
+              _currencyChip(
+                amount: economy.gems,
+                asset: 'assets/ui/icon_gem.png',
+                placeholderLabel: 'gem',
+                placeholderColor: const Color(0xFF7BB8FF),
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _levelChip(int level) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A1606).withValues(alpha: 0.92),
+        border: Border.all(color: _cAmber.withValues(alpha: 0.55), width: 0.6),
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Text(
+        'Lv. $level',
+        style: const TextStyle(
+          color: _cGreenPale,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
         ),
-        const Divider(height: 0.5, thickness: 0.5, color: _cDivider),
-      ],
+      ),
+    );
+  }
+
+  Widget _currencyChip({
+    required int amount,
+    required String asset,
+    required String placeholderLabel,
+    required Color placeholderColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A1606).withValues(alpha: 0.92),
+        border: Border.all(color: _cAmber.withValues(alpha: 0.55), width: 0.6),
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$amount',
+            style: const TextStyle(
+              color: _cGreenPale,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: Image.asset(
+              asset,
+              errorBuilder: AssetPlaceholder.image(
+                color: placeholderColor,
+                label: placeholderLabel,
+                borderRadius: 3,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Grid
+  // Jet list — full-width cards, vertical scroll
   // ---------------------------------------------------------------------------
-  Widget _buildGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 0.74,
-      ),
+  Widget _buildList() {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 14),
       itemCount: _jets.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final jet = _jets[index];
         return JetCard(
@@ -366,6 +425,4 @@ class _JetsScreenState extends State<JetsScreen> {
       },
     );
   }
-
 }
-

@@ -3,9 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../game/models.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_typography.dart';
 import '../state/economy_state.dart';
+
+/// Each biome ships with this many levels. Wave counts per level come
+/// from Remote Config (`difficulty__wave_curves__v1`), so this is just
+/// the picker upper-bound, not a gameplay constant.
+const int _kLevelsPerBiome = 10;
 
 /// Soft gate against accidental opens. Stored in source for dev
 /// convenience — this is **not** real security; anyone with the binary
@@ -57,89 +63,98 @@ class DevToolsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.amber,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'DEBUG',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
+        padding: EdgeInsets.fromLTRB(
+            16, 12, 16, MediaQuery.of(context).viewInsets.bottom + 24),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.amber,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'DEBUG',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text('DEV TOOLS', style: AppTypography.title),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close,
-                      color: AppColors.greenLabel),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'kDebugMode only — never shipped to release. Each action '
-              'is confirmation-gated.',
-              style: AppTypography.label,
-            ),
-            const SizedBox(height: 16),
-            _DevAction(
-              title: 'Replay FTUE',
-              subtitle:
-                  "Clears Ace dialogue history + Stage 3 reveal + Stage 1 "
-                  'completion flag. Wallets, level and progression preserved.',
-              onConfirmed: (economy) async => economy.debugReplayFtue(),
-              confirmLabel: 'REPLAY',
-            ),
-            const SizedBox(height: 10),
-            _DevAction(
-              title: 'Reset challenge cycle',
-              subtitle:
-                  'Wipes the active 72h cycle so long-press LAUNCH re-fires '
-                  'the Stage 3 reveal sequence.',
-              onConfirmed: (economy) async => economy.debugResetChallengeCycle(),
-              confirmLabel: 'RESET',
-            ),
-            const SizedBox(height: 10),
-            _DevAction(
-              title: 'Sim Stage 1 clear',
-              subtitle:
-                  'Awards a 3★ Stage 1 clear (≈600 coins + 2 gems) and '
-                  "fires Ace's \"Hell yes!\" line + the home-screen "
-                  'coin chip reveal.',
-              onConfirmed: (economy) async => economy.debugSimulateStage1Clear(),
-              confirmLabel: 'CLEAR',
-            ),
-            const SizedBox(height: 10),
-            _DevAction(
-              title: 'Hard reset economy',
-              subtitle:
-                  'Factory reset: coins, gems, level, streak, loadouts, '
-                  'IAP history, FTUE flags — everything goes back to '
-                  'first-install defaults.',
-              danger: true,
-              onConfirmed: (economy) => economy.debugHardReset(),
-              confirmLabel: 'WIPE',
-            ),
-            const SizedBox(height: 16),
-            _StateSummary(),
-          ],
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text('DEV TOOLS', style: AppTypography.title),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close,
+                        color: AppColors.greenLabel),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'kDebugMode only — never shipped to release. Each action '
+                'is confirmation-gated.',
+                style: AppTypography.label,
+              ),
+              const SizedBox(height: 16),
+              const _StageLauncher(),
+              const SizedBox(height: 10),
+              const _WalletEditor(),
+              const SizedBox(height: 16),
+              _DevAction(
+                title: 'Replay FTUE',
+                subtitle:
+                    "Clears Ace dialogue history + Stage 3 reveal + Stage 1 "
+                    'completion flag. Wallets, level and progression preserved.',
+                onConfirmed: (economy) async => economy.debugReplayFtue(),
+                confirmLabel: 'REPLAY',
+              ),
+              const SizedBox(height: 10),
+              _DevAction(
+                title: 'Reset challenge cycle',
+                subtitle:
+                    'Wipes the active 72h cycle so long-press LAUNCH re-fires '
+                    'the Stage 3 reveal sequence.',
+                onConfirmed: (economy) async =>
+                    economy.debugResetChallengeCycle(),
+                confirmLabel: 'RESET',
+              ),
+              const SizedBox(height: 10),
+              _DevAction(
+                title: 'Sim Stage 1 clear',
+                subtitle:
+                    'Awards a 3★ Stage 1 clear (≈600 coins + 2 gems) and '
+                    "fires Ace's \"Hell yes!\" line + the home-screen "
+                    'coin chip reveal.',
+                onConfirmed: (economy) async =>
+                    economy.debugSimulateStage1Clear(),
+                confirmLabel: 'CLEAR',
+              ),
+              const SizedBox(height: 10),
+              _DevAction(
+                title: 'Hard reset economy',
+                subtitle:
+                    'Factory reset: coins, gems, level, streak, loadouts, '
+                    'IAP history, FTUE flags — everything goes back to '
+                    'first-install defaults.',
+                danger: true,
+                onConfirmed: (economy) => economy.debugHardReset(),
+                confirmLabel: 'WIPE',
+              ),
+              const SizedBox(height: 16),
+              _StateSummary(),
+            ],
+          ),
         ),
       ),
     );
@@ -260,6 +275,367 @@ class _DevActionState extends State<_DevAction> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Biome + level picker that jumps straight into a stage without going
+/// through the home screen. Mirrors the home screen's launch path:
+/// sets the current world/stage, primes `beginStage`, then pushes the
+/// loading screen.
+class _StageLauncher extends StatefulWidget {
+  const _StageLauncher();
+
+  @override
+  State<_StageLauncher> createState() => _StageLauncherState();
+}
+
+class _StageLauncherState extends State<_StageLauncher> {
+  int _world = 1;
+  int _stage = 1;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    final economy = context.read<EconomyState>();
+    _world = economy.currentWorld.clamp(1, 6);
+    _stage = economy.currentStage.clamp(1, _kLevelsPerBiome);
+    _initialized = true;
+  }
+
+  Future<void> _launch() async {
+    final economy = context.read<EconomyState>();
+    final navigator = Navigator.of(context);
+    economy.setCurrentWorld(_world);
+    economy.setCurrentStage(_stage);
+    economy.beginStage(_stage);
+    // Close the dev tools sheet, then jump to the loading screen.
+    navigator.pop();
+    await navigator.pushNamed(
+      '/loading',
+      arguments: {'world': _world, 'stage': _stage},
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.greenTrack, width: 0.6),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Launch stage',
+            style: AppTypography.bodyPale.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              color: AppColors.greenPale,
+            ),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'Pick a biome and level, then jump straight in. Wave counts '
+            'come from Remote Config.',
+            style: AppTypography.label,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _LabeledDropdown<int>(
+                  label: 'BIOME',
+                  value: _world,
+                  items: [
+                    for (var w = 1; w <= 6; w++)
+                      DropdownMenuItem(
+                        value: w,
+                        child: Text('$w · ${worldName(w)}'),
+                      ),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setState(() => _world = v);
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _LabeledDropdown<int>(
+                  label: 'LEVEL',
+                  value: _stage,
+                  items: [
+                    for (var s = 1; s <= _kLevelsPerBiome; s++)
+                      DropdownMenuItem(
+                        value: s,
+                        child: Text('Level $s'),
+                      ),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setState(() => _stage = v);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.amber,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+            ),
+            onPressed: _launch,
+            child: Text(
+              'LAUNCH ${worldName(_world).toUpperCase()} · LV $_stage',
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact label + dropdown pair used inside the stage launcher.
+class _LabeledDropdown<T> extends StatelessWidget {
+  final String label;
+  final T value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+
+  const _LabeledDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: AppTypography.label),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: AppColors.cardBg,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: AppColors.greenTrack, width: 0.5),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<T>(
+              value: value,
+              isExpanded: true,
+              dropdownColor: AppColors.cardBg,
+              iconEnabledColor: AppColors.greenLabel,
+              style: AppTypography.bodyPale.copyWith(fontSize: 13),
+              items: items,
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Direct-edit wallet panel. Lets QA overwrite coins and gems to any
+/// absolute value without ladder-walking through grants. Bypasses the
+/// usual analytics-sourced [EconomyState.addCoins]/[EconomyState.addGems]
+/// path on purpose — see [EconomyState.debugSetCoins].
+class _WalletEditor extends StatefulWidget {
+  const _WalletEditor();
+
+  @override
+  State<_WalletEditor> createState() => _WalletEditorState();
+}
+
+class _WalletEditorState extends State<_WalletEditor> {
+  final TextEditingController _coinsCtrl = TextEditingController();
+  final TextEditingController _gemsCtrl = TextEditingController();
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    final economy = context.read<EconomyState>();
+    _coinsCtrl.text = economy.coins.toString();
+    _gemsCtrl.text = economy.gems.toString();
+    _initialized = true;
+  }
+
+  @override
+  void dispose() {
+    _coinsCtrl.dispose();
+    _gemsCtrl.dispose();
+    super.dispose();
+  }
+
+  void _apply() {
+    final economy = context.read<EconomyState>();
+    final newCoins = int.tryParse(_coinsCtrl.text.trim());
+    final newGems = int.tryParse(_gemsCtrl.text.trim());
+    final messenger = ScaffoldMessenger.of(context);
+    if (newCoins == null && newGems == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter at least one valid integer.')),
+      );
+      return;
+    }
+    if (newCoins != null) economy.debugSetCoins(newCoins);
+    if (newGems != null) economy.debugSetGems(newGems);
+    FocusScope.of(context).unfocus();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Wallet set to ${economy.coins} coins / ${economy.gems} gems.',
+        ),
+      ),
+    );
+  }
+
+  void _resyncFromState() {
+    final economy = context.read<EconomyState>();
+    setState(() {
+      _coinsCtrl.text = economy.coins.toString();
+      _gemsCtrl.text = economy.gems.toString();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final economy = context.watch<EconomyState>();
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.greenTrack, width: 0.6),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Wallet',
+                  style: AppTypography.bodyPale.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: AppColors.greenPale,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Reload from current balance',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.refresh,
+                    color: AppColors.greenLabel, size: 18),
+                onPressed: _resyncFromState,
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Live: ${economy.coins} coins / ${economy.gems} gems.',
+            style: AppTypography.label,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _WalletField(
+                  label: 'COINS',
+                  controller: _coinsCtrl,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _WalletField(
+                  label: 'GEMS',
+                  controller: _gemsCtrl,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.amber,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+            ),
+            onPressed: _apply,
+            child: const Text(
+              'APPLY',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WalletField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+
+  const _WalletField({required this.label, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: AppTypography.label),
+        const SizedBox(height: 4),
+        TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          style: AppTypography.bodyPale.copyWith(fontSize: 14),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: AppColors.cardBg,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide: const BorderSide(
+                  color: AppColors.greenTrack, width: 0.5),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide:
+                  const BorderSide(color: AppColors.amber, width: 0.8),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

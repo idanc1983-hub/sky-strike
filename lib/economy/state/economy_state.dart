@@ -1412,6 +1412,26 @@ class EconomyState extends ChangeNotifier {
     );
   }
 
+  /// Debug-only: overwrites the coin balance to an absolute value.
+  /// Bypasses [addCoins]/[spendCoins] so QA can jump straight to a
+  /// target balance without ladder-walking through deltas.
+  void debugSetCoins(int value) {
+    final clamped = value < 0 ? 0 : value;
+    if (_coins == clamped) return;
+    _coins = clamped;
+    _scheduleSync();
+    notifyListeners();
+  }
+
+  /// Debug-only: overwrites the gem balance to an absolute value.
+  void debugSetGems(int value) {
+    final clamped = value < 0 ? 0 : value;
+    if (_gems == clamped) return;
+    _gems = clamped;
+    _scheduleSync();
+    notifyListeners();
+  }
+
   /// Wipes the active challenge cycle only (keeps `challengeRevealed`
   /// true). Long-press LAUNCH still re-fires the reveal because that
   /// path early-returns on `challengeRevealed`, so this resets that flag

@@ -3,7 +3,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../economy/constants/ad_placement_catalog.dart';
+import '../economy/services/ads_service.dart';
+import '../economy/state/economy_state.dart';
 import '../game/models.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -246,6 +250,10 @@ class _GameScreenState extends State<GameScreen>
   int _reviveFrameAcc = 0;
   bool _reviveExpired = false;
 
+  // ── Rewarded-ad CTAs (mission failed + stage clear) ──────────────────────
+  bool _adInFlight = false;
+  bool _rewardDoubled = false;
+
   // ── Visual FX ────────────────────────────────────────────────────────────
   double _vignetteOpacity = 0;
   int _vignetteFrames = 0;
@@ -416,7 +424,10 @@ class _GameScreenState extends State<GameScreen>
       if (_waveClearFrames >= _kWaveClearDuration) _advanceWave();
     }
 
-    if (_phase == _Phase.gameOver && !_reviveExpired && !_reviveUsed) {
+    if (_phase == _Phase.gameOver &&
+        !_reviveExpired &&
+        !_reviveUsed &&
+        !_adInFlight) {
       _reviveFrameAcc++;
       if (_reviveFrameAcc >= 60) {
         _reviveFrameAcc = 0;
@@ -1115,6 +1126,8 @@ class _GameScreenState extends State<GameScreen>
     _playerInvincible = false;
     _playerVisible = true;
     _reviveUsed = false;
+    _adInFlight = false;
+    _rewardDoubled = false;
     _vignetteOpacity = 0;
     _vignetteFrames  = 0;
     _screenShakeFrames = 0;
@@ -1125,7 +1138,11 @@ class _GameScreenState extends State<GameScreen>
   void _revive() {
     if (_playerGems < revivePrice(_waveAtDeath)) return;
     _playerGems -= revivePrice(_waveAtDeath);
-    _reviveUsed  = true;
+    _applyRevive();
+  }
+
+  void _applyRevive() {
+    _reviveUsed = true;
     _hp = _maxHp;
     if (_currentWave >= _maxWave) {
       _bossHp = (_bossHpAtDeath * _bossMaxHp).round().clamp(1, _bossMaxHp);
@@ -1134,6 +1151,66 @@ class _GameScreenState extends State<GameScreen>
     _playerInvincible = true;
     _invincibleFrames = _kInvincibleDuration;
     _phase = _currentWave >= _maxWave ? _Phase.boss : _Phase.wave;
+  }
+
+  Future<void> _watchAdToRevive() async {
+    if (_adInFlight) return;
+    final economy = context.read<EconomyState>();
+    if (!economy.canTakeAdRevive()) {
+      _showAdSnack('No more free revives this stage');
+      return;
+    }
+    setState(() => _adInFlight = true);
+    final outcome = await economy.showRewardedAd(AdPlacement.reviveMidStage);
+    if (!mounted) return;
+    if (outcome.result == AdShowResult.rewardEarned) {
+      economy.commitAdRevive();
+      setState(() {
+        _adInFlight = false;
+        _applyRevive();
+      });
+    } else {
+      setState(() => _adInFlight = false);
+      _showAdSnack(_messageForAdOutcome(outcome.result));
+    }
+  }
+
+  Future<void> _watchAdToDoubleReward() async {
+    if (_adInFlight || _rewardDoubled) return;
+    setState(() => _adInFlight = true);
+    final outcome = await context
+        .read<EconomyState>()
+        .showRewardedAd(AdPlacement.doubleBiomeEnd);
+    if (!mounted) return;
+    if (outcome.result == AdShowResult.rewardEarned) {
+      setState(() {
+        _adInFlight = false;
+        _rewardDoubled = true;
+      });
+    } else {
+      setState(() => _adInFlight = false);
+      _showAdSnack(_messageForAdOutcome(outcome.result));
+    }
+  }
+
+  String _messageForAdOutcome(AdShowResult r) {
+    switch (r) {
+      case AdShowResult.dismissed:
+        return 'Ad cancelled — no reward';
+      case AdShowResult.failedToLoad:
+        return 'Ad unavailable, try again';
+      case AdShowResult.capReached:
+        return 'Daily ad limit reached';
+      case AdShowResult.rewardEarned:
+        return '';
+    }
+  }
+
+  void _showAdSnack(String msg) {
+    if (msg.isEmpty) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1252,6 +1329,28 @@ class _GameScreenState extends State<GameScreen>
             // ── HUD ──────────────────────────────────────────────────────
             if (_phase == _Phase.wave || _phase == _Phase.boss) _buildHUD(),
 
+            // ── Power-up tray ────────────────────────────────────────────
+            // Kept continuously mounted (Offstage rather than `if`) so the
+            // tray state — collectible counts — survives phase changes like
+            // waveClear / paused / gameOver. Otherwise the tray widget is
+            // disposed on every phase swap and collectibles reset to 0.
+            Offstage(
+              offstage: _phase != _Phase.wave && _phase != _Phase.boss,
+              child: SafeArea(
+                child: Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 8),
+                    child: _PowerUpTray(
+                      key: _trayKey,
+                      slotImages: Map.unmodifiable(_puSlotImages),
+                      onActivate: _onCollectibleActivated,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
             // ── Boss HP bar ───────────────────────────────────────────────
             if (_phase == _Phase.boss && !_bossExploding && _bossMaxHp > 0)
               _buildBossHpBar(),
@@ -1337,15 +1436,9 @@ class _GameScreenState extends State<GameScreen>
             ),
           ),
 
-          // Power-up tray
-          Positioned(
-            bottom: 8, left: 8,
-            child: _PowerUpTray(
-              key: _trayKey,
-              slotImages: Map.unmodifiable(_puSlotImages),
-              onActivate: _onCollectibleActivated,
-            ),
-          ),
+          // Power-up tray is rendered as a sibling of the HUD in the
+          // main Stack so it stays mounted across phase changes —
+          // see _GameScreenState.build.
 
           // Pause button
           Positioned(
@@ -1527,8 +1620,10 @@ class _GameScreenState extends State<GameScreen>
         _totalScore >= (maxScore * 0.85).round() &&
         avgAcc >= 85;
     final stars    = got3 ? 3 : got2 ? 2 : 1;
-    final starBonus = 50 + (got2 ? 100 : 0) + (got3 ? 200 : 0);
-    final gemBonus  = got3 ? 1 : 0;
+    final mult     = _rewardDoubled ? 2 : 1;
+    final baseReward = 500 * mult;
+    final starBonus = (50 + (got2 ? 100 : 0) + (got3 ? 200 : 0)) * mult;
+    final gemBonus  = (got3 ? 1 : 0) * mult;
 
     return Container(
       color: Colors.black.withValues(alpha: 0.5),
@@ -1565,11 +1660,34 @@ class _GameScreenState extends State<GameScreen>
           _statRow('Avg accuracy', '$avgAcc%', const Color(0xFF97C459)),
           _statRow('Best combo', '×$_bestCombo', const Color(0xFFEF9F27)),
           const SizedBox(height: 10),
-          _statRow('Base reward', '+500 ★', const Color(0xFFEF9F27)),
+          _statRow('Base reward', '+$baseReward ★', const Color(0xFFEF9F27)),
           _statRow('Star bonus', '+$starBonus ★', const Color(0xFFEF9F27)),
           if (gemBonus > 0)
             _statRow('3★ bonus', '+$gemBonus 💎', const Color(0xFF97C459)),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
+          if (_rewardDoubled)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0x222B6D11),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: const Color(0xFF97C459), width: 0.5),
+              ),
+              child: const Text('Reward Doubled ✓',
+                  style: TextStyle(
+                      color: Color(0xFFC0DD97),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5)),
+            )
+          else
+            _watchAdButton(
+              label: 'Watch Ad — 2× Reward',
+              onTap: _watchAdToDoubleReward,
+            ),
+          const SizedBox(height: 18),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -1594,6 +1712,8 @@ class _GameScreenState extends State<GameScreen>
     final price    = revivePrice(_waveAtDeath);
     final canRevive = !_reviveUsed && !_reviveExpired;
     final hasGems   = _playerGems >= price;
+    final canAdRevive = canRevive &&
+        context.watch<EconomyState>().canTakeAdRevive();
 
     return Container(
       color: const Color(0xB8000000),
@@ -1690,6 +1810,14 @@ class _GameScreenState extends State<GameScreen>
             ),
           ],
 
+          if (canAdRevive) ...[
+            const SizedBox(height: 14),
+            _watchAdButton(
+              label: 'Watch Ad — Free Revive',
+              onTap: _watchAdToRevive,
+            ),
+          ],
+
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1782,6 +1910,55 @@ class _GameScreenState extends State<GameScreen>
                   letterSpacing: 1.5)),
         ),
       );
+
+  Widget _watchAdButton({
+    required String label,
+    required Future<void> Function() onTap,
+  }) {
+    final loading = _adInFlight;
+    return GestureDetector(
+      onTap: loading ? null : () => onTap(),
+      child: Opacity(
+        opacity: loading ? 0.6 : 1,
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFCC8833), Color(0xFFEF9F27)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+                color: const Color(0xFFFFD27A), width: 0.5),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (loading)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Color(0xFF1a1a1a)),
+                )
+              else
+                const Icon(Icons.play_arrow_rounded,
+                    size: 18, color: Color(0xFF1a1a1a)),
+              const SizedBox(width: 8),
+              Text(label,
+                  style: const TextStyle(
+                      color: Color(0xFF1a1a1a),
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
