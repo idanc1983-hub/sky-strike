@@ -45,7 +45,7 @@ const List<_BiomeMeta> _biomes = [
   ),
   _BiomeMeta(
     index: 6,
-    name: 'Megacity',
+    name: 'City',
     asset: 'assets/map/biome_city.png',
     fallback: Color(0xFF0a0818),
   ),
@@ -103,10 +103,15 @@ class _WorldMapScreenState extends State<WorldMapScreen>
       if (!mounted) return;
       final economy = context.read<EconomyState>();
       final worldIndex = (economy.currentWorld - 1).clamp(0, _biomes.length - 1);
+      // Items 0..N-2 each have height = cardStride (connector + card).
+      // The topmost item has just the card. In both cases the card's
+      // centre lives at `i*cardStride + cardHeight/2` from the bottom
+      // of the scrollable, since the connector sits above the card.
       const cardStride = _biomeCardHeight + _connectorHeight;
-      final targetOffset = worldIndex * cardStride;
+      final cardCenter =
+          worldIndex * cardStride + _biomeCardHeight / 2;
       final screenH = MediaQuery.of(context).size.height;
-      final desired = targetOffset - (screenH / 2) + (_biomeCardHeight / 2);
+      final desired = cardCenter - screenH / 2;
       final clamped = desired.clamp(
         0.0,
         _scrollController.position.maxScrollExtent,
@@ -130,7 +135,6 @@ class _WorldMapScreenState extends State<WorldMapScreen>
   Widget build(BuildContext context) {
     final economy = context.watch<EconomyState>();
     final currentWorld = economy.currentWorld.clamp(1, _biomes.length);
-    final maxWorld = economy.maxWorldReached.clamp(1, _biomes.length);
 
     return Scaffold(
       backgroundColor: _cGreenDeep,
@@ -172,11 +176,24 @@ class _WorldMapScreenState extends State<WorldMapScreen>
                       final state = _resolveState(
                         worldIndex: meta.index,
                         currentWorld: currentWorld,
-                        maxWorld: maxWorld,
                       );
+                      // Each item renders the connector that leads up to
+                      // the next world. With reverse:true, the first
+                      // child of the Column lands at the visually-upper
+                      // edge of the item, which is the gap between this
+                      // card and the card above it. The topmost item
+                      // (City) has no card above, so it skips the
+                      // connector. Colouring uses the destination
+                      // world's state — completed/current => solid,
+                      // next => faded, locked => barely visible.
+                      final hasNext = i < _biomes.length - 1;
                       return Column(
                         children: [
-                          if (i > 0) _buildConnector(state),
+                          if (hasNext)
+                            _buildConnector(_resolveState(
+                              worldIndex: _biomes[i + 1].index,
+                              currentWorld: currentWorld,
+                            )),
                           _buildBiomeRow(meta, state),
                         ],
                       );
@@ -194,13 +211,10 @@ class _WorldMapScreenState extends State<WorldMapScreen>
   _BiomeState _resolveState({
     required int worldIndex,
     required int currentWorld,
-    required int maxWorld,
   }) {
     if (worldIndex < currentWorld) return _BiomeState.completed;
     if (worldIndex == currentWorld) return _BiomeState.current;
-    if (worldIndex == currentWorld + 1 && worldIndex <= maxWorld + 1) {
-      return _BiomeState.next;
-    }
+    if (worldIndex == currentWorld + 1) return _BiomeState.next;
     return _BiomeState.locked;
   }
 

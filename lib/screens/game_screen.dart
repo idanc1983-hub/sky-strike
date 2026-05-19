@@ -906,15 +906,15 @@ class _GameScreenState extends State<GameScreen>
       case PowerUpType.shield:
         _shieldActive = true;
         _shieldHitsRemaining = 3;
-      case PowerUpType.splitShot:
-        _splitShotActive = true;
-        _splitShotFrames = PowerUpType.splitShot.durationFrames;
       case PowerUpType.speedBoost:
         _speedBoostActive = true;
         _speedBoostFrames = PowerUpType.speedBoost.durationFrames;
-      case PowerUpType.droneWingman:
-        _droneActive = true;
-        _droneFrames = PowerUpType.droneWingman.durationFrames;
+      case PowerUpType.magnet:
+        _magnetActive = true;
+        _magnetFrames = PowerUpType.magnet.durationFrames;
+      case PowerUpType.ghostMode:
+        _ghostActive = true;
+        _ghostFrames = PowerUpType.ghostMode.durationFrames;
       case PowerUpType.hp:
         final restore = (_maxHp * 0.25).round();
         final before  = _hp;
@@ -946,18 +946,18 @@ class _GameScreenState extends State<GameScreen>
     switch (type) {
       case PowerUpType.bomb:
         _detonateBomb();
+      case PowerUpType.splitShot:
+        _splitShotActive = true;
+        _splitShotFrames = PowerUpType.splitShot.durationFrames;
       case PowerUpType.laser:
         _laserActive = true;
         _laserFrames = PowerUpType.laser.durationFrames;
-      case PowerUpType.magnet:
-        _magnetActive = true;
-        _magnetFrames = PowerUpType.magnet.durationFrames;
-      case PowerUpType.ghostMode:
-        _ghostActive = true;
-        _ghostFrames = PowerUpType.ghostMode.durationFrames;
       case PowerUpType.freezeTime:
         _freezeActive = true;
         _freezeFrames = PowerUpType.freezeTime.durationFrames;
+      case PowerUpType.droneWingman:
+        _droneActive = true;
+        _droneFrames = PowerUpType.droneWingman.durationFrames;
       default:
         break;
     }

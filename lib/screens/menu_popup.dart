@@ -27,6 +27,11 @@ class MenuPopup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Capture the navigator once — referencing `context` after the
+    // dialog has been popped is fragile because the dialog element
+    // begins deactivating in the same frame.
+    final nav = Navigator.of(context);
+
     return Dialog(
       backgroundColor: _cPanel,
       insetPadding: const EdgeInsets.symmetric(horizontal: 28),
@@ -39,14 +44,14 @@ class MenuPopup extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _Header(onClose: () => Navigator.of(context).pop()),
+            _Header(onClose: nav.pop),
             const SizedBox(height: 12),
             _MenuTile(
               icon: Icons.settings_rounded,
               label: 'Settings',
               onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).push(
+                nav.pop();
+                nav.push(
                   MaterialPageRoute(builder: (_) => const SettingsScreen()),
                 );
               },
@@ -56,8 +61,8 @@ class MenuPopup extends StatelessWidget {
               icon: Icons.public_rounded,
               label: 'World Map',
               onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).push(
+                nav.pop();
+                nav.push(
                   MaterialPageRoute(builder: (_) => const WorldMapScreen()),
                 );
               },
@@ -67,8 +72,8 @@ class MenuPopup extends StatelessWidget {
               icon: Icons.card_giftcard_rounded,
               label: 'Daily Rewards',
               onTap: () {
-                Navigator.of(context).pop();
-                DailyRewardsPopup.show(context);
+                nav.pop();
+                DailyRewardsPopup.show(nav.context);
               },
             ),
           ],
@@ -99,7 +104,7 @@ class _Header extends StatelessWidget {
             ),
           ),
         ),
-        _CloseButton(onTap: onClose),
+        MenuCloseButton(onTap: onClose),
       ],
     );
   }
@@ -165,14 +170,6 @@ class _MenuTile extends StatelessWidget {
 /// Top-right X used to dismiss the menu and any sub-screen / popup that
 /// the menu opens. Exposed so [SettingsScreen], [WorldMapScreen], and
 /// [DailyRewardsPopup] share the same hit-target and styling.
-class _CloseButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _CloseButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => MenuCloseButton(onTap: onTap);
-}
-
 class MenuCloseButton extends StatelessWidget {
   final VoidCallback onTap;
   const MenuCloseButton({super.key, required this.onTap});
