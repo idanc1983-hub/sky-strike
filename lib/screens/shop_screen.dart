@@ -596,10 +596,10 @@ class _ShopScreenState extends State<ShopScreen> {
   String get _biomeChestAsset {
     const map = {
       1: 'assets/ui/icon_chest_biome_jungle.png',
-      2: 'assets/ui/icon_chest_biome_ocean.png',
-      3: 'assets/ui/icon_chest_biome_desert.png',
-      4: 'assets/ui/icon_chest_biome_volcano.png',
-      5: 'assets/ui/icon_chest_biome_arctic.png',
+      2: 'assets/ui/icon_chest_biome_desert.png',
+      3: 'assets/ui/icon_chest_biome_sea.png',
+      4: 'assets/ui/icon_chest_biome_ice.png',
+      5: 'assets/ui/icon_chest_biome_volcano.png',
       6: 'assets/ui/icon_chest_biome_city.png',
     };
     return map[_currentWorld] ?? 'assets/ui/icon_chest_biome_jungle.png';

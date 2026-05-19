@@ -107,8 +107,8 @@ double waveEnemySpeed(int wave) => 0.4 + (wave * 0.05);
 // Higher number = slower fire. World 1 W1-3 returns 9999 (no fire).
 int waveEnemyFireRate(int world, int wave) {
   if (world == 1 && wave <= 3) return 9999;
-  if (world == 1) return max(55 - wave * 2, 25);
-  return max(40 - wave * 2, 18);
+  if (world == 1) return max(75 - wave * 2, 40);
+  return max(60 - wave * 2, 28);
 }
 
 double eliteRatio(int world, int wave) {
@@ -154,8 +154,12 @@ int bossHpForWorld(int world) {
   return hps[(world - 1).clamp(0, 5)];
 }
 
-// Frames between boss fire volleys — World 1 fires slowly so new players can dodge
-int bossFireRate(int world) => world == 1 ? 55 : 30;
+// Frames between boss fire volleys — earlier biomes fire slowly so players can dodge
+int bossFireRate(int world) {
+  if (world == 1) return 75;
+  if (world == 2) return 60;
+  return 45;
+}
 
 // Boss bullet speed (downward) — slower in World 1 for dodgeability
 double bossBulletSpeed(int world) => world == 1 ? 2.0 : 3.0;
@@ -176,12 +180,17 @@ List<EnemyTier> activeEnemyTiers(int stage) {
 // ---------------------------------------------------------------------------
 // Biome helpers
 // ---------------------------------------------------------------------------
+// World ordering follows Levels-economy.xlsx — one biome per 10 levels:
+// W1 Jungle (1–10) → W2 Desert (11–20) → W3 Sea (21–30) →
+// W4 Arctic / ice (31–40) → W5 Volcano (41–50) → W6 City (51–60).
 const List<String> kWorldNames = [
-  '', 'Jungle', 'Ocean', 'Desert', 'Volcano', 'Arctic', 'Megacity'
+  '', 'Jungle', 'Desert', 'Sea', 'Arctic', 'Volcano', 'City'
 ];
 String worldName(int world) => kWorldNames[world.clamp(1, 6)];
 
-const _biomeKeys = ['', 'jungle', 'ocean', 'desert', 'volcano', 'arctic', 'city'];
+// Biome key strings — match remote config (`unlock_biome` values).
+// W4's display name is "Arctic" but its key is "ice".
+const _biomeKeys = ['', 'jungle', 'desert', 'sea', 'ice', 'volcano', 'city'];
 String biomeName(int world) => _biomeKeys[world.clamp(1, 6)];
 
 String enemyAsset(int world, EnemyTier tier) {

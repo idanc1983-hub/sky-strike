@@ -13,6 +13,7 @@ import '../economy/ui/three_plus_one_offer_popup.dart';
 import '../economy/ui/vapor_trail_popup.dart';
 import '../game/models.dart';
 import '../shared/widgets/asset_placeholder.dart';
+import 'menu_popup.dart';
 
 // ---------------------------------------------------------------------------
 // Biome config
@@ -33,6 +34,7 @@ class _Biome {
   });
 }
 
+// World ordering follows Levels-economy.xlsx — one biome per 10 levels.
 const _biomes = <int, _Biome>{
   1: _Biome(
     bgAsset: 'assets/backgrounds/bg_jungle.png',
@@ -42,38 +44,38 @@ const _biomes = <int, _Biome>{
     placeholderColor: Color(0xFF1a3a0a),
   ),
   2: _Biome(
-    bgAsset: 'assets/backgrounds/bg_ocean.png',
-    enemyAsset: 'assets/enemies/enemy_ocean.png',
-    enemyLabel: 'naval jets',
-    worldName: 'Ocean',
-    placeholderColor: Color(0xFF0a1a3a),
-  ),
-  3: _Biome(
     bgAsset: 'assets/backgrounds/bg_desert.png',
     enemyAsset: 'assets/enemies/enemy_desert.png',
     enemyLabel: 'stealth drones',
     worldName: 'Desert',
     placeholderColor: Color(0xFF3a2a0a),
   ),
+  3: _Biome(
+    bgAsset: 'assets/backgrounds/bg_sea.png',
+    enemyAsset: 'assets/enemies/enemy_sea.png',
+    enemyLabel: 'naval jets',
+    worldName: 'Sea',
+    placeholderColor: Color(0xFF0a1a3a),
+  ),
   4: _Biome(
+    bgAsset: 'assets/backgrounds/bg_ice.png',
+    enemyAsset: 'assets/enemies/enemy_ice.png',
+    enemyLabel: 'cryo jets',
+    worldName: 'Arctic',
+    placeholderColor: Color(0xFF1a2a3a),
+  ),
+  5: _Biome(
     bgAsset: 'assets/backgrounds/bg_volcano.png',
     enemyAsset: 'assets/enemies/enemy_volcano.png',
     enemyLabel: 'fire bombers',
     worldName: 'Volcano',
     placeholderColor: Color(0xFF3a0a0a),
   ),
-  5: _Biome(
-    bgAsset: 'assets/backgrounds/bg_arctic.png',
-    enemyAsset: 'assets/enemies/enemy_arctic.png',
-    enemyLabel: 'cryo jets',
-    worldName: 'Arctic',
-    placeholderColor: Color(0xFF1a2a3a),
-  ),
   6: _Biome(
     bgAsset: 'assets/backgrounds/bg_city.png',
     enemyAsset: 'assets/enemies/enemy_city.png',
     enemyLabel: 'rogue AI jets',
-    worldName: 'Megacity',
+    worldName: 'City',
     placeholderColor: Color(0xFF1a1a2a),
   ),
 };
@@ -235,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen>
           _jetLoaded = true;
           _onImageLoaded();
         }));
-    _loadImage('assets/enemies/Arctic_enemy_3.png', (img) => setState(() {
+    _loadImage('assets/enemies/Ice_enemy_3.png', (img) => setState(() {
           _enemyImage = img;
           _enemyLoaded = true;
           _onImageLoaded();
@@ -460,7 +462,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ---------------------------------------------------------------------------
-  // Top bar — level pill on the left, coins + gems on the right
+  // Top bar — menu button on the left, coins + gems on the right
   // ---------------------------------------------------------------------------
   Widget _buildTopBar(EconomyState economy) {
     return Padding(
@@ -468,7 +470,7 @@ class _HomeScreenState extends State<HomeScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _levelChip(economy.level),
+          _menuButton(),
           Row(
             children: [
               // FTUE: coin chip is hidden until Stage 1 first clear.
@@ -493,21 +495,20 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _levelChip(int level) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A1606).withValues(alpha: 0.92),
-        border: Border.all(color: _cAmber.withValues(alpha: 0.55), width: 0.6),
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: Text(
-        'Lv. $level',
-        style: const TextStyle(
-          color: _cGreenPale,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
+  Widget _menuButton() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => MenuPopup.show(context),
+      child: Container(
+        width: 36,
+        height: 32,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A1606).withValues(alpha: 0.92),
+          border: Border.all(color: _cAmber.withValues(alpha: 0.55), width: 0.6),
+          borderRadius: BorderRadius.circular(7),
         ),
+        child: const Icon(Icons.menu, color: _cGreenPale, size: 20),
       ),
     );
   }

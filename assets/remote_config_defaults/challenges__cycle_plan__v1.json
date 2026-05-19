@@ -1,0 +1,20 @@
+{
+  "cycles": {
+    "conqueror": {
+      "display_name": "Star Ascent"
+    },
+    "hunter": {
+      "display_name": "Iron Skies"
+    },
+    "new_players": {
+      "display_name": "New Players"
+    },
+    "survivor": {
+      "display_name": "Last Stand"
+    },
+    "treasure": {
+      "display_name": "Golden Sky"
+    }
+  },
+  "schema_version": 1
+}

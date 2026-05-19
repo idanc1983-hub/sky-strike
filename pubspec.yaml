@@ -40,6 +40,8 @@ flutter:
     - assets/themes/
     - assets/mock_backend/
     - assets/config/
+    - assets/remote_config_defaults/
+    - assets/map/
     # Power-up drop orbs (256×256 source → rendered 56×56 on canvas)
     - assets/ui/pu_bomb_drop.png
     - assets/ui/pu_laser_drop.png

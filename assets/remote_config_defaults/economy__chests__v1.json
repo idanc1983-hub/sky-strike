@@ -1,0 +1,32 @@
+{
+  "chests": {
+    "bronze": {
+      "open_grant": {
+        "coins": 250,
+        "gems": 0,
+        "powerup_pool": "T1_T2",
+        "powerups": 1
+      },
+      "shop_coin_price": 400
+    },
+    "gold": {
+      "open_grant": {
+        "coins": 1800,
+        "gems": 30,
+        "powerup_pool": "T4_T5_T6",
+        "powerups": 2
+      },
+      "shop_coin_price": 3000
+    },
+    "silver": {
+      "open_grant": {
+        "coins": 600,
+        "gems": 5,
+        "powerup_pool": "T2_T3_T4",
+        "powerups": 1
+      },
+      "shop_coin_price": 1000
+    }
+  },
+  "schema_version": 1
+}

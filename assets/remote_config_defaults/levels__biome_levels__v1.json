@@ -1,0 +1,1625 @@
+{
+  "levels": {
+    "city_1": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 6.8
+        },
+        "enemy_2": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 3.6,
+      "waves": 5
+    },
+    "city_10": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 112.27
+        },
+        "enemy_1": {
+          "count": 24,
+          "power": 8.64
+        },
+        "enemy_2": {
+          "count": 18,
+          "power": 13.82
+        },
+        "enemy_3": {
+          "count": 14,
+          "power": 21.59
+        },
+        "enemy_4": {
+          "count": 10,
+          "power": 34.54
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 4.5,
+      "waves": 10
+    },
+    "city_2": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 7.0
+        },
+        "enemy_2": {
+          "count": 6,
+          "power": 11.21
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 3.7,
+      "waves": 5
+    },
+    "city_3": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 39.64
+        },
+        "enemy_1": {
+          "count": 12,
+          "power": 7.21
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 11.53
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 3.8,
+      "waves": 7
+    },
+    "city_4": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 7.41
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 11.86
+        },
+        "enemy_3": {
+          "count": 4,
+          "power": 18.53
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 3.9,
+      "waves": 7
+    },
+    "city_5": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 7.62
+        },
+        "enemy_2": {
+          "count": 10,
+          "power": 12.19
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 19.04
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 4.0,
+      "waves": 7
+    },
+    "city_6": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 58.65
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 7.82
+        },
+        "enemy_2": {
+          "count": 12,
+          "power": 12.51
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 19.55
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 4.1,
+      "waves": 10
+    },
+    "city_7": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 8.02
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 12.84
+        },
+        "enemy_3": {
+          "count": 8,
+          "power": 20.06
+        },
+        "enemy_4": {
+          "count": 4,
+          "power": 32.1
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 4.2,
+      "waves": 10
+    },
+    "city_8": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 78.17
+        },
+        "enemy_1": {
+          "count": 20,
+          "power": 8.23
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 13.16
+        },
+        "enemy_3": {
+          "count": 10,
+          "power": 20.57
+        },
+        "enemy_4": {
+          "count": 6,
+          "power": 32.91
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 4.3,
+      "waves": 10
+    },
+    "city_9": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 22,
+          "power": 8.43
+        },
+        "enemy_2": {
+          "count": 16,
+          "power": 13.49
+        },
+        "enemy_3": {
+          "count": 12,
+          "power": 21.08
+        },
+        "enemy_4": {
+          "count": 8,
+          "power": 33.73
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 4.4,
+      "waves": 10
+    },
+    "desert_1": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 1.5
+        },
+        "enemy_2": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.4,
+      "waves": 5
+    },
+    "desert_10": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 24.77
+        },
+        "enemy_1": {
+          "count": 24,
+          "power": 1.91
+        },
+        "enemy_2": {
+          "count": 18,
+          "power": 3.05
+        },
+        "enemy_3": {
+          "count": 14,
+          "power": 4.76
+        },
+        "enemy_4": {
+          "count": 10,
+          "power": 7.62
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 1.7,
+      "waves": 10
+    },
+    "desert_2": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 1.54
+        },
+        "enemy_2": {
+          "count": 6,
+          "power": 2.47
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.43,
+      "waves": 5
+    },
+    "desert_3": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 8.75
+        },
+        "enemy_1": {
+          "count": 12,
+          "power": 1.59
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 2.54
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 1.47,
+      "waves": 7
+    },
+    "desert_4": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 1.64
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 2.62
+        },
+        "enemy_3": {
+          "count": 4,
+          "power": 4.09
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.5,
+      "waves": 7
+    },
+    "desert_5": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 1.68
+        },
+        "enemy_2": {
+          "count": 10,
+          "power": 2.69
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 4.2
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.53,
+      "waves": 7
+    },
+    "desert_6": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 12.94
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 1.72
+        },
+        "enemy_2": {
+          "count": 12,
+          "power": 2.76
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 4.31
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 1.57,
+      "waves": 10
+    },
+    "desert_7": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 1.77
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 2.83
+        },
+        "enemy_3": {
+          "count": 8,
+          "power": 4.42
+        },
+        "enemy_4": {
+          "count": 4,
+          "power": 7.08
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.6,
+      "waves": 10
+    },
+    "desert_8": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 17.24
+        },
+        "enemy_1": {
+          "count": 20,
+          "power": 1.81
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 2.9
+        },
+        "enemy_3": {
+          "count": 10,
+          "power": 4.54
+        },
+        "enemy_4": {
+          "count": 6,
+          "power": 7.26
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 1.63,
+      "waves": 10
+    },
+    "desert_9": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 22,
+          "power": 1.86
+        },
+        "enemy_2": {
+          "count": 16,
+          "power": 2.98
+        },
+        "enemy_3": {
+          "count": 12,
+          "power": 4.65
+        },
+        "enemy_4": {
+          "count": 8,
+          "power": 7.44
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.67,
+      "waves": 10
+    },
+    "ice_1": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 3.2
+        },
+        "enemy_2": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 2.3,
+      "waves": 5
+    },
+    "ice_10": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 52.83
+        },
+        "enemy_1": {
+          "count": 24,
+          "power": 4.06
+        },
+        "enemy_2": {
+          "count": 18,
+          "power": 6.5
+        },
+        "enemy_3": {
+          "count": 14,
+          "power": 10.16
+        },
+        "enemy_4": {
+          "count": 10,
+          "power": 16.26
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 2.8,
+      "waves": 10
+    },
+    "ice_2": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 3.3
+        },
+        "enemy_2": {
+          "count": 6,
+          "power": 5.27
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 2.36,
+      "waves": 5
+    },
+    "ice_3": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 18.66
+        },
+        "enemy_1": {
+          "count": 12,
+          "power": 3.39
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 5.43
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 2.41,
+      "waves": 7
+    },
+    "ice_4": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 3.49
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 5.58
+        },
+        "enemy_3": {
+          "count": 4,
+          "power": 8.72
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 2.47,
+      "waves": 7
+    },
+    "ice_5": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 3.58
+        },
+        "enemy_2": {
+          "count": 10,
+          "power": 5.73
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 8.96
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 2.52,
+      "waves": 7
+    },
+    "ice_6": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 27.6
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 3.68
+        },
+        "enemy_2": {
+          "count": 12,
+          "power": 5.89
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 9.2
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 2.58,
+      "waves": 10
+    },
+    "ice_7": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 3.78
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 6.04
+        },
+        "enemy_3": {
+          "count": 8,
+          "power": 9.44
+        },
+        "enemy_4": {
+          "count": 4,
+          "power": 15.1
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 2.63,
+      "waves": 10
+    },
+    "ice_8": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 36.78
+        },
+        "enemy_1": {
+          "count": 20,
+          "power": 3.87
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 6.2
+        },
+        "enemy_3": {
+          "count": 10,
+          "power": 9.68
+        },
+        "enemy_4": {
+          "count": 6,
+          "power": 15.49
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 2.69,
+      "waves": 10
+    },
+    "ice_9": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 22,
+          "power": 3.97
+        },
+        "enemy_2": {
+          "count": 16,
+          "power": 6.35
+        },
+        "enemy_3": {
+          "count": 12,
+          "power": 9.92
+        },
+        "enemy_4": {
+          "count": 8,
+          "power": 15.87
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 2.74,
+      "waves": 10
+    },
+    "jungle_1": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 1.0
+        },
+        "enemy_2": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.0,
+      "waves": 5
+    },
+    "jungle_10": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 16.51
+        },
+        "enemy_1": {
+          "count": 24,
+          "power": 1.27
+        },
+        "enemy_2": {
+          "count": 18,
+          "power": 2.03
+        },
+        "enemy_3": {
+          "count": 14,
+          "power": 3.17
+        },
+        "enemy_4": {
+          "count": 10,
+          "power": 5.08
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 1.3,
+      "waves": 10
+    },
+    "jungle_2": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 1.03
+        },
+        "enemy_2": {
+          "count": 6,
+          "power": 1.65
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.03,
+      "waves": 5
+    },
+    "jungle_3": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 5.83
+        },
+        "enemy_1": {
+          "count": 12,
+          "power": 1.06
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 1.7
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 1.07,
+      "waves": 7
+    },
+    "jungle_4": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 1.09
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 1.74
+        },
+        "enemy_3": {
+          "count": 4,
+          "power": 2.73
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.1,
+      "waves": 7
+    },
+    "jungle_5": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 1.12
+        },
+        "enemy_2": {
+          "count": 10,
+          "power": 1.79
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 2.8
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.13,
+      "waves": 7
+    },
+    "jungle_6": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 8.62
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 1.15
+        },
+        "enemy_2": {
+          "count": 12,
+          "power": 1.84
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 2.88
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 1.17,
+      "waves": 10
+    },
+    "jungle_7": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 1.18
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 1.89
+        },
+        "enemy_3": {
+          "count": 8,
+          "power": 2.95
+        },
+        "enemy_4": {
+          "count": 4,
+          "power": 4.72
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.2,
+      "waves": 10
+    },
+    "jungle_8": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 11.49
+        },
+        "enemy_1": {
+          "count": 20,
+          "power": 1.21
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 1.94
+        },
+        "enemy_3": {
+          "count": 10,
+          "power": 3.02
+        },
+        "enemy_4": {
+          "count": 6,
+          "power": 4.84
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 1.23,
+      "waves": 10
+    },
+    "jungle_9": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 22,
+          "power": 1.24
+        },
+        "enemy_2": {
+          "count": 16,
+          "power": 1.98
+        },
+        "enemy_3": {
+          "count": 12,
+          "power": 3.1
+        },
+        "enemy_4": {
+          "count": 8,
+          "power": 4.96
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.27,
+      "waves": 10
+    },
+    "sea_1": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 2.2
+        },
+        "enemy_2": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.8,
+      "waves": 5
+    },
+    "sea_10": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 36.32
+        },
+        "enemy_1": {
+          "count": 24,
+          "power": 2.79
+        },
+        "enemy_2": {
+          "count": 18,
+          "power": 4.47
+        },
+        "enemy_3": {
+          "count": 14,
+          "power": 6.99
+        },
+        "enemy_4": {
+          "count": 10,
+          "power": 11.18
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 2.2,
+      "waves": 10
+    },
+    "sea_2": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 2.27
+        },
+        "enemy_2": {
+          "count": 6,
+          "power": 3.63
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.84,
+      "waves": 5
+    },
+    "sea_3": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 12.83
+        },
+        "enemy_1": {
+          "count": 12,
+          "power": 2.33
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 3.73
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 1.89,
+      "waves": 7
+    },
+    "sea_4": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 2.4
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 3.84
+        },
+        "enemy_3": {
+          "count": 4,
+          "power": 6.0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.93,
+      "waves": 7
+    },
+    "sea_5": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 2.46
+        },
+        "enemy_2": {
+          "count": 10,
+          "power": 3.94
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 6.16
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 1.98,
+      "waves": 7
+    },
+    "sea_6": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 18.97
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 2.53
+        },
+        "enemy_2": {
+          "count": 12,
+          "power": 4.05
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 6.32
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 2.02,
+      "waves": 10
+    },
+    "sea_7": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 2.6
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 4.15
+        },
+        "enemy_3": {
+          "count": 8,
+          "power": 6.49
+        },
+        "enemy_4": {
+          "count": 4,
+          "power": 10.38
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 2.07,
+      "waves": 10
+    },
+    "sea_8": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 25.29
+        },
+        "enemy_1": {
+          "count": 20,
+          "power": 2.66
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 4.26
+        },
+        "enemy_3": {
+          "count": 10,
+          "power": 6.65
+        },
+        "enemy_4": {
+          "count": 6,
+          "power": 10.65
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 2.11,
+      "waves": 10
+    },
+    "sea_9": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 22,
+          "power": 2.73
+        },
+        "enemy_2": {
+          "count": 16,
+          "power": 4.36
+        },
+        "enemy_3": {
+          "count": 12,
+          "power": 6.82
+        },
+        "enemy_4": {
+          "count": 8,
+          "power": 10.91
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 2.16,
+      "waves": 10
+    },
+    "volcano_1": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 4.6
+        },
+        "enemy_2": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 2.9,
+      "waves": 5
+    },
+    "volcano_10": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 75.95
+        },
+        "enemy_1": {
+          "count": 24,
+          "power": 5.84
+        },
+        "enemy_2": {
+          "count": 18,
+          "power": 9.35
+        },
+        "enemy_3": {
+          "count": 14,
+          "power": 14.61
+        },
+        "enemy_4": {
+          "count": 10,
+          "power": 23.37
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 3.5,
+      "waves": 10
+    },
+    "volcano_2": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 10,
+          "power": 4.74
+        },
+        "enemy_2": {
+          "count": 6,
+          "power": 7.58
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 2.97,
+      "waves": 5
+    },
+    "volcano_3": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 26.82
+        },
+        "enemy_1": {
+          "count": 12,
+          "power": 4.88
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 7.8
+        },
+        "enemy_3": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 3.03,
+      "waves": 7
+    },
+    "volcano_4": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 5.01
+        },
+        "enemy_2": {
+          "count": 8,
+          "power": 8.02
+        },
+        "enemy_3": {
+          "count": 4,
+          "power": 12.54
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 3.1,
+      "waves": 7
+    },
+    "volcano_5": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 14,
+          "power": 5.15
+        },
+        "enemy_2": {
+          "count": 10,
+          "power": 8.24
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 12.88
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 3.17,
+      "waves": 7
+    },
+    "volcano_6": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 39.67
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 5.29
+        },
+        "enemy_2": {
+          "count": 12,
+          "power": 8.46
+        },
+        "enemy_3": {
+          "count": 6,
+          "power": 13.22
+        },
+        "enemy_4": {
+          "count": 0,
+          "power": 0
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 3.23,
+      "waves": 10
+    },
+    "volcano_7": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 18,
+          "power": 5.43
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 8.68
+        },
+        "enemy_3": {
+          "count": 8,
+          "power": 13.57
+        },
+        "enemy_4": {
+          "count": 4,
+          "power": 21.71
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 3.3,
+      "waves": 10
+    },
+    "volcano_8": {
+      "enemies": {
+        "boss": {
+          "count": 1,
+          "power": 52.88
+        },
+        "enemy_1": {
+          "count": 20,
+          "power": 5.57
+        },
+        "enemy_2": {
+          "count": 14,
+          "power": 8.91
+        },
+        "enemy_3": {
+          "count": 10,
+          "power": 13.91
+        },
+        "enemy_4": {
+          "count": 6,
+          "power": 22.26
+        }
+      },
+      "is_boss_level": true,
+      "jet_multiplier": 3.37,
+      "waves": 10
+    },
+    "volcano_9": {
+      "enemies": {
+        "boss": {
+          "count": 0,
+          "power": 0
+        },
+        "enemy_1": {
+          "count": 22,
+          "power": 5.7
+        },
+        "enemy_2": {
+          "count": 16,
+          "power": 9.13
+        },
+        "enemy_3": {
+          "count": 12,
+          "power": 14.26
+        },
+        "enemy_4": {
+          "count": 8,
+          "power": 22.82
+        }
+      },
+      "is_boss_level": false,
+      "jet_multiplier": 3.43,
+      "waves": 10
+    }
+  },
+  "schema_version": 1
+}

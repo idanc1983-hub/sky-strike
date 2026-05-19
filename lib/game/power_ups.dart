@@ -5,35 +5,38 @@ enum PowerUpCategory { instant, collectible }
 enum PowerUpType {
   // INSTANT — auto-apply on pickup, never enter tray
   rapidFire,
-  shield,
-  splitShot,
   speedBoost,
-  droneWingman,
-  // COLLECTIBLE — stored in tray, tap to activate
-  bomb,
-  laser,
+  shield,
   magnet,
   ghostMode,
+  // COLLECTIBLE — stored in tray, tap to activate
+  bomb,
+  splitShot,
+  laser,
   freezeTime,
+  droneWingman,
   // Legacy instant
   hp,
+  // Currency drop — adds coins to wallet on pickup
+  coins,
 }
 
 extension PowerUpTypeX on PowerUpType {
   PowerUpCategory get category {
     switch (this) {
       case PowerUpType.rapidFire:
-      case PowerUpType.shield:
-      case PowerUpType.splitShot:
       case PowerUpType.speedBoost:
-      case PowerUpType.droneWingman:
-      case PowerUpType.hp:
-        return PowerUpCategory.instant;
-      case PowerUpType.bomb:
-      case PowerUpType.laser:
+      case PowerUpType.shield:
       case PowerUpType.magnet:
       case PowerUpType.ghostMode:
+      case PowerUpType.hp:
+      case PowerUpType.coins:
+        return PowerUpCategory.instant;
+      case PowerUpType.bomb:
+      case PowerUpType.splitShot:
+      case PowerUpType.laser:
       case PowerUpType.freezeTime:
+      case PowerUpType.droneWingman:
         return PowerUpCategory.collectible;
     }
   }
@@ -52,18 +55,19 @@ extension PowerUpTypeX on PowerUpType {
       case PowerUpType.shield:      return 'assets/ui/pu_shield.png';
       case PowerUpType.splitShot:   return 'assets/ui/pu_split_shot_drop.png';
       case PowerUpType.droneWingman: return 'assets/ui/pu_drone_drop.png';
+      case PowerUpType.coins:       return 'assets/ui/pu_coins_drop.png';
     }
   }
 
   // Asset path for the tray slot icon (null = instant types, no slot)
   String? get slotAsset {
     switch (this) {
-      case PowerUpType.bomb:        return 'assets/ui/pu_bomb_slot.png';
-      case PowerUpType.laser:       return 'assets/ui/pu_laser_slot.png';
-      case PowerUpType.magnet:      return 'assets/ui/pu_magnet_slot.png';
-      case PowerUpType.ghostMode:   return 'assets/ui/pu_ghost_slot.png';
-      case PowerUpType.freezeTime:  return 'assets/ui/pu_freeze_slot.png';
-      default:                      return null;
+      case PowerUpType.bomb:         return 'assets/ui/pu_bomb_slot.png';
+      case PowerUpType.splitShot:    return 'assets/ui/pu_split_shot_slot.png';
+      case PowerUpType.laser:        return 'assets/ui/pu_laser_slot.png';
+      case PowerUpType.freezeTime:   return 'assets/ui/pu_freeze_slot.png';
+      case PowerUpType.droneWingman: return 'assets/ui/pu_drone_slot.png';
+      default:                       return null;
     }
   }
 
@@ -80,18 +84,19 @@ extension PowerUpTypeX on PowerUpType {
       case PowerUpType.speedBoost:  return const Color(0xFF97C459);
       case PowerUpType.droneWingman: return const Color(0xFF5DCAA5);
       case PowerUpType.hp:          return const Color(0xFF97C459);
+      case PowerUpType.coins:       return const Color(0xFFFFC83D);
     }
   }
 
   // Fixed tray slot index for collectibles (-1 for instants)
   int get slotIndex {
     switch (this) {
-      case PowerUpType.bomb:        return 0;
-      case PowerUpType.laser:       return 1;
-      case PowerUpType.magnet:      return 2;
-      case PowerUpType.ghostMode:   return 3;
-      case PowerUpType.freezeTime:  return 4;
-      default:                      return -1;
+      case PowerUpType.bomb:         return 0;
+      case PowerUpType.splitShot:    return 1;
+      case PowerUpType.laser:        return 2;
+      case PowerUpType.freezeTime:   return 3;
+      case PowerUpType.droneWingman: return 4;
+      default:                       return -1;
     }
   }
 
@@ -109,6 +114,7 @@ extension PowerUpTypeX on PowerUpType {
       case PowerUpType.ghostMode:    return 180;
       case PowerUpType.freezeTime:   return 240;
       case PowerUpType.hp:           return 1;
+      case PowerUpType.coins:        return 1;
     }
   }
 
@@ -125,17 +131,18 @@ extension PowerUpTypeX on PowerUpType {
       case PowerUpType.ghostMode:    return 'Ghost';
       case PowerUpType.freezeTime:   return 'Freeze';
       case PowerUpType.hp:           return 'HP';
+      case PowerUpType.coins:        return 'Coins';
     }
   }
 }
 
-// Fixed order of collectible slots in the tray
+// Fixed order of collectible slots in the tray (unlock order, W1→W5)
 const List<PowerUpType> kCollectibleSlots = [
   PowerUpType.bomb,
+  PowerUpType.splitShot,
   PowerUpType.laser,
-  PowerUpType.magnet,
-  PowerUpType.ghostMode,
   PowerUpType.freezeTime,
+  PowerUpType.droneWingman,
 ];
 
 // ---------------------------------------------------------------------------
@@ -154,6 +161,7 @@ const Map<PowerUpType, double> kNormalDropRates = {
   PowerUpType.magnet:       0.02,
   PowerUpType.ghostMode:    0.02,
   PowerUpType.freezeTime:   0.02,
+  PowerUpType.coins:        0.08,
 };
 
 const Map<PowerUpType, double> kW1EarlyDropRates = {
@@ -168,6 +176,7 @@ const Map<PowerUpType, double> kW1EarlyDropRates = {
   PowerUpType.magnet:       0.01,
   PowerUpType.ghostMode:    0.01,
   PowerUpType.freezeTime:   0.01,
+  PowerUpType.coins:        0.10,
 };
 
 const Map<PowerUpType, double> kBoostDropRates = {
@@ -182,6 +191,7 @@ const Map<PowerUpType, double> kBoostDropRates = {
   PowerUpType.magnet:       0.03,
   PowerUpType.ghostMode:    0.03,
   PowerUpType.freezeTime:   0.03,
+  PowerUpType.coins:        0.12,
 };
 
 Map<PowerUpType, double> normalDropRates(int world, int wave) {

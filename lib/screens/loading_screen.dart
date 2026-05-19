@@ -6,18 +6,26 @@ const _cGreenLight = Color(0xFF97C459);
 const _cGreenPale = Color(0xFFC0DD97);
 const _cGreenMid = Color(0xFF639922);
 
+// Biome ordering follows Levels-economy.xlsx — one biome per 10 levels:
+// W1 Jungle (1–10) → W2 Desert (11–20) → W3 Sea (21–30) →
+// W4 Arctic (31–40) → W5 Volcano (41–50) → W6 City (51–60).
 const _worldNames = {
   1: 'Jungle',
-  2: 'Ocean',
-  3: 'Desert',
-  4: 'Volcano',
-  5: 'Arctic',
-  6: 'Megacity',
+  2: 'Desert',
+  3: 'Sea',
+  4: 'Arctic',
+  5: 'Volcano',
+  6: 'City',
 };
 
 String _loadingBg(int world) {
   const map = <int, String>{
     1: 'assets/backgrounds/Jungle_loading.png',
+    2: 'assets/backgrounds/Desert_loading.png',
+    3: 'assets/backgrounds/Sea_loading.png',
+    4: 'assets/backgrounds/Arctic_loading.png',
+    5: 'assets/backgrounds/Volcano_loading.png',
+    6: 'assets/backgrounds/City_loading.png',
   };
   return map[world] ?? 'assets/backgrounds/Jungle_loading.png';
 }

@@ -5,9 +5,13 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../economy/constants/ace_dialogue_catalog.dart';
 import '../economy/constants/ad_placement_catalog.dart';
+import '../economy/constants/economy_constants.dart';
 import '../economy/services/ads_service.dart';
+import '../economy/services/ftue_triggers.dart';
 import '../economy/state/economy_state.dart';
+import '../economy/ui/ace_dialogue_overlay.dart';
 import '../game/models.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,6 +82,13 @@ class _FloatText {
   final Color color;
   final bool bold;
   final int life;
+  // v1.4 — per-float visual params. Old combo floats keep the defaults
+  // (12 px, no glow, immediate fade). The wave-clear callout passes larger
+  // values so it reads as a banner rather than a damage number.
+  final double fontSize;
+  final double riseSpeed;     // logical px per frame
+  final double glowBlur;      // 0 = no glow
+  final double holdFraction;  // alpha stays at 1.0 until frame/life > this
   int frame = 0;
   _FloatText({
     required this.x,
@@ -86,10 +97,14 @@ class _FloatText {
     required this.color,
     this.bold = false,
     this.life = 48,
+    this.fontSize = 12,
+    this.riseSpeed = 0.7,
+    this.glowBlur = 0,
+    this.holdFraction = 0.0,
   });
 }
 
-enum _Phase { wave, boss, waveClear, stageClear, gameOver, paused }
+enum _Phase { wave, boss, stageClear, gameOver, paused }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GameScreen
@@ -125,14 +140,20 @@ class _GameScreenState extends State<GameScreen>
   static const int _maxWave = 10;
   int _waveTarget = 0;      // kill quota for this wave (= pool size)
   int _waveKilled = 0;
-  int _waveClearFrames = 0;
-  static const int _kWaveClearDuration = 480; // 8 s at 60 fps (auto-skip mode)
-  bool _autoAdvanceWave = false;
   int _waveChipPulseFrames = 0;
 
-  int _waveScoreSnapshot = 0;
-  int _waveBestComboSnapshot = 0;
-  int _waveAccuracySnapshot = 0;
+  // v1.4 — no-stop wave clear: green edge-sweep border + reward float.
+  // The game keeps running through the wave transition; no phase change,
+  // no overlay, no freeze. Sweep timing: 80 ms fade-in, 200 ms hold,
+  // 600 ms fade-out (880 ms total). Reward float spawns at +200 ms;
+  // _advanceWave fires at +400 ms.
+  bool _showEdgeSweep = false;
+  double _edgeSweepOpacity = 0.0;
+  // Re-entry guard: _checkWaveComplete fires every tick the wave is
+  // "done", but the phase no longer changes — without this flag the
+  // 400 ms _advanceWave delay would queue dozens of duplicate callbacks
+  // and the wave counter would explode.
+  bool _waveClearPending = false;
 
   // ── Player ───────────────────────────────────────────────────────────────
   double _playerX = 0, _playerY = 0;
@@ -156,7 +177,6 @@ class _GameScreenState extends State<GameScreen>
 
   // ── Score ────────────────────────────────────────────────────────────────
   int _totalScore = 0;
-  int _waveScore = 0;
   int _bestCombo = 0;
 
   // ── Accuracy ─────────────────────────────────────────────────────────────
@@ -354,6 +374,12 @@ class _GameScreenState extends State<GameScreen>
     // mounted-check and now — createTicker after dispose throws.
     if (!mounted) return;
     _ticker = createTicker(_onTick)..start();
+    // Wave 1 FTUE line (Stage 1 only) — request after the first frame so
+    // the AceDialogueListener is mounted and ready to present.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _maybeFireWaveStartLine(1);
+    });
   }
 
   Future<ui.Image?> _loadUiImage(String assetPath) async {
@@ -379,9 +405,9 @@ class _GameScreenState extends State<GameScreen>
   }
 
   Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    _autoAdvanceWave = prefs.getBool('settings_autoskip_timer') ?? false;
+    // v1.4 — wave-clear pause removed, so settings_autoskip_timer is a no-op
+    // for gameplay. Kept readable from prefs by SettingsScreen.
+    return;
   }
 
   Future<void> _saveStageResult({required bool cleared}) async {
@@ -417,11 +443,6 @@ class _GameScreenState extends State<GameScreen>
     final active = _phase == _Phase.wave || _phase == _Phase.boss;
     if (_screenW > 0 && _playerInitialized && active) {
       _updateSimulation();
-    }
-
-    if (_phase == _Phase.waveClear && _autoAdvanceWave) {
-      _waveClearFrames++;
-      if (_waveClearFrames >= _kWaveClearDuration) _advanceWave();
     }
 
     if (_phase == _Phase.gameOver &&
@@ -635,7 +656,11 @@ class _GameScreenState extends State<GameScreen>
 
   void _tickFloatTexts() {
     _floatTexts.removeWhere((t) {
-      t.y -= 0.7;
+      // Stay stationary during the opacity-hold window, then drift up
+      // only during the fade-out. Default holdFraction is 0.0 so existing
+      // combo / coin floats rise from frame 0 as before.
+      final progress = t.frame / t.life;
+      if (progress > t.holdFraction) t.y -= t.riseSpeed;
       t.frame++;
       return t.frame >= t.life;
     });
@@ -802,6 +827,7 @@ class _GameScreenState extends State<GameScreen>
   }
 
   void _checkWaveComplete() {
+    if (_waveClearPending) return;
     if (_waveKilled < _waveTarget) return;
     final allDone = _enemies.every(
         (e) => !e.active || e.pendingRespawn);
@@ -819,7 +845,6 @@ class _GameScreenState extends State<GameScreen>
     _killFrames.add(_frame);
     final combo = comboMultiplier(_killFrames.length);
     final pts   = scorePerKill(_currentWave, combo);
-    _waveScore  += pts;
     _totalScore += pts;
     _waveKilled++;
 
@@ -847,6 +872,18 @@ class _GameScreenState extends State<GameScreen>
   }
 
   void _rollPowerUpDrop(double x, double y) {
+    final economy = context.read<EconomyState>();
+    if (FtueRules.shouldForceHpDrop(
+      currentWorld: _world,
+      currentStage: _stage,
+      currentWave: _currentWave,
+      firedTriggers: economy.firedFtueTriggers,
+    )) {
+      _pickups.add(_Pickup(x: x, y: y, type: PowerUpType.hp));
+      economy.markFtueTriggerFired(FtueTriggers.stage1Wave2HpForced);
+      return;
+    }
+
     final rates = _isBoostWave ? kBoostDropRates : normalDropRates(_world, _currentWave);
 
     for (final entry in rates.entries) {
@@ -891,6 +928,15 @@ class _GameScreenState extends State<GameScreen>
             life: 48,
           ));
         }
+      case PowerUpType.coins:
+        const amount = EconomyConstants.coinPickupValueRegular;
+        context.read<EconomyState>().addCoins(amount, source: 'in_game_pickup');
+        _floatTexts.add(_FloatText(
+          x: _playerX, y: _playerY - 20,
+          text: '+$amount',
+          color: const Color(0xFFFFC83D),
+          life: 48,
+        ));
       default:
         break;
     }
@@ -931,26 +977,83 @@ class _GameScreenState extends State<GameScreen>
   }
 
   void _triggerWaveClear() {
-    _waveScoreSnapshot    = _waveScore;
-    _waveBestComboSnapshot = _bestCombo;
-    _waveAccuracySnapshot = _accuracy;
+    // v1.4 — no freeze. Capture wave accuracy for the stage average, reset
+    // per-wave trackers, then fire the visual flourish (edge sweep + reward
+    // float) and schedule the next wave to begin while gameplay continues.
+    _waveClearPending = true;
     _waveAccuracies.add(_accuracy);
-    _waveScore    = 0;
     _bulletsFired = 0;
     _bulletsHit   = 0;
     _killFrames.clear();
-    _waveClearFrames = 0;
-    _phase = _Phase.waveClear;
+
+    // Edge sweep: opacity 0 -> 0.6 fade-in (80 ms), hold (200 ms),
+    // then 0.6 -> 0 fade-out (600 ms). The AnimatedOpacity widget
+    // owns the fade durations — we just toggle the target opacity.
+    _showEdgeSweep = true;
+    _edgeSweepOpacity = 0.6;
+    Future.delayed(const Duration(milliseconds: 280), () {
+      if (!mounted) return;
+      setState(() => _edgeSweepOpacity = 0.0);
+    });
+    Future.delayed(const Duration(milliseconds: 880), () {
+      if (!mounted) return;
+      setState(() => _showEdgeSweep = false);
+    });
+
+    // Reward float: spawns 200 ms after the sweep fires, rises and fades
+    // alongside the sweep's fade-out.
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
+      _spawnWaveClearFloat();
+    });
+
+    // Wave advances 400 ms after last kill. _advanceWave handles the
+    // boss transition (wave 10) on its own.
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      _advanceWave();
+    });
+
+    // Surface the next wave's FTUE intro now — same trigger point as
+    // before; the bubble runs concurrently with the new wave entry stagger.
+    // Only fires on Stage 1 for the two pre-boss transitions.
+    final upcoming = _currentWave + 1;
+    if (upcoming < _maxWave) _maybeFireWaveStartLine(upcoming);
+  }
+
+  void _spawnWaveClearFloat() {
+    // Per design: stars are a stage-level rating only — never shown
+    // mid-stage. The float is purely positive feedback for clearing a wave.
+    //
+    // Dead center, fully stationary, with a hard dark outline for
+    // readability. Holds at full opacity for 3 s then fades in place
+    // over ~1 s. Total life 240 frames @ 60 fps.
+    _floatTexts.add(_FloatText(
+      x: _screenW / 2,
+      y: _screenH / 2,
+      text: 'Wave $_currentWave clear',
+      color: const Color(0xFFEF9F27),
+      bold: true,
+      life: 240,
+      fontSize: 24,
+      riseSpeed: 0.0,     // no movement — fades in place
+      glowBlur: 4,        // soft black drop-shadow halo (with outline)
+      holdFraction: 0.75, // 3 s held, 1 s fade
+    ));
   }
 
   void _advanceWave() {
+    _waveClearPending = false;
     _currentWave++;
     _waveChipPulseFrames = 12;
     if (_currentWave >= _maxWave) {
-      _startBoss();
-    } else {
+      // Boss transition still does a hard reset — boss entry has its own
+      // fly-in/red-flash sequence.
       _enemyBullets.clear();
       _playerBullets.clear();
+      _startBoss();
+    } else {
+      // v1.4 — keep in-flight bullets to preserve the no-stop feel.
       _waveTarget  = waveEnemyCount(_world, _currentWave);
       _waveKilled  = 0;
       _buildEnemyPool();
@@ -1024,11 +1127,13 @@ class _GameScreenState extends State<GameScreen>
       _bossFireTimer++;
       if (_bossFireTimer >= bossFireRate(_world)) {
         _bossFireTimer = 0;
-        final spd    = bossBulletSpeed(_world);
-        final spread = bossBulletSpread(_world);
+        final spd = bossBulletSpeed(_world);
         _enemyBullets.add(_EnemyBullet(x: _bossX, y: _bossY + 40, dy: spd));
-        _enemyBullets.add(_EnemyBullet(x: _bossX, y: _bossY + 40, dx: -spread, dy: spd * 0.93));
-        _enemyBullets.add(_EnemyBullet(x: _bossX, y: _bossY + 40, dx:  spread, dy: spd * 0.93));
+        if (_world >= 3) {
+          final spread = bossBulletSpread(_world);
+          _enemyBullets.add(_EnemyBullet(x: _bossX, y: _bossY + 40, dx: -spread, dy: spd * 0.93));
+          _enemyBullets.add(_EnemyBullet(x: _bossX, y: _bossY + 40, dx:  spread, dy: spd * 0.93));
+        }
       }
     }
 
@@ -1074,6 +1179,20 @@ class _GameScreenState extends State<GameScreen>
       _hp = 0;
       _waveAtDeath    = _currentWave;
       _bossHpAtDeath  = _bossMaxHp > 0 ? _bossHp / _bossMaxHp : 1.0;
+
+      final economy = context.read<EconomyState>();
+      economy.recordDeathThisStage();
+      if (FtueRules.shouldFreeReviveOnDeath(
+        currentWorld: _world,
+        currentStage: _stage,
+        firedTriggers: economy.firedFtueTriggers,
+      )) {
+        economy.markFtueTriggerFired(FtueTriggers.stage1FreeReviveUsed);
+        economy.requestAceLine(AceLineKeys.ftueFirstDeath);
+        _applyRevive(consumeOneShot: false);
+        return;
+      }
+
       _reviveCountdown = 8;
       _reviveFrameAcc  = 0;
       _reviveExpired   = false;
@@ -1099,7 +1218,6 @@ class _GameScreenState extends State<GameScreen>
     _waveKilled   = 0;
     _hp           = _maxHp;
     _totalScore   = 0;
-    _waveScore    = 0;
     _bestCombo    = 0;
     _bulletsFired = 0;
     _bulletsHit   = 0;
@@ -1130,6 +1248,9 @@ class _GameScreenState extends State<GameScreen>
     _rewardDoubled = false;
     _vignetteOpacity = 0;
     _vignetteFrames  = 0;
+    _waveClearPending = false;
+    _showEdgeSweep    = false;
+    _edgeSweepOpacity = 0.0;
     _screenShakeFrames = 0;
     _hasTouched = false;
     _buildEnemyPool();
@@ -1139,10 +1260,11 @@ class _GameScreenState extends State<GameScreen>
     if (_playerGems < revivePrice(_waveAtDeath)) return;
     _playerGems -= revivePrice(_waveAtDeath);
     _applyRevive();
+    context.read<EconomyState>().requestAceLine(AceLineKeys.ftueReviveYes);
   }
 
-  void _applyRevive() {
-    _reviveUsed = true;
+  void _applyRevive({bool consumeOneShot = true}) {
+    if (consumeOneShot) _reviveUsed = true;
     _hp = _maxHp;
     if (_currentWave >= _maxWave) {
       _bossHp = (_bossHpAtDeath * _bossMaxHp).round().clamp(1, _bossMaxHp);
@@ -1169,6 +1291,7 @@ class _GameScreenState extends State<GameScreen>
         _adInFlight = false;
         _applyRevive();
       });
+      economy.requestAceLine(AceLineKeys.ftueReviveYes);
     } else {
       setState(() => _adInFlight = false);
       _showAdSnack(_messageForAdOutcome(outcome.result));
@@ -1191,6 +1314,18 @@ class _GameScreenState extends State<GameScreen>
       setState(() => _adInFlight = false);
       _showAdSnack(_messageForAdOutcome(outcome.result));
     }
+  }
+
+  void _maybeFireWaveStartLine(int wave) {
+    if (_world != 1 || _stage != 1) return;
+    final key = switch (wave) {
+      1 => AceLineKeys.ftueWave1Start,
+      2 => AceLineKeys.ftueWave2Start,
+      3 => AceLineKeys.ftueWave3Start,
+      _ => null,
+    };
+    if (key == null) return;
+    context.read<EconomyState>().requestAceLine(key);
   }
 
   String _messageForAdOutcome(AdShowResult r) {
@@ -1254,7 +1389,8 @@ class _GameScreenState extends State<GameScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFF0a1a0a),
-      body: GestureDetector(
+      body: AceDialogueListener(
+        child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanUpdate: (d) {
           if (_phase != _Phase.wave && _phase != _Phase.boss) return;
@@ -1332,7 +1468,7 @@ class _GameScreenState extends State<GameScreen>
             // ── Power-up tray ────────────────────────────────────────────
             // Kept continuously mounted (Offstage rather than `if`) so the
             // tray state — collectible counts — survives phase changes like
-            // waveClear / paused / gameOver. Otherwise the tray widget is
+            // paused / gameOver / stageClear. Otherwise the tray widget is
             // disposed on every phase swap and collectibles reset to 0.
             Offstage(
               offstage: _phase != _Phase.wave && _phase != _Phase.boss,
@@ -1360,13 +1496,19 @@ class _GameScreenState extends State<GameScreen>
                 (_phase == _Phase.wave || _phase == _Phase.boss))
               _buildDragHint(),
 
+            // ── Wave-clear edge sweep (no-stop, v1.4) ────────────────────
+            // Rendered above HUD so the green border is visible on top of
+            // chips. IgnorePointer so it never blocks drag input — gameplay
+            // continues underneath.
+            if (_showEdgeSweep) _buildEdgeSweep(),
+
             // ── Overlays ─────────────────────────────────────────────────
-            if (_phase == _Phase.waveClear)  _buildWaveClearOverlay(),
             if (_phase == _Phase.stageClear) _buildStageClearOverlay(),
             if (_phase == _Phase.gameOver)   _buildGameOverOverlay(),
             if (_phase == _Phase.paused)     _buildPauseOverlay(),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1547,61 +1689,40 @@ class _GameScreenState extends State<GameScreen>
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Wave clear overlay
+  // Wave-clear edge sweep (v1.4)
+  //
+  // Replaces the previous dark overlay + tap-to-continue flow. A green
+  // border flashes around the screen for ~880 ms while gameplay continues
+  // underneath. The reward float (spawned via _spawnWaveClearFloat) renders
+  // on the canvas layer at the same time.
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildWaveClearOverlay() {
-    final secsLeft = _autoAdvanceWave
-        ? ((_kWaveClearDuration - _waveClearFrames) / 60).ceil().clamp(0, 8)
-        : 0;
-    final got2 = _waveAccuracySnapshot >= 70 &&
-        _waveScoreSnapshot >= scorePerKill(_currentWave - 1, 1.0) * 6;
-    final stars = got2 ? 2 : 1;
-
-    return Container(
-      color: Colors.black.withValues(alpha: 0.45),
-      alignment: Alignment.center,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('Wave $_currentWave Done',
-              style: const TextStyle(
-                  color: Color(0xFF97C459),
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 3)),
-          const SizedBox(height: 4),
-          Text('★' * stars + '☆' * (2 - stars),
-              style: const TextStyle(
-                  fontSize: 20, color: Color(0xFFEF9F27))),
-          const SizedBox(height: 18),
-          _statRow('Score', '$_waveScoreSnapshot', const Color(0xFFC0DD97)),
-          _statRow('Best combo', '×$_waveBestComboSnapshot', const Color(0xFFEF9F27)),
-          _statRow('Accuracy', '$_waveAccuracySnapshot%', const Color(0xFF97C459)),
-          _statRow('HP into next wave',
-              '${(_hp / _maxHp * 100).round()}%', const Color(0xFFEF9F27)),
-          const SizedBox(height: 24),
-          GestureDetector(
-            onTap: _advanceWave,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF3B6D11),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white24, width: 0.5),
-              ),
-              child: Text(
-                secsLeft > 0 ? 'Next Wave → ($secsLeft)' : 'Next Wave →',
-                style: const TextStyle(
-                    color: Color(0xFFC0DD97),
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5),
-              ),
+  Widget _buildEdgeSweep() {
+    // Fade-in (80 ms) when _edgeSweepOpacity is being raised to 0.6,
+    // fade-out (600 ms) when it drops back to 0. AnimatedOpacity takes
+    // the duration we hand it for whichever direction is current.
+    final fadingIn = _edgeSweepOpacity > 0;
+    return IgnorePointer(
+      child: AnimatedOpacity(
+        opacity: _edgeSweepOpacity,
+        duration: Duration(milliseconds: fadingIn ? 80 : 600),
+        curve: Curves.easeOut,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: const Color(0xFF97C459),
+              width: 3.0,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF97C459).withValues(alpha: 0.25),
+                blurRadius: 18,
+                spreadRadius: 0,
+                blurStyle: BlurStyle.inner,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1822,16 +1943,25 @@ class _GameScreenState extends State<GameScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _overlayBtn('Retry Stage', const Color(0xFF3B6D11),
-                  () => setState(_fullReset)),
+              _overlayBtn('Retry Stage', const Color(0xFF3B6D11), () {
+                _maybeFireReviveDeclined(canRevive);
+                setState(_fullReset);
+              }),
               const SizedBox(width: 12),
-              _overlayBtn('Home', const Color(0xFF1a1a1a),
-                  () => Navigator.pop(context)),
+              _overlayBtn('Home', const Color(0xFF1a1a1a), () {
+                _maybeFireReviveDeclined(canRevive);
+                Navigator.pop(context);
+              }),
             ],
           ),
         ],
       ),
     );
+  }
+
+  void _maybeFireReviveDeclined(bool hadReviveOption) {
+    if (!hadReviveOption) return;
+    context.read<EconomyState>().requestAceLine(AceLineKeys.ftueReviveNo);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2161,7 +2291,7 @@ class _GamePainter extends CustomPainter {
   }
 
   void _drawPickups(Canvas canvas) {
-    const double orbSize = 56.0;
+    const double orbSize = 44.0;
 
     for (final p in pickups) {
       final center = Offset(p.x, p.y);
@@ -2413,16 +2543,39 @@ class _GamePainter extends CustomPainter {
 
   void _drawFloatTexts(Canvas canvas) {
     for (final t in floatTexts) {
-      final alpha = 1.0 - (t.frame / t.life);
+      // Hold full opacity for the first holdFraction of the life, then
+      // ease-out fade to 0 across the remainder. Default holdFraction is
+      // 0.0 which gives the old linear-fade behaviour.
+      final progress = t.frame / t.life;
+      final double alpha;
+      if (progress <= t.holdFraction) {
+        alpha = 1.0;
+      } else {
+        final fadeP = (progress - t.holdFraction) / (1.0 - t.holdFraction);
+        alpha = (1.0 - fadeP).clamp(0.0, 1.0);
+      }
+
+      // When glowBlur > 0, render a hard dark outline (4 zero-blur shadows
+      // at unit offsets) plus a soft black drop shadow. This guarantees
+      // legibility against the busy biome backdrop — a same-color halo
+      // would just blur the letterforms.
+      final outlineAlpha = alpha * 0.95;
+      final style = TextStyle(
+        color: t.color.withValues(alpha: alpha),
+        fontSize: t.fontSize,
+        fontWeight: t.bold ? FontWeight.bold : FontWeight.normal,
+        shadows: t.glowBlur > 0
+            ? [
+                Shadow(color: Colors.black.withValues(alpha: outlineAlpha), offset: const Offset(-1.2, -1.2)),
+                Shadow(color: Colors.black.withValues(alpha: outlineAlpha), offset: const Offset( 1.2, -1.2)),
+                Shadow(color: Colors.black.withValues(alpha: outlineAlpha), offset: const Offset(-1.2,  1.2)),
+                Shadow(color: Colors.black.withValues(alpha: outlineAlpha), offset: const Offset( 1.2,  1.2)),
+                Shadow(color: Colors.black.withValues(alpha: alpha * 0.55), blurRadius: t.glowBlur),
+              ]
+            : null,
+      );
       final tp = TextPainter(
-        text: TextSpan(
-          text: t.text,
-          style: TextStyle(
-            color: t.color.withValues(alpha: alpha),
-            fontSize: 12,
-            fontWeight: t.bold ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
+        text: TextSpan(text: t.text, style: style),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(t.x - tp.width / 2, t.y));

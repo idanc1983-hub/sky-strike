@@ -7,10 +7,12 @@ import '../economy/ui/ace_dialogue_overlay.dart';
 import 'home_screen.dart';
 import 'shop_screen.dart';
 import 'jets_screen.dart';
-import 'settings_screen.dart';
+import 'social_screen.dart';
 
-const _cGreen = Color(0xFF3B6D11);
-const _cGreenMid = Color(0xFF639922);
+const _cNavBg          = Color(0xFF0a1a0a);
+const _cNavIndicator   = Color(0x403B6D11);
+const _cNavInactive    = Color(0xFF639922);
+const _cNavActive      = Color(0xFF97C459);
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -46,21 +48,38 @@ class _MainShellState extends State<MainShell> {
             HomeScreen(),
             ShopScreen(),
             JetsScreen(),
-            SettingsScreen(),
+            SocialScreen(),
           ],
         ),
       ),
       bottomNavigationBar: NavigationBar(
-        backgroundColor: const Color(0xFF0a1a0a),
-        indicatorColor: _cGreen,
+        backgroundColor: _cNavBg,
+        indicatorColor: _cNavIndicator,
+        surfaceTintColor: Colors.transparent,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         selectedIndex: _index,
         onDestinationSelected: _onTabSelected,
         destinations: const [
-          NavigationDestination(icon: _HomeIcon(), label: 'Home'),
-          NavigationDestination(icon: _ShopIcon(), label: 'Shop'),
-          NavigationDestination(icon: _JetIcon(), label: 'Jets'),
-          NavigationDestination(icon: _SettingsIcon(), label: 'Settings'),
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined, color: _cNavInactive),
+            selectedIcon: Icon(Icons.home_outlined, color: _cNavActive),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.shopping_bag_outlined, color: _cNavInactive),
+            selectedIcon: Icon(Icons.shopping_bag_outlined, color: _cNavActive),
+            label: 'Shop',
+          ),
+          NavigationDestination(
+            icon: _JetNavIcon(color: _cNavInactive),
+            selectedIcon: _JetNavIcon(color: _cNavActive),
+            label: 'Jets',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.emoji_events_outlined, color: _cNavInactive),
+            selectedIcon: Icon(Icons.emoji_events_outlined, color: _cNavActive),
+            label: 'Social',
+          ),
         ],
       ),
     );
@@ -68,146 +87,77 @@ class _MainShellState extends State<MainShell> {
 }
 
 // ---------------------------------------------------------------------------
-// Nav icon painters
+// Jets nav icon — top-down jet silhouette drawn in code (spec mandates a
+// CustomPainter here, no Material substitute).
 // ---------------------------------------------------------------------------
-class _HomeIcon extends StatelessWidget {
-  const _HomeIcon();
+class _JetNavIcon extends StatelessWidget {
+  final Color color;
+  const _JetNavIcon({required this.color});
+
   @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: const Size(24, 24), painter: _HomePainter());
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: CustomPaint(painter: JetIconPainter(color)),
+    );
+  }
 }
 
-class _HomePainter extends CustomPainter {
+class JetIconPainter extends CustomPainter {
+  final Color color;
+  JetIconPainter(this.color);
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = _cGreenMid
+      ..color = color
       ..style = PaintingStyle.fill;
     final w = size.width;
     final h = size.height;
-    // House silhouette
-    final path = Path()
+
+    // Fuselage — narrow vertical body
+    final fuselage = Path()
       ..moveTo(w * 0.5, 0)
-      ..lineTo(w, h * 0.48)
-      ..lineTo(w * 0.82, h * 0.48)
-      ..lineTo(w * 0.82, h * 0.95)
-      ..lineTo(w * 0.18, h * 0.95)
-      ..lineTo(w * 0.18, h * 0.48)
-      ..lineTo(0, h * 0.48)
+      ..lineTo(w * 0.58, h * 0.65)
+      ..lineTo(w * 0.5, h * 0.75)
+      ..lineTo(w * 0.42, h * 0.65)
       ..close();
-    canvas.drawPath(path, paint);
-    // Door cutout
-    canvas.drawRect(
-      Rect.fromLTWH(w * 0.37, h * 0.6, w * 0.26, h * 0.35),
-      Paint()..color = const Color(0xFF0a1a0a),
-    );
-  }
 
-  @override
-  bool shouldRepaint(_HomePainter old) => false;
-}
-
-class _ShopIcon extends StatelessWidget {
-  const _ShopIcon();
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: const Size(24, 24), painter: _ShopPainter());
-}
-
-class _ShopPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = _cGreenMid
-      ..style = PaintingStyle.fill;
-    final w = size.width;
-    final h = size.height;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-          Rect.fromLTWH(w * 0.1, h * 0.35, w * 0.8, h * 0.6),
-          const Radius.circular(3)),
-      paint,
-    );
-    final handlePaint = Paint()
-      ..color = _cGreenMid
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawArc(
-      Rect.fromLTWH(w * 0.28, h * 0.08, w * 0.44, h * 0.35),
-      3.14,
-      3.14,
-      false,
-      handlePaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_ShopPainter old) => false;
-}
-
-class _JetIcon extends StatelessWidget {
-  const _JetIcon();
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: const Size(24, 24), painter: _JetPainter());
-}
-
-class _JetPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = _cGreenMid
-      ..style = PaintingStyle.fill;
-    final w = size.width;
-    final h = size.height;
-    final path = Path()
-      ..moveTo(w * 0.5, 0)
-      ..lineTo(w * 0.6, h * 0.4)
-      ..lineTo(w, h * 0.55)
-      ..lineTo(w * 0.65, h * 0.65)
-      ..lineTo(w * 0.6, h)
-      ..lineTo(w * 0.5, h * 0.8)
-      ..lineTo(w * 0.4, h)
-      ..lineTo(w * 0.35, h * 0.65)
-      ..lineTo(0, h * 0.55)
-      ..lineTo(w * 0.4, h * 0.4)
+    // Left wing
+    final leftWing = Path()
+      ..moveTo(w * 0.44, h * 0.38)
+      ..lineTo(0, h * 0.72)
+      ..lineTo(w * 0.38, h * 0.60)
       ..close();
-    canvas.drawPath(path, paint);
+
+    // Right wing
+    final rightWing = Path()
+      ..moveTo(w * 0.56, h * 0.38)
+      ..lineTo(w, h * 0.72)
+      ..lineTo(w * 0.62, h * 0.60)
+      ..close();
+
+    // Rear stabilisers
+    final leftStab = Path()
+      ..moveTo(w * 0.46, h * 0.70)
+      ..lineTo(w * 0.28, h * 0.90)
+      ..lineTo(w * 0.44, h * 0.82)
+      ..close();
+
+    final rightStab = Path()
+      ..moveTo(w * 0.54, h * 0.70)
+      ..lineTo(w * 0.72, h * 0.90)
+      ..lineTo(w * 0.56, h * 0.82)
+      ..close();
+
+    canvas.drawPath(fuselage, paint);
+    canvas.drawPath(leftWing, paint);
+    canvas.drawPath(rightWing, paint);
+    canvas.drawPath(leftStab, paint);
+    canvas.drawPath(rightStab, paint);
   }
 
   @override
-  bool shouldRepaint(_JetPainter old) => false;
-}
-
-class _SettingsIcon extends StatelessWidget {
-  const _SettingsIcon();
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: const Size(24, 24), painter: _SettingsPainter());
-}
-
-class _SettingsPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = _cGreenMid
-      ..style = PaintingStyle.fill;
-    final w = size.width;
-    final h = size.height;
-    final cx = w / 2;
-    final cy = h / 2;
-    for (int i = 0; i < 8; i++) {
-      canvas.save();
-      canvas.translate(cx, cy);
-      canvas.rotate(i * 3.14159 / 4);
-      canvas.drawRect(Rect.fromLTWH(-2, -h * 0.48, 4, h * 0.22), paint);
-      canvas.restore();
-    }
-    canvas.drawCircle(Offset(cx, cy), w * 0.32, paint);
-    canvas.drawCircle(Offset(cx, cy), w * 0.16,
-        Paint()..color = const Color(0xFF0a1a0a));
-  }
-
-  @override
-  bool shouldRepaint(_SettingsPainter old) => false;
+  bool shouldRepaint(JetIconPainter old) => old.color != color;
 }

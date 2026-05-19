@@ -10,14 +10,14 @@ class PowerUpCatalog {
   static const Map<String, int> unlockBiome = <String, int>{
     'rapid_fire': 1,
     'speed_boost': 1,
-    'bomb': 2,
-    'magnet': 2,
-    'shield': 3,
-    'split_shot': 3,
-    'laser': 4,
+    'bomb': 1,
+    'shield': 2,
+    'split_shot': 2,
+    'magnet': 3,
+    'laser': 3,
+    'freeze_time': 4,
     'ghost_mode': 5,
-    'freeze_time': 5,
-    'drone_wingman': 6,
+    'drone_wingman': 5,
   };
 
   /// `world → list of power-ups newly unlocked when that world is reached`.
@@ -64,19 +64,19 @@ class PowerUpCatalog {
   };
 
   /// Indicates whether a power-up exists in the world as a *collectible*
-  /// pickup (Bomb, Magnet, Laser, Ghost Mode, Freeze Time) versus an
-  /// *instant* effect activated from the tray.
+  /// pickup (Bomb, Split Shot, Laser, Freeze Time, Drone Wingman) versus
+  /// an *instant* effect auto-applied on pickup.
   static const Map<String, bool> isCollectible = <String, bool>{
     'rapid_fire': false,
     'speed_boost': false,
     'bomb': true,
-    'magnet': true,
+    'magnet': false,
     'shield': false,
-    'split_shot': false,
+    'split_shot': true,
     'laser': true,
-    'ghost_mode': true,
+    'ghost_mode': false,
     'freeze_time': true,
-    'drone_wingman': false,
+    'drone_wingman': true,
   };
 
   /// Coin price to buy one copy in the shop. See [packDiscounts] for bulk
@@ -127,7 +127,7 @@ class PowerUpCatalog {
       case 'split_shot':
         return 'assets/ui/pu_split_shot_slot.png';
       case 'drone_wingman':
-        return 'assets/ui/pu_drone_drop.png';
+        return 'assets/ui/pu_drone_slot.png';
       default:
         return 'assets/ui/pu_bomb_slot.png';
     }

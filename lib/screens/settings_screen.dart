@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../economy/ui/ace_settings_tile.dart';
 import '../economy/ui/dev_tools_sheet.dart';
+import 'menu_popup.dart';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const _cGreen      = Color(0xFF3B6D11);
@@ -256,17 +257,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ─── Top bar ───────────────────────────────────────────────────────────────
   Widget _buildTopBar() {
-    return const Column(
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text(
-            'SETTINGS',
-            style: TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w600,
-              color: _cGreenPale, letterSpacing: 3,
-            ),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          child: Row(
+            children: [
+              const SizedBox(width: 28),
+              const Expanded(
+                child: Text(
+                  'SETTINGS',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600,
+                    color: _cGreenPale, letterSpacing: 3,
+                  ),
+                ),
+              ),
+              MenuCloseButton(onTap: () => Navigator.of(context).pop()),
+            ],
           ),
         ),
         const Divider(height: 0.5, thickness: 0.5, color: _cDivider),

@@ -124,10 +124,10 @@ class EconomyConstants {
   /// Gem cost for the contextual Slot-4 unlock shortcut (pickup overflow only).
   static const int loadoutSlot4GemShortcutCost = 25;
 
-  /// Biome required to unlock loadout slot 4 (W5 = Arctic).
+  /// Biome required to unlock loadout slot 4 (W5 = Volcano).
   static const int loadoutSlot4BiomeReq = 5;
 
-  /// Biome required to unlock loadout slot 5 (W6 = Megacity).
+  /// Biome required to unlock loadout slot 5 (W6 = City).
   static const int loadoutSlot5BiomeReq = 6;
 
   // ---------------------------------------------------------------------------

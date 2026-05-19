@@ -1,0 +1,65 @@
+{
+  "power_ups": {
+    "bomb": {
+      "category": "stack",
+      "coin_price": 120,
+      "display_name": "Bomb",
+      "unlock_biome": "desert"
+    },
+    "drone_wingman": {
+      "category": "stack",
+      "coin_price": 400,
+      "display_name": "Drone Wingman",
+      "unlock_biome": "city"
+    },
+    "freeze_time": {
+      "category": "stack",
+      "coin_price": 320,
+      "display_name": "Freeze Time",
+      "unlock_biome": "volcano"
+    },
+    "ghost_mode": {
+      "category": "stack",
+      "coin_price": 280,
+      "display_name": "Ghost Mode",
+      "unlock_biome": "volcano"
+    },
+    "laser": {
+      "category": "stack",
+      "coin_price": 220,
+      "display_name": "Laser",
+      "unlock_biome": "ice"
+    },
+    "magnet": {
+      "category": "instant",
+      "coin_price": 100,
+      "display_name": "Magnet",
+      "unlock_biome": "desert"
+    },
+    "rapid_fire": {
+      "category": "instant",
+      "coin_price": 70,
+      "display_name": "Rapid Fire",
+      "unlock_biome": "jungle"
+    },
+    "shield": {
+      "category": "stack",
+      "coin_price": 150,
+      "display_name": "Shield",
+      "unlock_biome": "sea"
+    },
+    "speed_boost": {
+      "category": "instant",
+      "coin_price": 70,
+      "display_name": "Speed Boost",
+      "unlock_biome": "jungle"
+    },
+    "split_shot": {
+      "category": "stack",
+      "coin_price": 150,
+      "display_name": "Split Shot",
+      "unlock_biome": "sea"
+    }
+  },
+  "schema_version": 1
+}
