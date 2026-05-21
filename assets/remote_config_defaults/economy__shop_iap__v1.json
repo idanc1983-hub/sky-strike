@@ -1,7 +1,101 @@
 {
   "schema_version": 1,
-  "coin_packs": {},
-  "gem_packs": {},
-  "chest_prices": {},
-  "powerup_prices": {}
+  "coin_packs": {
+    "coin_1": {
+      "coin_amount": 500,
+      "price_usd": 0.99
+    },
+    "coin_2": {
+      "coin_amount": 1800,
+      "price_usd": 2.99
+    },
+    "coin_3": {
+      "coin_amount": 3500,
+      "price_usd": 4.99
+    },
+    "coin_4": {
+      "coin_amount": 8000,
+      "price_usd": 9.99
+    },
+    "coin_5": {
+      "coin_amount": 18000,
+      "price_usd": 19.99
+    },
+    "coin_6": {
+      "coin_amount": 50000,
+      "price_usd": 49.99
+    }
+  },
+  "gem_packs": {
+    "gem_1": {
+      "gem_amount": 25,
+      "price_usd": 0.99
+    },
+    "gem_2": {
+      "gem_amount": 90,
+      "price_usd": 2.99
+    },
+    "gem_3": {
+      "gem_amount": 175,
+      "price_usd": 4.99
+    },
+    "gem_4": {
+      "gem_amount": 400,
+      "price_usd": 9.99
+    },
+    "gem_5": {
+      "gem_amount": 900,
+      "price_usd": 19.99
+    },
+    "gem_6": {
+      "gem_amount": 2500,
+      "price_usd": 49.99
+    }
+  },
+  "chest_prices": {
+    "basic_chest": {
+      "coin_price": 300,
+      "gem_price": 15
+    },
+    "unique_chest": {
+      "coin_price": 1000,
+      "gem_price": 50
+    },
+    "epic_chest": {
+      "coin_price": 3000,
+      "gem_price": 150
+    }
+  },
+  "powerup_prices": {
+    "rapid_fire": {
+      "coin_price": 70
+    },
+    "speed_boost": {
+      "coin_price": 70
+    },
+    "bomb": {
+      "coin_price": 120
+    },
+    "magnet": {
+      "coin_price": 100
+    },
+    "shield": {
+      "coin_price": 150
+    },
+    "split_shot": {
+      "coin_price": 150
+    },
+    "laser": {
+      "coin_price": 220
+    },
+    "ghost_mode": {
+      "coin_price": 280
+    },
+    "freeze_time": {
+      "coin_price": 320
+    },
+    "drone_wingman": {
+      "coin_price": 400
+    }
+  }
 }

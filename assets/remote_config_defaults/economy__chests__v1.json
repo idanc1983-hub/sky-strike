@@ -1,32 +1,86 @@
 {
+  "schema_version": 1,
   "chests": {
-    "bronze": {
-      "open_grant": {
-        "coins": 250,
-        "gems": 0,
-        "powerup_pool": "T1_T2",
-        "powerups": 1
-      },
-      "shop_coin_price": 400
+    "basic_chest": {
+      "coin_min": 50,
+      "coin_max": 200,
+      "gem_min": 0,
+      "gem_max": 0,
+      "jet_drop_chance": 0.0,
+      "jet_id": null
     },
-    "gold": {
-      "open_grant": {
-        "coins": 1800,
-        "gems": 30,
-        "powerup_pool": "T4_T5_T6",
-        "powerups": 2
-      },
-      "shop_coin_price": 3000
+    "unique_chest": {
+      "coin_min": 200,
+      "coin_max": 400,
+      "gem_min": 3,
+      "gem_max": 6,
+      "jet_drop_chance": 0.0,
+      "jet_id": null
     },
-    "silver": {
-      "open_grant": {
-        "coins": 600,
-        "gems": 5,
-        "powerup_pool": "T2_T3_T4",
-        "powerups": 1
-      },
-      "shop_coin_price": 1000
+    "epic_chest": {
+      "coin_min": 700,
+      "coin_max": 1200,
+      "gem_min": 8,
+      "gem_max": 15,
+      "jet_drop_chance": 0.0,
+      "jet_id": null
+    },
+    "special_chest": {
+      "coin_min": 2000,
+      "coin_max": 3500,
+      "gem_min": 30,
+      "gem_max": 50,
+      "jet_drop_chance": 0.0,
+      "jet_id": null
+    },
+    "jungle_chest": {
+      "coin_min": 250,
+      "coin_max": 500,
+      "gem_min": 5,
+      "gem_max": 10,
+      "jet_drop_chance": 0.0,
+      "jet_id": null,
+      "bonus_coins_in_place_of_jet": 200
+    },
+    "desert_chest": {
+      "coin_min": 400,
+      "coin_max": 800,
+      "gem_min": 8,
+      "gem_max": 15,
+      "jet_drop_chance": 0.1,
+      "jet_id": "Wraith X"
+    },
+    "sea_chest": {
+      "coin_min": 600,
+      "coin_max": 1000,
+      "gem_min": 10,
+      "gem_max": 20,
+      "jet_drop_chance": 0.1,
+      "jet_id": "Specter"
+    },
+    "ice_chest": {
+      "coin_min": 800,
+      "coin_max": 1400,
+      "gem_min": 15,
+      "gem_max": 25,
+      "jet_drop_chance": 0.1,
+      "jet_id": "Viper"
+    },
+    "volcano_chest": {
+      "coin_min": 1200,
+      "coin_max": 2000,
+      "gem_min": 20,
+      "gem_max": 35,
+      "jet_drop_chance": 0.1,
+      "jet_id": "Inferno"
+    },
+    "city_chest": {
+      "coin_min": 1600,
+      "coin_max": 2500,
+      "gem_min": 25,
+      "gem_max": 45,
+      "jet_drop_chance": 0.1,
+      "jet_id": "Phantom"
     }
-  },
-  "schema_version": 1
+  }
 }

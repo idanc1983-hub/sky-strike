@@ -1,13 +1,14 @@
 {
-  "coin_pickup_boss_phase": 80,
-  "coin_pickup_elite": 25,
-  "coin_pickup_regular": 8,
-  "hp_pack_at_max_hp": 80,
   "schema_version": 1,
+  "world_coin_multiplier_step": 0.25,
+  "coin_pickup_regular": 8,
+  "coin_pickup_elite": 25,
+  "coin_pickup_boss_phase": 80,
+  "hp_pack_at_max_hp": 80,
   "stage_clear_bonus": 150,
-  "star_bonus_1star": 0,
   "star_bonus_2star": 40,
   "star_bonus_3star": 80,
+  "star_bonus_1star": 0,
   "wave_clear_W1": [
     25,
     28,
@@ -19,6 +20,5 @@
     55,
     60,
     180
-  ],
-  "world_coin_multiplier_step": 0.25
+  ]
 }

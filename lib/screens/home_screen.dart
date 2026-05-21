@@ -9,8 +9,8 @@ import '../economy/state/economy_state.dart';
 import '../economy/ui/challenge_prizes_popup.dart';
 import '../economy/ui/challenge_reveal_sequence.dart';
 import '../economy/ui/pre_mission_popup.dart';
+import '../economy/ui/snake_offer_popup.dart';
 import '../economy/ui/three_plus_one_offer_popup.dart';
-import '../economy/ui/vapor_trail_popup.dart';
 import '../game/models.dart';
 import '../shared/widgets/asset_placeholder.dart';
 import 'menu_popup.dart';
@@ -569,13 +569,19 @@ class _HomeScreenState extends State<HomeScreen>
           _OfferIcon(
             asset: 'assets/ui/home/1plus3_lobby_iron_skies.png',
             placeholderLabel: '1+3',
-            onTap: () => ThreePlusOneOfferPopup.show(context),
+            onTap: () => ThreePlusOneOfferPopup.show(
+              context,
+              assetId: '1+2_ironsky',
+            ),
           ),
           const SizedBox(width: 10),
           _OfferIcon(
             asset: 'assets/ui/home/snake_lobby_iron_skies.png',
             placeholderLabel: 'SNAKE',
-            onTap: () => VaporTrailPopup.show(context),
+            onTap: () => SnakeOfferPopup.show(
+              context,
+              assetId: 'snake_ironsky',
+            ),
           ),
         ],
       ),

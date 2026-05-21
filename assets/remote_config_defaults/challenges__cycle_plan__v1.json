@@ -1,20 +1,45 @@
 {
+  "schema_version": 1,
   "cycles": {
-    "conqueror": {
-      "display_name": "Star Ascent"
-    },
-    "hunter": {
-      "display_name": "Iron Skies"
+    "iron_skies": {
+      "display_name": "Iron skies",
+      "metric": "kills",
+      "target_enemy": "follow_biome",
+      "duration_hours": 72,
+      "popup_bg": null,
+      "active": true
     },
     "new_players": {
-      "display_name": "New Players"
+      "display_name": "New Players",
+      "metric": "kills",
+      "target_enemy": "follow_biome",
+      "duration_hours": 72,
+      "popup_bg": null,
+      "active": true
     },
-    "survivor": {
-      "display_name": "Last Stand"
+    "last_stand": {
+      "display_name": "Last Stand",
+      "metric": "survival",
+      "target_enemy": "follow_biome",
+      "duration_hours": 72,
+      "popup_bg": null,
+      "active": true
     },
-    "treasure": {
-      "display_name": "Golden Sky"
+    "golden_sky": {
+      "display_name": "Golden Sky",
+      "metric": "score",
+      "target_enemy": "follow_biome",
+      "duration_hours": 72,
+      "popup_bg": null,
+      "active": true
+    },
+    "star_ascent": {
+      "display_name": "Star Ascent",
+      "metric": "stars",
+      "target_enemy": "follow_biome",
+      "duration_hours": 72,
+      "popup_bg": null,
+      "active": true
     }
-  },
-  "schema_version": 1
+  }
 }

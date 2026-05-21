@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "jets": {
     "basic": {
       "base_power": 100,
@@ -24,6 +25,5 @@
       "base_power": 650,
       "unlock_biome": "city"
     }
-  },
-  "schema_version": 1
+  }
 }

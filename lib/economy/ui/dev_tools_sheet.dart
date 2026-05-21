@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/remote_config_service.dart';
 import '../../game/models.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_typography.dart';
 import '../state/economy_state.dart';
+import 'generic_offer_popup.dart';
+import 'snake_offer_popup.dart';
+import 'three_plus_one_offer_popup.dart';
 
 /// Each biome ships with this many levels. Wave counts per level come
 /// from Remote Config (`difficulty__wave_curves__v1`), so this is just
@@ -108,6 +112,8 @@ class DevToolsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               const _StageLauncher(),
+              const SizedBox(height: 10),
+              const _MonetizationLauncher(),
               const SizedBox(height: 10),
               const _WalletEditor(),
               const SizedBox(height: 16),
@@ -859,4 +865,148 @@ class _DevPasscodePromptState extends State<_DevPasscodePrompt>
       ),
     );
   }
+}
+
+// =============================================================================
+// Monetization launcher — pick any of the 14 popup configs and render it
+// with the current remote config data. Background art falls back to the
+// dev placeholder when the popup_bg key has no registered asset.
+// =============================================================================
+class _MonetizationLauncher extends StatefulWidget {
+  const _MonetizationLauncher();
+
+  @override
+  State<_MonetizationLauncher> createState() => _MonetizationLauncherState();
+}
+
+class _MonetizationLauncherState extends State<_MonetizationLauncher> {
+  String? _selected;
+
+  /// All known monetization asset IDs across the 3 format files. Kept as
+  /// a static list because the popup configs already declare every
+  /// active asset by name — this just gives the dropdown its options.
+  static const List<_MonetizationEntry> _entries = [
+    _MonetizationEntry('fto',                'ThreePlusOne'),
+    _MonetizationEntry('first_purchase',     'ThreePlusOne'),
+    _MonetizationEntry('1+2_ironsky',        'ThreePlusOne'),
+    _MonetizationEntry('1+2_laststand',      'ThreePlusOne'),
+    _MonetizationEntry('1+2_goldensky',      'ThreePlusOne'),
+    _MonetizationEntry('1+2_starascent',     'ThreePlusOne'),
+    _MonetizationEntry('snake_ironsky',      'Snake'),
+    _MonetizationEntry('snake_laststand',    'Snake'),
+    _MonetizationEntry('snake_goldensky',    'Snake'),
+    _MonetizationEntry('snake_starascent',   'Snake'),
+    _MonetizationEntry('generic_ironsky',    'Generic'),
+    _MonetizationEntry('generic_laststand',  'Generic'),
+    _MonetizationEntry('generic_goldensky',  'Generic'),
+    _MonetizationEntry('generic_starascent', 'Generic'),
+  ];
+
+  void _show() {
+    final id = _selected;
+    if (id == null) return;
+    final format = _entries.firstWhere((e) => e.assetId == id).format;
+    switch (format) {
+      case 'ThreePlusOne':
+        ThreePlusOneOfferPopup.show(context, assetId: id);
+        break;
+      case 'Snake':
+        SnakeOfferPopup.show(context, assetId: id);
+        break;
+      case 'Generic':
+        GenericOfferPopup.show(context, assetId: id);
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = _selected;
+    final config = selected == null
+        ? null
+        : RemoteConfigService.instance.popupFor(selected);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.amber, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Monetization popup',
+            style: TextStyle(
+              color: AppColors.amber,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Launch any of the 14 configured offers using live Remote Config data. '
+            'Missing popup_bg art falls back to the dev placeholder.',
+            style: AppTypography.label,
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: _selected,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              filled: true,
+              fillColor: AppColors.cardBg,
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              border: OutlineInputBorder(borderSide: BorderSide.none),
+            ),
+            dropdownColor: AppColors.cardBg,
+            style: AppTypography.bodyPale,
+            hint: const Text('Select asset…', style: AppTypography.bodyPale),
+            items: [
+              for (final e in _entries)
+                DropdownMenuItem(
+                  value: e.assetId,
+                  child: Text(
+                    '${e.assetId}  · ${e.format}',
+                    style: AppTypography.bodyPale,
+                  ),
+                ),
+            ],
+            onChanged: (v) => setState(() => _selected = v),
+          ),
+          if (config != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'display_name: ${config['display_name']}\n'
+              'popup_bg: ${config['popup_bg']}\n'
+              'cycle: ${config['trigger_challenge_id']}\n'
+              'unlock_level: ${config['unlock_level']}',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 10,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.amber,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: _selected == null ? null : _show,
+            child: const Text('SHOW POPUP'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonetizationEntry {
+  final String assetId;
+  final String format;
+  const _MonetizationEntry(this.assetId, this.format);
 }

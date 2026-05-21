@@ -1,1390 +1,710 @@
 {
+  "schema_version": 1,
   "cycles": {
-    "golden_sky": {
-      "challenge_type": "treasure",
-      "display_name": "Golden Sky",
-      "onboarding_only": false,
-      "stages": [
-        {
-          "goal": 500,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 70,
-          "prize_gems": 0,
-          "stage": 1
-        },
-        {
-          "goal": 600,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 70,
-          "prize_gems": 0,
-          "stage": 2
-        },
-        {
-          "goal": 700,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 100,
-          "prize_gems": 0,
-          "stage": 3
-        },
-        {
-          "goal": 1360,
-          "goal_unit": "coins_earned",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1000,
-          "prize_gems": 0,
-          "stage": 4
-        },
-        {
-          "goal": 900,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 100,
-          "prize_gems": 0,
-          "stage": 5
-        },
-        {
-          "goal": 1000,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 120,
-          "prize_gems": 0,
-          "stage": 6
-        },
-        {
-          "goal": 1100,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 150,
-          "prize_gems": 0,
-          "stage": 7
-        },
-        {
-          "goal": 2040,
-          "goal_unit": "coins_earned",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1000,
-          "prize_gems": 0,
-          "stage": 8
-        },
-        {
-          "goal": 1300,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 150,
-          "prize_gems": 0,
-          "stage": 9
-        },
-        {
-          "goal": 1400,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 10
-        },
-        {
-          "goal": 1500,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 11
-        },
-        {
-          "goal": 2720,
-          "goal_unit": "coins_earned",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1200,
-          "prize_gems": 0,
-          "stage": 12
-        },
-        {
-          "goal": 1700,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 13
-        },
-        {
-          "goal": 1800,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 14
-        },
-        {
-          "goal": 1900,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 15
-        },
-        {
-          "goal": 3400,
-          "goal_unit": "coins_earned",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1400,
-          "prize_gems": 0,
-          "stage": 16
-        },
-        {
-          "goal": 2100,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 17
-        },
-        {
-          "goal": 2200,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 18
-        },
-        {
-          "goal": 2300,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 19
-        },
-        {
-          "goal": 4080,
-          "goal_unit": "coins_earned",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1600,
-          "prize_gems": 0,
-          "stage": 20
-        },
-        {
-          "goal": 2500,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 21
-        },
-        {
-          "goal": 2600,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 22
-        },
-        {
-          "goal": 2700,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 23
-        },
-        {
-          "goal": 4760,
-          "goal_unit": "coins_earned",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1800,
-          "prize_gems": 0,
-          "stage": 24
-        },
-        {
-          "goal": 2900,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 25
-        },
-        {
-          "goal": 3000,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 26
-        },
-        {
-          "goal": 3100,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 450,
-          "prize_gems": 0,
-          "stage": 27
-        },
-        {
-          "goal": 5440,
-          "goal_unit": "coins_earned",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 2000,
-          "prize_gems": 0,
-          "stage": 28
-        },
-        {
-          "goal": 3300,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 450,
-          "prize_gems": 0,
-          "stage": 29
-        },
-        {
-          "goal": 6647,
-          "goal_unit": "coins_earned",
-          "is_blocker": false,
-          "is_final": true,
-          "prize_chest": "gold",
-          "prize_coins": 3000,
-          "prize_gems": 50,
-          "stage": 30
-        }
-      ]
-    },
     "iron_skies": {
-      "challenge_type": "hunter",
-      "display_name": "Iron Skies",
-      "onboarding_only": false,
+      "display_name": "Iron skies",
+      "metric": "kills",
       "stages": [
         {
+          "stage": 1,
           "goal": 50,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 70,
-          "prize_gems": 0,
-          "stage": 1
+          "prize": "70coin"
         },
         {
+          "stage": 2,
           "goal": 59,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 70,
-          "prize_gems": 0,
-          "stage": 2
+          "prize": "70coin"
         },
         {
+          "stage": 3,
           "goal": 68,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 100,
-          "prize_gems": 0,
-          "stage": 3
+          "prize": "100coin"
         },
         {
+          "stage": 4,
           "goal": 131,
-          "goal_unit": "kills",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1000,
-          "prize_gems": 0,
-          "stage": 4
+          "prize": "epic_chest"
         },
         {
+          "stage": 5,
           "goal": 86,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 100,
-          "prize_gems": 0,
-          "stage": 5
+          "prize": "100coin"
         },
         {
+          "stage": 6,
           "goal": 95,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 120,
-          "prize_gems": 0,
-          "stage": 6
+          "prize": "120coin"
         },
         {
+          "stage": 7,
           "goal": 104,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 150,
-          "prize_gems": 0,
-          "stage": 7
+          "prize": "150coin"
         },
         {
+          "stage": 8,
           "goal": 192,
-          "goal_unit": "kills",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1000,
-          "prize_gems": 0,
-          "stage": 8
+          "prize": "epic_chest"
         },
         {
+          "stage": 9,
           "goal": 122,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 150,
-          "prize_gems": 0,
-          "stage": 9
+          "prize": "150coin"
         },
         {
+          "stage": 10,
           "goal": 131,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 10
+          "prize": "220coin"
         },
         {
+          "stage": 11,
           "goal": 140,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 11
+          "prize": "220coin"
         },
         {
+          "stage": 12,
           "goal": 253,
-          "goal_unit": "kills",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1200,
-          "prize_gems": 0,
-          "stage": 12
+          "prize": "200coin + epic_chest"
         },
         {
+          "stage": 13,
           "goal": 158,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 13
+          "prize": "220coin"
         },
         {
+          "stage": 14,
           "goal": 167,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 14
+          "prize": "280coin"
         },
         {
+          "stage": 15,
           "goal": 176,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 15
+          "prize": "280coin"
         },
         {
+          "stage": 16,
           "goal": 314,
-          "goal_unit": "kills",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1400,
-          "prize_gems": 0,
-          "stage": 16
+          "prize": "400coin + biome_chest_match"
         },
         {
+          "stage": 17,
           "goal": 194,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 17
+          "prize": "280coin"
         },
         {
+          "stage": 18,
           "goal": 203,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 18
+          "prize": "320coin"
         },
         {
+          "stage": 19,
           "goal": 212,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 19
+          "prize": "320coin"
         },
         {
+          "stage": 20,
           "goal": 376,
-          "goal_unit": "kills",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1600,
-          "prize_gems": 0,
-          "stage": 20
+          "prize": "600coin + epic_chest"
         },
         {
+          "stage": 21,
           "goal": 230,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 21
+          "prize": "320coin"
         },
         {
+          "stage": 22,
           "goal": 239,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 22
+          "prize": "400coin"
         },
         {
+          "stage": 23,
           "goal": 248,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 23
+          "prize": "400coin"
         },
         {
+          "stage": 24,
           "goal": 437,
-          "goal_unit": "kills",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1800,
-          "prize_gems": 0,
-          "stage": 24
+          "prize": "800coin + biome_chest_match"
         },
         {
+          "stage": 25,
           "goal": 266,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 25
+          "prize": "400coin"
         },
         {
+          "stage": 26,
           "goal": 275,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 26
+          "prize": "400coin"
         },
         {
+          "stage": 27,
           "goal": 284,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 450,
-          "prize_gems": 0,
-          "stage": 27
+          "prize": "450coin"
         },
         {
+          "stage": 28,
           "goal": 498,
-          "goal_unit": "kills",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 2000,
-          "prize_gems": 0,
-          "stage": 28
+          "prize": "1000coin + epic_chest"
         },
         {
+          "stage": 29,
           "goal": 302,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 450,
-          "prize_gems": 0,
-          "stage": 29
+          "prize": "450coin"
         },
         {
+          "stage": 30,
           "goal": 608,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": true,
-          "prize_chest": "gold",
-          "prize_coins": 3000,
-          "prize_gems": 50,
-          "stage": 30
-        }
-      ]
-    },
-    "last_stand": {
-      "challenge_type": "survivor",
-      "display_name": "Last Stand",
-      "onboarding_only": false,
-      "stages": [
-        {
-          "goal": 1,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 70,
-          "prize_gems": 0,
-          "stage": 1
-        },
-        {
-          "goal": 1,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 70,
-          "prize_gems": 0,
-          "stage": 2
-        },
-        {
-          "goal": 1,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 100,
-          "prize_gems": 0,
-          "stage": 3
-        },
-        {
-          "goal": 2,
-          "goal_unit": "no_death_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1000,
-          "prize_gems": 0,
-          "stage": 4
-        },
-        {
-          "goal": 1,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 100,
-          "prize_gems": 0,
-          "stage": 5
-        },
-        {
-          "goal": 2,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 120,
-          "prize_gems": 0,
-          "stage": 6
-        },
-        {
-          "goal": 2,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 150,
-          "prize_gems": 0,
-          "stage": 7
-        },
-        {
-          "goal": 3,
-          "goal_unit": "no_death_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1000,
-          "prize_gems": 0,
-          "stage": 8
-        },
-        {
-          "goal": 2,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 150,
-          "prize_gems": 0,
-          "stage": 9
-        },
-        {
-          "goal": 2,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 10
-        },
-        {
-          "goal": 2,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 11
-        },
-        {
-          "goal": 4,
-          "goal_unit": "no_death_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1200,
-          "prize_gems": 0,
-          "stage": 12
-        },
-        {
-          "goal": 2,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 13
-        },
-        {
-          "goal": 2,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 14
-        },
-        {
-          "goal": 2,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 15
-        },
-        {
-          "goal": 4,
-          "goal_unit": "no_death_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1400,
-          "prize_gems": 0,
-          "stage": 16
-        },
-        {
-          "goal": 3,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 17
-        },
-        {
-          "goal": 3,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 18
-        },
-        {
-          "goal": 3,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 19
-        },
-        {
-          "goal": 5,
-          "goal_unit": "no_death_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1600,
-          "prize_gems": 0,
-          "stage": 20
-        },
-        {
-          "goal": 3,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 21
-        },
-        {
-          "goal": 3,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 22
-        },
-        {
-          "goal": 3,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 23
-        },
-        {
-          "goal": 6,
-          "goal_unit": "no_death_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1800,
-          "prize_gems": 0,
-          "stage": 24
-        },
-        {
-          "goal": 3,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 25
-        },
-        {
-          "goal": 4,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 26
-        },
-        {
-          "goal": 4,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 450,
-          "prize_gems": 0,
-          "stage": 27
-        },
-        {
-          "goal": 6,
-          "goal_unit": "no_death_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 2000,
-          "prize_gems": 0,
-          "stage": 28
-        },
-        {
-          "goal": 4,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 450,
-          "prize_gems": 0,
-          "stage": 29
-        },
-        {
-          "goal": 8,
-          "goal_unit": "no_death_clears",
-          "is_blocker": false,
-          "is_final": true,
-          "prize_chest": "gold",
-          "prize_coins": 3000,
-          "prize_gems": 50,
-          "stage": 30
+          "prize": "biome_chest_match + 50gem + 500coin"
         }
       ]
     },
     "new_players": {
-      "challenge_type": "hunter",
       "display_name": "New Players",
-      "onboarding_only": true,
+      "metric": "kills",
       "stages": [
         {
+          "stage": 1,
           "goal": 5,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 20,
-          "prize_gems": 0,
-          "stage": 1
+          "prize": "20coin"
         },
         {
+          "stage": 2,
           "goal": 7,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 25,
-          "prize_gems": 0,
-          "stage": 2
+          "prize": "25coin"
         },
         {
+          "stage": 3,
           "goal": 8,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 30,
-          "prize_gems": 0,
-          "stage": 3
+          "prize": "30coin"
         },
         {
+          "stage": 4,
           "goal": 13,
-          "goal_unit": "kills",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "bronze",
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 4
+          "prize": "unique_chest"
         },
         {
+          "stage": 5,
           "goal": 12,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 35,
-          "prize_gems": 0,
-          "stage": 5
+          "prize": "35coin"
         },
         {
+          "stage": 6,
           "goal": 14,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 40,
-          "prize_gems": 0,
-          "stage": 6
+          "prize": "40coin"
         },
         {
+          "stage": 7,
           "goal": 15,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 50,
-          "prize_gems": 0,
-          "stage": 7
+          "prize": "50coin"
         },
         {
+          "stage": 8,
           "goal": 22,
-          "goal_unit": "kills",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "bronze",
-          "prize_coins": 500,
-          "prize_gems": 0,
-          "stage": 8
+          "prize": "100coin+ unique_chest"
         },
         {
+          "stage": 9,
           "goal": 19,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 60,
-          "prize_gems": 0,
-          "stage": 9
+          "prize": "60coin"
         },
         {
+          "stage": 10,
           "goal": 21,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 70,
-          "prize_gems": 0,
-          "stage": 10
+          "prize": "70coin"
         },
         {
+          "stage": 11,
           "goal": 22,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 70,
-          "prize_gems": 0,
-          "stage": 11
+          "prize": "70coin"
         },
         {
+          "stage": 12,
           "goal": 32,
-          "goal_unit": "kills",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "bronze",
-          "prize_coins": 600,
-          "prize_gems": 0,
-          "stage": 12
+          "prize": "200coin + unique_chest"
         },
         {
+          "stage": 13,
           "goal": 26,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 70,
-          "prize_gems": 0,
-          "stage": 13
+          "prize": "70coin"
         },
         {
+          "stage": 14,
           "goal": 28,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 100,
-          "prize_gems": 0,
-          "stage": 14
+          "prize": "100coin"
         },
         {
+          "stage": 15,
           "goal": 44,
-          "goal_unit": "kills",
-          "is_blocker": false,
-          "is_final": true,
-          "prize_chest": "silver",
-          "prize_coins": 1000,
-          "prize_gems": 20,
-          "stage": 15
+          "prize": "epic_chest + 30gem + 200coin"
+        }
+      ]
+    },
+    "last_stand": {
+      "display_name": "Last Stand",
+      "metric": "survival",
+      "stages": [
+        {
+          "stage": 1,
+          "goal": 1,
+          "prize": "70coin"
+        },
+        {
+          "stage": 2,
+          "goal": 1,
+          "prize": "70coin"
+        },
+        {
+          "stage": 3,
+          "goal": 1,
+          "prize": "100coin"
+        },
+        {
+          "stage": 4,
+          "goal": 2,
+          "prize": "epic_chest"
+        },
+        {
+          "stage": 5,
+          "goal": 1,
+          "prize": "100coin"
+        },
+        {
+          "stage": 6,
+          "goal": 2,
+          "prize": "120coin"
+        },
+        {
+          "stage": 7,
+          "goal": 2,
+          "prize": "150coin"
+        },
+        {
+          "stage": 8,
+          "goal": 3,
+          "prize": "epic_chest"
+        },
+        {
+          "stage": 9,
+          "goal": 2,
+          "prize": "150coin"
+        },
+        {
+          "stage": 10,
+          "goal": 2,
+          "prize": "220coin"
+        },
+        {
+          "stage": 11,
+          "goal": 2,
+          "prize": "220coin"
+        },
+        {
+          "stage": 12,
+          "goal": 4,
+          "prize": "200coin + epic_chest"
+        },
+        {
+          "stage": 13,
+          "goal": 2,
+          "prize": "220coin"
+        },
+        {
+          "stage": 14,
+          "goal": 2,
+          "prize": "280coin"
+        },
+        {
+          "stage": 15,
+          "goal": 2,
+          "prize": "280coin"
+        },
+        {
+          "stage": 16,
+          "goal": 4,
+          "prize": "400coin + biome_chest_match"
+        },
+        {
+          "stage": 17,
+          "goal": 3,
+          "prize": "280coin"
+        },
+        {
+          "stage": 18,
+          "goal": 3,
+          "prize": "320coin"
+        },
+        {
+          "stage": 19,
+          "goal": 3,
+          "prize": "320coin"
+        },
+        {
+          "stage": 20,
+          "goal": 5,
+          "prize": "600coin + epic_chest"
+        },
+        {
+          "stage": 21,
+          "goal": 3,
+          "prize": "320coin"
+        },
+        {
+          "stage": 22,
+          "goal": 3,
+          "prize": "400coin"
+        },
+        {
+          "stage": 23,
+          "goal": 3,
+          "prize": "400coin"
+        },
+        {
+          "stage": 24,
+          "goal": 6,
+          "prize": "800coin + biome_chest_match"
+        },
+        {
+          "stage": 25,
+          "goal": 3,
+          "prize": "400coin"
+        },
+        {
+          "stage": 26,
+          "goal": 4,
+          "prize": "400coin"
+        },
+        {
+          "stage": 27,
+          "goal": 4,
+          "prize": "450coin"
+        },
+        {
+          "stage": 28,
+          "goal": 6,
+          "prize": "1000coin + epic_chest"
+        },
+        {
+          "stage": 29,
+          "goal": 4,
+          "prize": "450coin"
+        },
+        {
+          "stage": 30,
+          "goal": 8,
+          "prize": "biome_chest_match + 50gem + 500coin"
+        }
+      ]
+    },
+    "golden_sky": {
+      "display_name": "Golden Sky",
+      "metric": "score",
+      "stages": [
+        {
+          "stage": 1,
+          "goal": 500,
+          "prize": "70coin"
+        },
+        {
+          "stage": 2,
+          "goal": 600,
+          "prize": "70coin"
+        },
+        {
+          "stage": 3,
+          "goal": 700,
+          "prize": "100coin"
+        },
+        {
+          "stage": 4,
+          "goal": 1360,
+          "prize": "epic_chest"
+        },
+        {
+          "stage": 5,
+          "goal": 900,
+          "prize": "100coin"
+        },
+        {
+          "stage": 6,
+          "goal": 1000,
+          "prize": "120coin"
+        },
+        {
+          "stage": 7,
+          "goal": 1100,
+          "prize": "150coin"
+        },
+        {
+          "stage": 8,
+          "goal": 2040,
+          "prize": "epic_chest"
+        },
+        {
+          "stage": 9,
+          "goal": 1300,
+          "prize": "150coin"
+        },
+        {
+          "stage": 10,
+          "goal": 1400,
+          "prize": "220coin"
+        },
+        {
+          "stage": 11,
+          "goal": 1500,
+          "prize": "220coin"
+        },
+        {
+          "stage": 12,
+          "goal": 2720,
+          "prize": "200coin + epic_chest"
+        },
+        {
+          "stage": 13,
+          "goal": 1700,
+          "prize": "220coin"
+        },
+        {
+          "stage": 14,
+          "goal": 1800,
+          "prize": "280coin"
+        },
+        {
+          "stage": 15,
+          "goal": 1900,
+          "prize": "280coin"
+        },
+        {
+          "stage": 16,
+          "goal": 3400,
+          "prize": "400coin + biome_chest_match"
+        },
+        {
+          "stage": 17,
+          "goal": 2100,
+          "prize": "280coin"
+        },
+        {
+          "stage": 18,
+          "goal": 2200,
+          "prize": "320coin"
+        },
+        {
+          "stage": 19,
+          "goal": 2300,
+          "prize": "320coin"
+        },
+        {
+          "stage": 20,
+          "goal": 4080,
+          "prize": "600coin + epic_chest"
+        },
+        {
+          "stage": 21,
+          "goal": 2500,
+          "prize": "320coin"
+        },
+        {
+          "stage": 22,
+          "goal": 2600,
+          "prize": "400coin"
+        },
+        {
+          "stage": 23,
+          "goal": 2700,
+          "prize": "400coin"
+        },
+        {
+          "stage": 24,
+          "goal": 4760,
+          "prize": "800coin + biome_chest_match"
+        },
+        {
+          "stage": 25,
+          "goal": 2900,
+          "prize": "400coin"
+        },
+        {
+          "stage": 26,
+          "goal": 3000,
+          "prize": "400coin"
+        },
+        {
+          "stage": 27,
+          "goal": 3100,
+          "prize": "450coin"
+        },
+        {
+          "stage": 28,
+          "goal": 5440,
+          "prize": "1000coin + epic_chest"
+        },
+        {
+          "stage": 29,
+          "goal": 3300,
+          "prize": "450coin"
+        },
+        {
+          "stage": 30,
+          "goal": 6647,
+          "prize": "biome_chest_match + 50gem + 500coin"
         }
       ]
     },
     "star_ascent": {
-      "challenge_type": "conqueror",
       "display_name": "Star Ascent",
-      "onboarding_only": false,
+      "metric": "stars",
       "stages": [
         {
+          "stage": 1,
           "goal": 2,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 70,
-          "prize_gems": 0,
-          "stage": 1
+          "prize": "70coin"
         },
         {
+          "stage": 2,
           "goal": 2,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 70,
-          "prize_gems": 0,
-          "stage": 2
+          "prize": "70coin"
         },
         {
+          "stage": 3,
           "goal": 2,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 100,
-          "prize_gems": 0,
-          "stage": 3
+          "prize": "100coin"
         },
         {
+          "stage": 4,
           "goal": 5,
-          "goal_unit": "two_star_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1000,
-          "prize_gems": 0,
-          "stage": 4
+          "prize": "epic_chest"
         },
         {
+          "stage": 5,
           "goal": 3,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 100,
-          "prize_gems": 0,
-          "stage": 5
+          "prize": "100coin"
         },
         {
+          "stage": 6,
           "goal": 3,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 120,
-          "prize_gems": 0,
-          "stage": 6
+          "prize": "120coin"
         },
         {
+          "stage": 7,
           "goal": 3,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 150,
-          "prize_gems": 0,
-          "stage": 7
+          "prize": "150coin"
         },
         {
+          "stage": 8,
           "goal": 6,
-          "goal_unit": "two_star_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1000,
-          "prize_gems": 0,
-          "stage": 8
+          "prize": "epic_chest"
         },
         {
+          "stage": 9,
           "goal": 4,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 150,
-          "prize_gems": 0,
-          "stage": 9
+          "prize": "150coin"
         },
         {
+          "stage": 10,
           "goal": 4,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 10
+          "prize": "220coin"
         },
         {
+          "stage": 11,
           "goal": 4,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 11
+          "prize": "220coin"
         },
         {
+          "stage": 12,
           "goal": 8,
-          "goal_unit": "two_star_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1200,
-          "prize_gems": 0,
-          "stage": 12
+          "prize": "200coin + epic_chest"
         },
         {
+          "stage": 13,
           "goal": 5,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 220,
-          "prize_gems": 0,
-          "stage": 13
+          "prize": "220coin"
         },
         {
+          "stage": 14,
           "goal": 5,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 14
+          "prize": "280coin"
         },
         {
+          "stage": 15,
           "goal": 5,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 15
+          "prize": "280coin"
         },
         {
+          "stage": 16,
           "goal": 10,
-          "goal_unit": "two_star_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1400,
-          "prize_gems": 0,
-          "stage": 16
+          "prize": "400coin + biome_chest_match"
         },
         {
+          "stage": 17,
           "goal": 6,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 280,
-          "prize_gems": 0,
-          "stage": 17
+          "prize": "280coin"
         },
         {
+          "stage": 18,
           "goal": 6,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 18
+          "prize": "320coin"
         },
         {
+          "stage": 19,
           "goal": 6,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 19
+          "prize": "320coin"
         },
         {
+          "stage": 20,
           "goal": 11,
-          "goal_unit": "two_star_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1600,
-          "prize_gems": 0,
-          "stage": 20
+          "prize": "600coin + epic_chest"
         },
         {
+          "stage": 21,
           "goal": 7,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 320,
-          "prize_gems": 0,
-          "stage": 21
+          "prize": "320coin"
         },
         {
+          "stage": 22,
           "goal": 7,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 22
+          "prize": "400coin"
         },
         {
+          "stage": 23,
           "goal": 7,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 23
+          "prize": "400coin"
         },
         {
+          "stage": 24,
           "goal": 13,
-          "goal_unit": "two_star_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 1800,
-          "prize_gems": 0,
-          "stage": 24
+          "prize": "800coin + biome_chest_match"
         },
         {
+          "stage": 25,
           "goal": 8,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 25
+          "prize": "400coin"
         },
         {
+          "stage": 26,
           "goal": 8,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 400,
-          "prize_gems": 0,
-          "stage": 26
+          "prize": "400coin"
         },
         {
+          "stage": 27,
           "goal": 8,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 450,
-          "prize_gems": 0,
-          "stage": 27
+          "prize": "450coin"
         },
         {
+          "stage": 28,
           "goal": 14,
-          "goal_unit": "two_star_clears",
-          "is_blocker": true,
-          "is_final": false,
-          "prize_chest": "silver",
-          "prize_coins": 2000,
-          "prize_gems": 0,
-          "stage": 28
+          "prize": "1000coin + epic_chest"
         },
         {
+          "stage": 29,
           "goal": 9,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": false,
-          "prize_chest": null,
-          "prize_coins": 450,
-          "prize_gems": 0,
-          "stage": 29
+          "prize": "450coin"
         },
         {
+          "stage": 30,
           "goal": 18,
-          "goal_unit": "two_star_clears",
-          "is_blocker": false,
-          "is_final": true,
-          "prize_chest": "gold",
-          "prize_coins": 3000,
-          "prize_gems": 50,
-          "stage": 30
+          "prize": "biome_chest_match + 50gem + 500coin"
         }
       ]
     }
-  },
-  "schema_version": 1
+  }
 }
