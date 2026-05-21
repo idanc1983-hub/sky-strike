@@ -1,6 +1,8 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'config/remote_config_service.dart';
 import 'economy/services/economy_api.dart';
 import 'economy/services/economy_persistence.dart';
 import 'economy/services/mock_ads_service.dart';
@@ -25,6 +27,16 @@ Future<void> main() async {
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
   ));
+
+  // Firebase + Remote Config. Failures here must not block the app — a
+  // missing platform plist or a flaky network should still launch the game
+  // with bundled defaults.
+  try {
+    await Firebase.initializeApp();
+    await RemoteConfigService.instance.init();
+  } catch (e, st) {
+    debugPrint('[FIREBASE_INIT_FAIL] $e\n$st');
+  }
 
   // Build a single EconomyState at app startup. ChangeNotifierProvider.value
   // hands the same instance to every screen that needs it.

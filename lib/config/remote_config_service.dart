@@ -1,643 +1,335 @@
-import 'dart:async';
+// remote_config_service.dart
+//
+// SkyStrike / Air Strike Remote Config integration — v2 (13 parameters).
+//
+// Wraps firebase_remote_config: fetch + activate once, then read each of the
+// 13 parameters by key and parse the JSON-string value into a Dart Map.
+//
+// Every parameter is stored as a JSON STRING in Remote Config (valueType:
+// JSON), so we read getString(key) and json.decode it. Every getter is
+// defensive: if the key is missing, empty, or garbled, it falls back to an
+// empty map/list — the game never crashes on a bad LiveOps push.
+//
+// Bundled defaults are loaded from assets/remote_config_defaults/ so a
+// brand-new install with no network plays with the same config that was
+// published to Firebase.
+
 import 'dart:convert';
-import 'dart:developer' as developer;
-
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:firebase_remote_config/firebase_remote_config.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
 
-import 'config_analytics.dart';
-import 'config_defaults.dart';
-import 'config_keys.dart';
-import 'config_schemas/ab_assignment.dart';
-import 'config_schemas/challenges_cycle_plan.dart';
-import 'config_schemas/drop_rates.dart';
-import 'config_schemas/enemy_scaling.dart';
-import 'config_schemas/feature_flags.dart';
-import 'config_schemas/level_rewards.dart';
-import 'config_schemas/revive_pricing.dart';
-import 'config_schemas/shop_prices.dart';
-import 'config_schemas/streak_boost.dart';
-import 'config_schemas/wave_curve.dart';
-import 'config_schemas/xp_curve.dart';
-import 'forced_variants.dart';
+/// Parameter keys — keep these in ONE place so a rename is a single edit.
+class RcKeys {
+  // levels group
+  static const levelsBiomeLevels = 'levels__biome_levels__v1';
 
-const String _logName = 'remote_config';
+  // economy group
+  static const economyJetBasePowers = 'economy__jet_base_powers__v1';
+  static const economyShopPowerups = 'economy__shop_powerups__v1';
+  static const economyChests = 'economy__chests__v1';
+  static const economyCoinDrops = 'economy__coin_drops__v1';
+  static const economyShopIap = 'economy__shop_iap__v1';
 
-/// Singleton orchestrator for Firebase Remote Config.
-///
-/// Lifecycle:
-///   1. `RemoteConfigService.instance.initialize()` during app startup.
-///   2. Service registers a lifecycle observer; refreshes on
-///      `AppLifecycleState.resumed`.
-///   3. Game code calls typed getters in hot paths — safe at 60fps.
-///
-/// Resilience:
-///   - Asset / fetch / parse failures never propagate. Each failure mode
-///     drops to a documented fallback: last-good cached value, then the
-///     baked default from `defaults.json`, then the per-schema static
-///     fallback constant.
-class RemoteConfigService with WidgetsBindingObserver {
-  RemoteConfigService._({
-    FirebaseRemoteConfig? remote,
-    ConfigAnalytics? analytics,
-  })  : _remote = remote ?? FirebaseRemoteConfig.instance,
-        _analytics = analytics ?? ConfigAnalytics();
+  // challenges group
+  static const challengesCyclePlan = 'challenges__cycle_plan__v1';
+  static const challengesStageLadders = 'challenges__stage_ladders__v1';
+  static const challengesDailyReward = 'challenges__daily_reward__v1';
 
-  static RemoteConfigService? _instance;
-  static RemoteConfigService get instance =>
-      _instance ??= RemoteConfigService._();
+  // monetization group
+  static const monetizationPopupConfig = 'monetization__popup_config__v1';
+  static const monetizationOffers1_3 = 'monetization__offers_1_3__v1';
+  static const monetizationOffersGeneric = 'monetization__offers_generic__v1';
+  static const monetizationOffersSnake = 'monetization__offers_snake__v1';
 
-  /// Test-only: replace the singleton with a custom instance.
-  @visibleForTesting
-  static void installForTests(RemoteConfigService instance) {
-    _instance = instance;
-  }
+  static const all = <String>[
+    levelsBiomeLevels,
+    economyJetBasePowers,
+    economyShopPowerups,
+    economyChests,
+    economyCoinDrops,
+    economyShopIap,
+    challengesCyclePlan,
+    challengesStageLadders,
+    challengesDailyReward,
+    monetizationPopupConfig,
+    monetizationOffers1_3,
+    monetizationOffersGeneric,
+    monetizationOffersSnake,
+  ];
+}
 
-  /// Test-only: clear the singleton.
-  @visibleForTesting
-  static void resetForTests() {
-    _instance = null;
-  }
+class RemoteConfigService {
+  RemoteConfigService._();
+  static final RemoteConfigService instance = RemoteConfigService._();
 
-  final FirebaseRemoteConfig _remote;
-  final ConfigAnalytics _analytics;
-
-  /// Increments on every successful activate. UI can watch this to
-  /// trigger rebuilds when remote values change.
-  final ValueNotifier<int> configVersion = ValueNotifier<int>(0);
-
+  final FirebaseRemoteConfig _rc = FirebaseRemoteConfig.instance;
   bool _initialized = false;
 
-  // Parsed schemas — populated by initialize() and refresh().
-  WaveCurveTable _waveCurves = WaveCurveTable.fallback;
-  EnemyScalingTable _enemyScaling = EnemyScalingTable.fallback;
-  DropRatesConfig _dropRates = DropRatesConfig.fallback;
-  StreakBoost _streakBoost = StreakBoost.fallback;
-  RevivePricing _revivePricing = RevivePricing.fallback;
-  ShopPrices _shopPrices = ShopPrices.fallback;
-  XpCurve _xpCurve = XpCurve.fallback;
-  LevelRewardsTable _levelRewards = LevelRewardsTable.fallback;
-  FeatureFlags _featureFlags = FeatureFlags.fallback;
-  KillSwitches _killSwitches = KillSwitches.fallback;
-  AbAssignment _abAssignment = AbAssignment.fallback;
-  ChallengesCyclePlan _challengesCyclePlan = ChallengesCyclePlan.fallback;
+  /// Call once during app startup, AFTER Firebase.initializeApp().
+  /// Returns true if a fresh config was activated, false if it used cached/last.
+  Future<bool> init({
+    Duration fetchTimeout = const Duration(seconds: 10),
+    // In production keep this at hours; for dev testing use Duration.zero
+    // so every launch pulls the newest published template.
+    Duration minimumFetchInterval = const Duration(hours: 1),
+  }) async {
+    if (_initialized) return false;
 
-  /// Last-known-good raw JSON strings keyed by Firebase key. Used to
-  /// recover when a fresh remote value parses badly.
-  final Map<String, String> _lastGoodRaw = <String, String>{};
+    await _rc.setConfigSettings(RemoteConfigSettings(
+      fetchTimeout: fetchTimeout,
+      minimumFetchInterval: minimumFetchInterval,
+    ));
 
-  /// Initialize the service. Idempotent. Loads baked defaults, registers
-  /// them with Firebase, fetches the remote payload (best-effort), and
-  /// hooks the lifecycle observer.
-  Future<void> initialize() async {
-    if (_initialized) return;
-    _initialized = true;
+    // Real defaults loaded from bundled assets (generated from params/*.json).
+    final defaults = await _loadDefaultsFromAssets();
+    await _rc.setDefaults(defaults);
 
-    final defaults = await ConfigDefaults.load();
-    // Seed our parser cache from defaults so getters work even if
-    // fetchAndActivate fails or times out.
-    _lastGoodRaw.addAll(defaults);
-    _parseAll(defaults, isDefault: true);
-
-    // Wire defaults into Firebase so its in-memory store falls back
-    // correctly. Firebase only accepts primitive types; we already
-    // stringified the payloads on the build side.
-    try {
-      await _remote.setDefaults(<String, Object>{
-        for (final entry in defaults.entries) entry.key: entry.value,
-      });
-    } catch (e, st) {
-      developer.log('setDefaults failed: $e',
-          name: _logName, level: 900, error: e, stackTrace: st);
-    }
-
-    try {
-      await _remote.setConfigSettings(RemoteConfigSettings(
-        fetchTimeout: const Duration(seconds: 10),
-        minimumFetchInterval:
-            kDebugMode ? Duration.zero : const Duration(seconds: 60),
-      ));
-    } catch (e) {
-      developer.log('setConfigSettings failed: $e',
-          name: _logName, level: 900);
-    }
-
-    WidgetsBinding.instance.addObserver(this);
-
-    await refresh(source: 'launch');
-  }
-
-  /// Force a fetch+activate. Safe to call any time after [initialize].
-  Future<void> refresh({String source = 'foreground'}) async {
-    final stopwatch = Stopwatch()..start();
     bool activated = false;
-    String? errorCode;
     try {
-      activated = await _remote
-          .fetchAndActivate()
-          .timeout(const Duration(seconds: 10));
-    } on TimeoutException {
-      errorCode = 'timeout';
-    } catch (e, st) {
-      errorCode = e.runtimeType.toString();
-      developer.log(
-        'fetchAndActivate failed: $e',
-        name: _logName,
-        level: 900,
-        error: e,
-        stackTrace: st,
-      );
+      activated = await _rc.fetchAndActivate();
+    } catch (e) {
+      // Network failure / timeout: defaults and last-activated values remain
+      // in effect, so the game keeps running. Log for diagnostics.
+      // ignore: avoid_print
+      print('[RemoteConfig] fetchAndActivate failed, using cached/defaults: $e');
     }
-    stopwatch.stop();
 
-    unawaited(_analytics.logFetch(
-      success: errorCode == null,
-      durationMs: stopwatch.elapsedMilliseconds,
-      source: source,
-      errorCode: errorCode,
-    ));
+    _initialized = true;
+    return activated;
+  }
 
-    if (errorCode != null) return;
+  // ---- defaults loading -------------------------------------------------
 
-    // Read every key's current value (remote-active overlay on top of
-    // defaults) and re-parse.
-    final fresh = <String, String>{};
-    for (final key in ConfigKeys.all) {
+  /// Maps each RC key to its bundled asset file (generated from params/*.json).
+  /// Add a new entry here whenever a new parameter is added to Remote Config.
+  static const Map<String, String> _defaultAssets = <String, String>{
+    RcKeys.levelsBiomeLevels:
+        'assets/remote_config_defaults/levels__biome_levels__v1.json',
+    RcKeys.economyJetBasePowers:
+        'assets/remote_config_defaults/economy__jet_base_powers__v1.json',
+    RcKeys.economyShopPowerups:
+        'assets/remote_config_defaults/economy__shop_powerups__v1.json',
+    RcKeys.economyChests:
+        'assets/remote_config_defaults/economy__chests__v1.json',
+    RcKeys.economyCoinDrops:
+        'assets/remote_config_defaults/economy__coin_drops__v1.json',
+    RcKeys.economyShopIap:
+        'assets/remote_config_defaults/economy__shop_iap__v1.json',
+    RcKeys.challengesCyclePlan:
+        'assets/remote_config_defaults/challenges__cycle_plan__v1.json',
+    RcKeys.challengesStageLadders:
+        'assets/remote_config_defaults/challenges__stage_ladders__v1.json',
+    RcKeys.challengesDailyReward:
+        'assets/remote_config_defaults/challenges__daily_reward__v1.json',
+    RcKeys.monetizationPopupConfig:
+        'assets/remote_config_defaults/monetization__popup_config__v1.json',
+    RcKeys.monetizationOffers1_3:
+        'assets/remote_config_defaults/monetization__offers_1_3__v1.json',
+    RcKeys.monetizationOffersGeneric:
+        'assets/remote_config_defaults/monetization__offers_generic__v1.json',
+    RcKeys.monetizationOffersSnake:
+        'assets/remote_config_defaults/monetization__offers_snake__v1.json',
+  };
+
+  /// Reads each default JSON asset as a raw string. Remote Config defaults
+  /// for JSON params are set as the JSON STRING (same form as getString
+  /// returns), so the file contents pass through untouched.
+  Future<Map<String, dynamic>> _loadDefaultsFromAssets() async {
+    final out = <String, dynamic>{};
+    for (final entry in _defaultAssets.entries) {
       try {
-        final s = _remote.getString(key);
-        if (s.isNotEmpty) fresh[key] = s;
+        out[entry.key] = await rootBundle.loadString(entry.value);
       } catch (e) {
-        developer.log('getString($key) failed: $e',
-            name: _logName, level: 900);
+        // Asset missing/misnamed: fall back to a minimal valid stub so
+        // setDefaults still succeeds and the app boots.
+        // ignore: avoid_print
+        print('[RemoteConfig] default asset "${entry.value}" missing: $e');
+        out[entry.key] = '{"schema_version":1}';
       }
     }
-    final schemaVersions = _parseAll(fresh, isDefault: false);
+    return out;
+  }
 
-    if (activated) {
-      configVersion.value = configVersion.value + 1;
-    }
-    int? templateVersion;
+  /// Force a refresh at runtime (e.g. pull-to-refresh on a LiveOps screen).
+  Future<bool> refresh() async {
     try {
-      templateVersion = _remote.lastFetchTime.millisecondsSinceEpoch;
-    } catch (_) {
-      templateVersion = null;
-    }
-    unawaited(_analytics.logActivated(
-      schemaVersions: schemaVersions,
-      templateVersion: templateVersion,
-    ));
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _initialized) {
-      // Fire-and-forget; refresh has its own error guards.
-      unawaited(refresh(source: 'foreground'));
+      return await _rc.fetchAndActivate();
+    } catch (e) {
+      // ignore: avoid_print
+      print('[RemoteConfig] refresh failed: $e');
+      return false;
     }
   }
 
-  // -------------------------------------------------------------------
-  // Parsing
-  // -------------------------------------------------------------------
+  // ---- core safe readers ------------------------------------------------
 
-  /// Parse every namespace from [raw]. Returns a `{namespace: schema_version}`
-  /// map describing what we successfully parsed.
-  Map<String, int> _parseAll(Map<String, String> raw,
-      {required bool isDefault}) {
-    final versions = <String, int>{};
-
-    _waveCurves = _parseOne<WaveCurveTable>(
-      raw: raw,
-      key: ConfigKeys.difficultyWaveCurves,
-      supported: WaveCurveTable.supportedSchemaVersion,
-      namespace: 'difficulty.wave_curves',
-      previous: _waveCurves,
-      fallback: WaveCurveTable.fallback,
-      parse: (m) => WaveCurveTable.fromJson(m),
-      versionOf: (v) => v.schemaVersion,
-      versions: versions,
-      versionKey: 'difficulty.wave_curves',
-      isDefault: isDefault,
-    );
-    _enemyScaling = _parseOne<EnemyScalingTable>(
-      raw: raw,
-      key: ConfigKeys.difficultyEnemyScaling,
-      supported: EnemyScalingTable.supportedSchemaVersion,
-      namespace: 'difficulty.enemy_scaling',
-      previous: _enemyScaling,
-      fallback: EnemyScalingTable.fallback,
-      parse: (m) => EnemyScalingTable.fromJson(m),
-      versionOf: (v) => v.schemaVersion,
-      versions: versions,
-      versionKey: 'difficulty.enemy_scaling',
-      isDefault: isDefault,
-    );
-
-    // DropRates merges TWO Firebase keys (rates + powerup_distribution).
-    _dropRates = _parseDropRates(raw, isDefault: isDefault, versions: versions);
-
-    _streakBoost = _parseOne<StreakBoost>(
-      raw: raw,
-      key: ConfigKeys.dropsStreakBoost,
-      supported: StreakBoost.supportedSchemaVersion,
-      namespace: 'drops.streak_boost',
-      previous: _streakBoost,
-      fallback: StreakBoost.fallback,
-      parse: (m) => StreakBoost.fromJson(m),
-      versionOf: (v) => v.schemaVersion,
-      versions: versions,
-      versionKey: 'drops.streak_boost',
-      isDefault: isDefault,
-    );
-    _revivePricing = _parseOne<RevivePricing>(
-      raw: raw,
-      key: ConfigKeys.economyRevivePricing,
-      supported: RevivePricing.supportedSchemaVersion,
-      namespace: 'economy.revive_pricing',
-      previous: _revivePricing,
-      fallback: RevivePricing.fallback,
-      parse: (m) => RevivePricing.fromJson(m),
-      versionOf: (v) => v.schemaVersion,
-      versions: versions,
-      versionKey: 'economy.revive_pricing',
-      isDefault: isDefault,
-    );
-    _shopPrices = _parseOne<ShopPrices>(
-      raw: raw,
-      key: ConfigKeys.economyShopPrices,
-      supported: ShopPrices.supportedSchemaVersion,
-      namespace: 'economy.shop_prices',
-      previous: _shopPrices,
-      fallback: ShopPrices.fallback,
-      parse: (m) => ShopPrices.fromJson(m),
-      versionOf: (v) => v.schemaVersion,
-      versions: versions,
-      versionKey: 'economy.shop_prices',
-      isDefault: isDefault,
-    );
-    _xpCurve = _parseOne<XpCurve>(
-      raw: raw,
-      key: ConfigKeys.progressionXpCurve,
-      supported: XpCurve.supportedSchemaVersion,
-      namespace: 'progression.xp_curve',
-      previous: _xpCurve,
-      fallback: XpCurve.fallback,
-      parse: (m) => XpCurve.fromJson(m),
-      versionOf: (v) => v.schemaVersion,
-      versions: versions,
-      versionKey: 'progression.xp_curve',
-      isDefault: isDefault,
-    );
-    _levelRewards = _parseOne<LevelRewardsTable>(
-      raw: raw,
-      key: ConfigKeys.progressionLevelRewards,
-      supported: LevelRewardsTable.supportedSchemaVersion,
-      namespace: 'progression.level_rewards',
-      previous: _levelRewards,
-      fallback: LevelRewardsTable.fallback,
-      parse: (m) => LevelRewardsTable.fromJson(m),
-      versionOf: (v) => v.schemaVersion,
-      versions: versions,
-      versionKey: 'progression.level_rewards',
-      isDefault: isDefault,
-    );
-    _featureFlags = _parseOne<FeatureFlags>(
-      raw: raw,
-      key: ConfigKeys.flagsFeatureFlags,
-      supported: FeatureFlags.supportedSchemaVersion,
-      namespace: 'flags.feature_flags',
-      previous: _featureFlags,
-      fallback: FeatureFlags.fallback,
-      parse: (m) => FeatureFlags.fromJson(m),
-      versionOf: (v) => v.schemaVersion,
-      versions: versions,
-      versionKey: 'flags.feature_flags',
-      isDefault: isDefault,
-    );
-    _killSwitches = _parseOne<KillSwitches>(
-      raw: raw,
-      key: ConfigKeys.flagsKillSwitches,
-      supported: KillSwitches.supportedSchemaVersion,
-      namespace: 'flags.kill_switches',
-      previous: _killSwitches,
-      fallback: KillSwitches.fallback,
-      parse: (m) => KillSwitches.fromJson(m),
-      versionOf: (v) => v.schemaVersion,
-      versions: versions,
-      versionKey: 'flags.kill_switches',
-      isDefault: isDefault,
-    );
-    _abAssignment = _parseOne<AbAssignment>(
-      raw: raw,
-      key: ConfigKeys.experimentsAbAssignment,
-      supported: AbAssignment.supportedSchemaVersion,
-      namespace: 'experiments.ab_assignment',
-      previous: _abAssignment,
-      fallback: AbAssignment.fallback,
-      parse: (m) => AbAssignment.fromJson(m),
-      versionOf: (v) => v.schemaVersion,
-      versions: versions,
-      versionKey: 'experiments.ab_assignment',
-      isDefault: isDefault,
-    );
-    _challengesCyclePlan = _parseOne<ChallengesCyclePlan>(
-      raw: raw,
-      key: ConfigKeys.challengesCyclePlan,
-      supported: ChallengesCyclePlan.supportedSchemaVersion,
-      namespace: 'challenges.cycle_plan',
-      previous: _challengesCyclePlan,
-      fallback: ChallengesCyclePlan.fallback,
-      parse: (m) => ChallengesCyclePlan.fromJson(m),
-      versionOf: (v) => v.schemaVersion,
-      versions: versions,
-      versionKey: 'challenges.cycle_plan',
-      isDefault: isDefault,
-    );
-
-    return versions;
-  }
-
-  T _parseOne<T>({
-    required Map<String, String> raw,
-    required String key,
-    required int supported,
-    required String namespace,
-    required T previous,
-    required T fallback,
-    required T Function(Map<String, dynamic>) parse,
-    required int Function(T) versionOf,
-    required Map<String, int> versions,
-    required String versionKey,
-    required bool isDefault,
-  }) {
-    final s = raw[key];
-    if (s == null || s.isEmpty) {
-      versions[versionKey] = versionOf(previous);
-      return previous;
-    }
+  Map<String, dynamic> _readJsonMap(String key) {
+    final raw = _rc.getString(key);
+    if (raw.isEmpty) return <String, dynamic>{};
     try {
-      final decoded = json.decode(s);
-      if (decoded is! Map) {
-        throw const FormatException('payload is not a JSON object');
-      }
-      final map = decoded.cast<String, dynamic>();
-      final seen = (map['schema_version'] as num?)?.toInt() ?? 0;
-      if (seen > supported) {
-        unawaited(_analytics.logSchemaMismatch(
-          namespace: namespace,
-          schemaVersionSeen: seen,
-          schemaVersionSupported: supported,
-        ));
-        developer.log(
-          'schema mismatch for $namespace: seen=$seen supported=$supported. '
-          'Falling back.',
-          name: _logName,
-          level: 900,
-        );
-        versions[versionKey] = versionOf(previous);
-        return previous;
-      }
-      final parsed = parse(map);
-      _lastGoodRaw[key] = s;
-      versions[versionKey] = versionOf(parsed);
-      return parsed;
-    } catch (e, st) {
-      unawaited(_analytics.logParseError(
-        namespace: namespace,
-        schemaVersionSeen: _peekSchemaVersion(s),
-        error: e.toString(),
-      ));
-      developer.log(
-        'parse error for $namespace: $e',
-        name: _logName,
-        level: 1000,
-        error: e,
-        stackTrace: st,
-      );
-      // Keep last good if we have one; else hand back the fallback.
-      versions[versionKey] = versionOf(previous);
-      return previous;
+      final decoded = json.decode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      return <String, dynamic>{};
+    } catch (e) {
+      // ignore: avoid_print
+      print('[RemoteConfig] bad JSON for "$key", falling back to empty: $e');
+      return <String, dynamic>{};
     }
   }
 
-  DropRatesConfig _parseDropRates(
-    Map<String, String> raw, {
-    required bool isDefault,
-    required Map<String, int> versions,
-  }) {
-    final ratesRaw = raw[ConfigKeys.dropsRates];
-    final distRaw = raw[ConfigKeys.dropsPowerupDistribution];
-    if (ratesRaw == null || distRaw == null) {
-      versions['drops.rates'] = _dropRates.schemaVersion;
-      return _dropRates;
-    }
-    try {
-      final ratesMap =
-          (json.decode(ratesRaw) as Map).cast<String, dynamic>();
-      final distMap =
-          (json.decode(distRaw) as Map).cast<String, dynamic>();
-      final ratesVersion =
-          (ratesMap['schema_version'] as num?)?.toInt() ?? 0;
-      final distVersion =
-          (distMap['schema_version'] as num?)?.toInt() ?? 0;
-      final supported = DropRatesConfig.supportedSchemaVersion;
-      if (ratesVersion > supported || distVersion > supported) {
-        unawaited(_analytics.logSchemaMismatch(
-          namespace: 'drops.rates',
-          schemaVersionSeen:
-              ratesVersion > supported ? ratesVersion : distVersion,
-          schemaVersionSupported: supported,
-        ));
-        versions['drops.rates'] = _dropRates.schemaVersion;
-        return _dropRates;
-      }
-      final merged = <String, dynamic>{
-        'schema_version': ratesVersion,
-        'buckets': ratesMap['buckets'] ?? const [],
-        'powerup_distribution':
-            distMap['distribution'] ?? const <String, dynamic>{},
-      };
-      final parsed = DropRatesConfig.fromJson(merged);
-      _lastGoodRaw[ConfigKeys.dropsRates] = ratesRaw;
-      _lastGoodRaw[ConfigKeys.dropsPowerupDistribution] = distRaw;
-      versions['drops.rates'] = parsed.schemaVersion;
-      return parsed;
-    } catch (e, st) {
-      unawaited(_analytics.logParseError(
-        namespace: 'drops.rates',
-        schemaVersionSeen: _peekSchemaVersion(ratesRaw),
-        error: e.toString(),
-      ));
-      developer.log(
-        'parse error for drops.rates: $e',
-        name: _logName,
-        level: 1000,
-        error: e,
-        stackTrace: st,
-      );
-      versions['drops.rates'] = _dropRates.schemaVersion;
-      return _dropRates;
-    }
+  Map<String, dynamic> _innerMap(String key, String container) {
+    final m = _readJsonMap(key)[container];
+    if (m is Map) return Map<String, dynamic>.from(m);
+    return <String, dynamic>{};
   }
 
-  int? _peekSchemaVersion(String? s) {
-    if (s == null || s.isEmpty) return null;
-    try {
-      final decoded = json.decode(s);
-      if (decoded is Map) {
-        final v = decoded['schema_version'];
-        if (v is num) return v.toInt();
-      }
-    } catch (_) {}
+  /// Optional: warn if a param's schema_version is not what this build expects.
+  bool schemaOk(String key, {int expected = 1}) {
+    final v = _readJsonMap(key)['schema_version'];
+    return v is int && v == expected;
+  }
+
+  // ---- LEVELS group -----------------------------------------------------
+
+  /// 60 entries keyed `"<biome>_<level>"` (e.g. `"jungle_1"`).
+  /// Each entry: { biome, level, waves, jet_multiplier, world_coin_mult,
+  ///               enemies: [{tag, count, power}, ...] }
+  Map<String, dynamic> get biomeLevels =>
+      _innerMap(RcKeys.levelsBiomeLevels, 'levels');
+
+  // ---- ECONOMY group ----------------------------------------------------
+
+  /// { "Inferno": {base_power, unlock_biome}, ... }
+  Map<String, dynamic> get jetBasePowers =>
+      _innerMap(RcKeys.economyJetBasePowers, 'jets');
+
+  /// 10 power-ups keyed by slug: { "speed_boost": {display_name, unlock_biome,
+  /// category, duration}, ... }
+  Map<String, dynamic> get shopPowerups =>
+      _innerMap(RcKeys.economyShopPowerups, 'power_ups');
+
+  /// 10 chests: 4 rarity (basic/unique/epic/special) + 6 biome chests.
+  /// Each: { coin_min, coin_max, gem_min, gem_max, jet_drop_chance, jet_id }
+  Map<String, dynamic> get chests =>
+      _innerMap(RcKeys.economyChests, 'chests');
+
+  /// Flat numeric config: coin_pickup_regular, stage_clear_bonus,
+  /// wave_clear_W1 (list of 10), star_bonus_*, etc.
+  Map<String, dynamic> get coinDrops =>
+      _readJsonMap(RcKeys.economyCoinDrops);
+
+  /// Shop bundles. Sub-maps:
+  /// - coin_packs: { "coin_1": {coin_amount, price_usd}, ... } (6 packs)
+  /// - gem_packs:  { "gem_1":  {gem_amount,  price_usd}, ... } (6 packs)
+  /// - chest_prices: { "basic_chest": {coin_price, gem_price}, ... }
+  /// - powerup_prices: { "rapid_fire": {coin_price}, ... }
+  Map<String, dynamic> get shopIap =>
+      _readJsonMap(RcKeys.economyShopIap);
+
+  // ---- CHALLENGES group -------------------------------------------------
+
+  /// 5 cycles: { "iron_skies": {display_name, metric, target_enemy,
+  /// duration_hours, popup_bg, active}, ... }
+  Map<String, dynamic> get challengeCyclePlan =>
+      _innerMap(RcKeys.challengesCyclePlan, 'cycles');
+
+  /// 5 cycles keyed by id, each: { display_name, metric, stages: [{stage,
+  /// goal, prize}, ...] }
+  Map<String, dynamic> get challengeStageLadders =>
+      _innerMap(RcKeys.challengesStageLadders, 'cycles');
+
+  /// Daily login rewards. Keys like "w1_d1".."w4_d7".
+  /// Each: { week, coin, gem, chest, jet, jet_fallback }
+  Map<String, dynamic> get dailyRewardDays =>
+      _innerMap(RcKeys.challengesDailyReward, 'days');
+
+  // ---- MONETIZATION group ----------------------------------------------
+
+  /// Popup configs keyed by asset_name (e.g. "fto", "1+2_ironsky").
+  /// Each: { display_name, duration_hours, cooldown_hours, popup_bg, active,
+  /// is_intro, trigger_challenge_id, unlock_level, dismiss_trigger }
+  Map<String, dynamic> get popupOffers =>
+      _innerMap(RcKeys.monetizationPopupConfig, 'offers');
+
+  /// Human-readable rules from the popup config xlsx (reference only).
+  Map<String, dynamic> get popupRules =>
+      _innerMap(RcKeys.monetizationPopupConfig, 'rules');
+
+  /// 1+3 offers (FTO, first_purchase, per-challenge bundles).
+  /// Each: { slots: [{reward, price}, {reward, price}, {reward, price}] }
+  Map<String, dynamic> get offers1Plus3 =>
+      _innerMap(RcKeys.monetizationOffers1_3, 'offers');
+
+  /// Generic per-challenge offers.
+  /// Each: { rewards: [list of strings], price_usd }
+  Map<String, dynamic> get offersGeneric =>
+      _innerMap(RcKeys.monetizationOffersGeneric, 'offers');
+
+  /// "Snake" multi-slot offers per challenge.
+  /// Each: { slots: [{reward_1, reward_2?, price}, ...] }
+  Map<String, dynamic> get offersSnake =>
+      _innerMap(RcKeys.monetizationOffersSnake, 'offers');
+
+  // ---- small typed convenience helpers ---------------------------------
+
+  /// Base power for a given jet name (e.g. "Inferno"), or null if unknown.
+  int? jetBasePower(String jetName) {
+    final j = jetBasePowers[jetName];
+    if (j is Map && j['base_power'] is int) return j['base_power'] as int;
+    if (j is Map && j['base_power'] is num) {
+      return (j['base_power'] as num).toInt();
+    }
     return null;
   }
 
-  // -------------------------------------------------------------------
-  // Typed getters (60fps safe — pure map lookups + analytics emit)
-  // -------------------------------------------------------------------
-
-  WaveCurve waveCurve({required int world, required int wave}) {
-    final v = _waveCurves.lookup(world: world, wave: wave);
-    unawaited(_analytics.logValueUsed(
-      key: ConfigKeys.difficultyWaveCurves,
-      source: ConfigValueSource.remote,
-      context: 'world=$world,wave=$wave',
-    ));
-    return v;
-  }
-
-  EnemyScaling enemyScaling({required int world}) {
-    final v = _enemyScaling.lookup(world: world);
-    unawaited(_analytics.logValueUsed(
-      key: ConfigKeys.difficultyEnemyScaling,
-      source: ConfigValueSource.remote,
-      context: 'world=$world',
-    ));
-    return v;
-  }
-
-  EffectiveDropRates dropRates({
-    required int world,
-    required int wave,
-    required int failureStreak,
-  }) {
-    final v = _dropRates.lookup(
-      world: world,
-      wave: wave,
-      failureStreak: failureStreak,
-      streakBoost: _streakBoost,
-    );
-    unawaited(_analytics.logValueUsed(
-      key: ConfigKeys.dropsRates,
-      source: ConfigValueSource.remote,
-      context: 'world=$world,wave=$wave,streak=$failureStreak',
-    ));
-    return v;
-  }
-
-  StreakBoost streakBoost() => _streakBoost;
-
-  int reviveCostGems({required int wave, required bool isBoss}) {
-    final v = _revivePricing.costFor(wave: wave, isBoss: isBoss);
-    unawaited(_analytics.logValueUsed(
-      key: ConfigKeys.economyRevivePricing,
-      source: ConfigValueSource.remote,
-      context: 'wave=$wave,boss=$isBoss',
-    ));
-    return v;
-  }
-
-  ShopPrices shopPrices() => _shopPrices;
-
-  XpCurve xpCurve() => _xpCurve;
-
-  ChallengesCyclePlan challengesCyclePlan() => _challengesCyclePlan;
-
-  LevelRewards? levelRewardsFor({required int level}) {
-    final r = _levelRewards.lookup(level: level);
-    if (r != null) {
-      unawaited(_analytics.logValueUsed(
-        key: ConfigKeys.progressionLevelRewards,
-        source: ConfigValueSource.remote,
-        context: 'level=$level',
-      ));
+  /// Coins awarded for clearing wave [waveIndex] (0-based) in world 1.
+  int waveClearCoins(int waveIndex, {int fallback = 0}) {
+    final list = coinDrops['wave_clear_W1'];
+    if (list is List && waveIndex >= 0 && waveIndex < list.length) {
+      final v = list[waveIndex];
+      if (v is int) return v;
+      if (v is num) return v.toInt();
     }
-    return r;
+    return fallback;
   }
 
-  bool isFeatureEnabled(String featureKey) {
-    final forced = ForcedVariants.isEnabled
-        ? ForcedVariants.instance.get(featureKey)
-        : null;
-    if (forced != null) {
-      final v = forced.toLowerCase() == 'true';
-      unawaited(_analytics.logValueUsed(
-        key: ConfigKeys.flagsFeatureFlags,
-        source: ConfigValueSource.forced,
-        context: featureKey,
-      ));
-      return v;
-    }
-    final v = _featureFlags.isEnabled(featureKey);
-    unawaited(_analytics.logValueUsed(
-      key: ConfigKeys.flagsFeatureFlags,
-      source: ConfigValueSource.remote,
-      context: featureKey,
-    ));
-    return v;
+  /// Level entry for a biome and level number, e.g. levelFor('jungle', 1).
+  /// Returns the full {biome, level, waves, jet_multiplier, world_coin_mult,
+  /// enemies} map, or null if missing.
+  Map<String, dynamic>? levelFor(String biome, int level) {
+    final key = '${biome}_$level';
+    final v = biomeLevels[key];
+    if (v is Map) return Map<String, dynamic>.from(v);
+    return null;
   }
 
-  bool isKillSwitchOn(String killSwitchKey) {
-    final forced = ForcedVariants.isEnabled
-        ? ForcedVariants.instance.get(killSwitchKey)
-        : null;
-    if (forced != null) {
-      final v = forced.toLowerCase() == 'true';
-      unawaited(_analytics.logValueUsed(
-        key: ConfigKeys.flagsKillSwitches,
-        source: ConfigValueSource.forced,
-        context: killSwitchKey,
-      ));
-      return v;
+  /// Coin pack price in USD, e.g. coinPackPriceUsd('coin_3') -> 4.99.
+  double? coinPackPriceUsd(String packId) {
+    final p = (shopIap['coin_packs'] as Map?)?[packId];
+    if (p is Map && p['price_usd'] is num) {
+      return (p['price_usd'] as num).toDouble();
     }
-    final v = _killSwitches.isOn(killSwitchKey);
-    unawaited(_analytics.logValueUsed(
-      key: ConfigKeys.flagsKillSwitches,
-      source: ConfigValueSource.remote,
-      context: killSwitchKey,
-    ));
-    return v;
+    return null;
   }
 
-  String abVariant(String experimentKey) {
-    final forced = ForcedVariants.isEnabled
-        ? ForcedVariants.instance.get(experimentKey)
-        : null;
-    if (forced != null) {
-      unawaited(_analytics.logValueUsed(
-        key: ConfigKeys.experimentsAbAssignment,
-        source: ConfigValueSource.forced,
-        context: experimentKey,
-      ));
-      unawaited(_analytics.logVariantAssigned(
-        experiment: experimentKey,
-        variant: forced,
-        source: ConfigValueSource.forced,
-      ));
-      return forced;
-    }
-    final v = _abAssignment.variantFor(experimentKey);
-    unawaited(_analytics.logValueUsed(
-      key: ConfigKeys.experimentsAbAssignment,
-      source: ConfigValueSource.remote,
-      context: experimentKey,
-    ));
-    unawaited(_analytics.logVariantAssigned(
-      experiment: experimentKey,
-      variant: v,
-      source: ConfigValueSource.remote,
-    ));
-    return v;
+  /// Returns the popup-config entry for an offer (active/triggers/etc.),
+  /// or null if unknown.
+  Map<String, dynamic>? popupFor(String assetName) {
+    final v = popupOffers[assetName];
+    if (v is Map) return Map<String, dynamic>.from(v);
+    return null;
+  }
+
+  /// True if a popup offer is marked active in Remote Config.
+  bool isOfferActive(String assetName) {
+    final p = popupFor(assetName);
+    return p != null && p['active'] == true;
+  }
+
+  /// Daily reward for a given week (1-based) and day (1..7).
+  Map<String, dynamic>? dailyReward(int week, int day) {
+    final v = dailyRewardDays['w${week}_d$day'];
+    if (v is Map) return Map<String, dynamic>.from(v);
+    return null;
   }
 }

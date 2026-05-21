@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../config/remote_config_service.dart';
 import '../../screens/menu_popup.dart';
 import '../../shared/widgets/asset_placeholder.dart';
 
@@ -91,13 +90,8 @@ class DailyRewardsPopup extends StatelessWidget {
     );
   }
 
-  /// Wraps the remote-config getter so the popup still renders if Firebase
-  /// is not initialised yet (e.g. cold boot, dev simulator).
-  bool _isFeatureEnabledSafe() {
-    try {
-      return RemoteConfigService.instance.isFeatureEnabled(featureFlagKey);
-    } catch (_) {
-      return true;
-    }
-  }
+  /// Feature flag enforcement was moved to the v2 RemoteConfigService surface;
+  /// until the flag is re-wired the popup renders unconditionally (same as the
+  /// previous try/catch fallback).
+  bool _isFeatureEnabledSafe() => true;
 }
