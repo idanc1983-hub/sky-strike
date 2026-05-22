@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../config/remote_config_service.dart';
 import '../economy/state/economy_state.dart';
 import '../models/jet_model.dart';
 import '../shared/widgets/asset_placeholder.dart';
@@ -10,108 +12,93 @@ import '../widgets/jet_card.dart';
 // Palette
 // ---------------------------------------------------------------------------
 const _cGreenPale = Color(0xFFC0DD97);
-const _cGreenMid = Color(0xFF639922);
 const _cAmber = Color(0xFFEF9F27);
-const _cAmberBg = Color(0xFF412402);
-const _cCardBg = Color(0xFF0d1f0d);
 
 // ---------------------------------------------------------------------------
-// Initial jets data
+// v2 jet metadata
 //
-// Placeholder seed for the simulator preview. Once the jet-tab plumbing is
-// wired to remote config, both the list order and the per-jet `price` will
-// come from `remote_config.jets[]` and this seed becomes a default fallback.
+// The 6 jets are sourced from Remote Config `economy__jet_base_powers__v1`.
+// Per Q3-(a): the starter jet keeps `jet_player` as the runtime ID for
+// save-format compatibility, but its RC entry is keyed `basic` (display
+// name + base_power come from there).
 //
-// Asset paths map to existing shop jet images:
-//   scout   → jet_viper.png   (starter / Recon Tier 1)
-//   phantom → jet_phantom.png
-//   inferno → jet_inferno.png
-//   wraith  → jet_wraith_x.png
-//   nova    → jet_specter.png
-//   eclipse → jet_player.png
+// Per the v2 economy plan, jets are NOT purchasable with gems. They unlock
+// via biome progression (player reaches the jet's biome → eligible) and
+// drop from biome chests at 10% per chest. The Jets screen models this
+// as: if player has reached the jet's biome, treat as owned; otherwise
+// locked. Full chest-drop ownership accounting comes later — for now this
+// gives a working visualization of "unlock as you progress."
 // ---------------------------------------------------------------------------
-const _kInitialJets = <JetModel>[
-  JetModel(
-    id: 'scout',
-    name: 'Scout',
-    tier: 'Recon · Tier 1',
-    speed: 88,
-    attack: 52,
-    armor: 60,
-    accentColor: Color(0xFF1D9E75),
-    bgColor: Color(0xFF0F2A18),
-    status: JetStatus.equipped,
-    price: 50,
-    assetPath: 'assets/jets/jet_viper.png',
-  ),
-  JetModel(
-    id: 'phantom',
-    name: 'Phantom',
-    tier: 'Stealth · Tier 2',
-    speed: 94,
-    attack: 68,
-    armor: 72,
-    accentColor: Color(0xFF378ADD),
-    bgColor: Color(0xFF0D1A30),
-    status: JetStatus.owned,
-    price: 75,
-    assetPath: 'assets/jets/jet_phantom.png',
-  ),
-  JetModel(
-    id: 'inferno',
-    name: 'Inferno',
-    tier: 'Assault · Tier 3',
-    speed: 74,
-    attack: 96,
-    armor: 80,
-    accentColor: Color(0xFFEF9F27),
-    bgColor: Color(0xFF2A1200),
-    status: JetStatus.purchasable,
-    price: 100,
-    assetPath: 'assets/jets/jet_inferno.png',
-  ),
-  JetModel(
-    id: 'wraith',
-    name: 'Wraith',
-    tier: 'Spectre · Tier 4',
-    speed: 98,
-    attack: 88,
-    armor: 65,
-    accentColor: Color(0xFFD85A30),
-    bgColor: Color(0xFF2A0D0D),
-    status: JetStatus.purchasable,
-    price: 340,
-    assetPath: 'assets/jets/jet_wraith_x.png',
-  ),
-  JetModel(
-    id: 'nova',
-    name: 'Nova',
-    tier: 'Titan · Tier 5',
-    speed: 0,
-    attack: 0,
-    armor: 0,
-    accentColor: Color(0xFF444444),
-    bgColor: Color(0xFF141414),
-    status: JetStatus.locked,
-    unlockCondition: 'Reach World 6',
-    price: 800,
-    assetPath: 'assets/jets/jet_specter.png',
-  ),
-  JetModel(
-    id: 'eclipse',
-    name: 'Eclipse',
-    tier: 'Apex · Tier 6',
-    speed: 0,
-    attack: 0,
-    armor: 0,
-    accentColor: Color(0xFF444444),
-    bgColor: Color(0xFF141414),
-    status: JetStatus.locked,
-    unlockCondition: 'Reach World 8',
-    price: 1200,
-    assetPath: 'assets/jets/jet_player.png',
-  ),
+
+/// Code ID → RC jet key. Code IDs are stable for save compatibility; RC
+/// keys are the canonical config names.
+const Map<String, String> _codeIdToRcName = {
+  'jet_player': 'basic',
+  'wraith_x': 'Wraith X',
+  'specter': 'Specter',
+  'viper': 'Viper',
+  'inferno': 'Inferno',
+  'phantom': 'Phantom',
+};
+
+/// Display order — by biome progression (jungle → city).
+const List<String> _orderedJetIds = [
+  'jet_player', // jungle  · starter
+  'wraith_x', // desert
+  'specter', // sea
+  'viper', // ice
+  'inferno', // volcano
+  'phantom', // city
 ];
+
+const Map<String, String> _jetAssets = {
+  'jet_player': 'assets/jets/jet_player.png',
+  'wraith_x': 'assets/jets/jet_wraith_x.png',
+  'specter': 'assets/jets/jet_specter.png',
+  'viper': 'assets/jets/jet_viper.png',
+  'inferno': 'assets/jets/jet_inferno.png',
+  'phantom': 'assets/jets/jet_phantom.png',
+};
+
+const Map<String, String> _jetTiers = {
+  'jet_player': 'Recon · Tier 1',
+  'wraith_x': 'Stealth · Tier 2',
+  'specter': 'Strike · Tier 3',
+  'viper': 'Assault · Tier 4',
+  'inferno': 'Heavy · Tier 5',
+  'phantom': 'Apex · Tier 6',
+};
+
+class _JetPalette {
+  final Color accent;
+  final Color bg;
+  const _JetPalette(this.accent, this.bg);
+}
+
+const Map<String, _JetPalette> _jetPalettes = {
+  'jet_player': _JetPalette(Color(0xFF1D9E75), Color(0xFF0F2A18)),
+  'wraith_x': _JetPalette(Color(0xFFD85A30), Color(0xFF2A0D0D)),
+  'specter': _JetPalette(Color(0xFF378ADD), Color(0xFF0D1A30)),
+  'viper': _JetPalette(Color(0xFFAB47BC), Color(0xFF1F0E25)),
+  'inferno': _JetPalette(Color(0xFFEF9F27), Color(0xFF2A1200)),
+  'phantom': _JetPalette(Color(0xFF7E57C2), Color(0xFF1A1428)),
+};
+
+/// Biome key → world index (1..6). Used to compute lock status against
+/// `EconomyState.currentWorld`.
+const Map<String, int> _biomeToWorld = {
+  'jungle': 1,
+  'desert': 2,
+  'sea': 3,
+  'ice': 4,
+  'volcano': 5,
+  'city': 6,
+};
+
+/// Highest base_power across all jets — used to normalize the 3 visual
+/// stat bars (speed/attack/armor) since v2 only provides `base_power`.
+/// Phantom = 650; if RC ships a higher-power jet later this still works.
+const int _maxBasePower = 650;
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -124,159 +111,79 @@ class JetsScreen extends StatefulWidget {
 }
 
 class _JetsScreenState extends State<JetsScreen> {
-  late List<JetModel> _jets;
+  String _equippedId = 'jet_player';
 
   @override
   void initState() {
     super.initState();
-    _jets = List<JetModel>.from(_kInitialJets);
-    _loadPersistedState();
+    _loadEquipped();
   }
 
-  Future<void> _loadPersistedState() async {
+  Future<void> _loadEquipped() async {
     final prefs = await SharedPreferences.getInstance();
-    final equippedId = prefs.getString('equipped_jet');
-    if (equippedId == null) return;
-    if (!mounted) return;
-    setState(() {
-      _jets = _jets.map((j) {
-        if (j.status == JetStatus.equipped) return j.copyWith(status: JetStatus.owned);
-        if (j.id == equippedId &&
-            j.status != JetStatus.locked &&
-            j.status != JetStatus.purchasable) {
-          return j.copyWith(status: JetStatus.equipped);
-        }
-        return j;
-      }).toList();
-    });
-  }
-
-  Future<void> _equipJet(JetModel jet) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('equipped_jet', jet.id);
-    if (!mounted) return;
-    setState(() {
-      _jets = _jets.map((j) {
-        if (j.status == JetStatus.equipped) return j.copyWith(status: JetStatus.owned);
-        if (j.id == jet.id) return j.copyWith(status: JetStatus.equipped);
-        return j;
-      }).toList();
-    });
-  }
-
-  void _buyJet(JetModel jet) {
-    final economy = context.read<EconomyState>();
-    if (economy.gems < jet.price) {
-      _showSnackBar('Not enough gems');
-      return;
+    final id = prefs.getString('equipped_jet');
+    if (id != null && mounted) {
+      setState(() => _equippedId = id);
     }
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: _cCardBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Buy ${jet.name}?',
-                style: const TextStyle(
-                  color: _cGreenPale,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'This will cost ${jet.price} gems.',
-                style: const TextStyle(color: _cGreenMid, fontSize: 13),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(ctx),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          border:
-                              Border.all(color: _cGreenMid, width: 0.5),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Cancel',
-                          textAlign: TextAlign.center,
-                          style:
-                              TextStyle(color: _cGreenMid, fontSize: 13),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () async {
-                        Navigator.pop(ctx);
-                        final ok = economy.spendGems(jet.price);
-                        if (!ok) {
-                          if (mounted) _showSnackBar('Not enough gems');
-                          return;
-                        }
-                        final prefs =
-                            await SharedPreferences.getInstance();
-                        await prefs.setString('equipped_jet', jet.id);
-                        if (!mounted) return;
-                        setState(() {
-                          _jets = _jets.map((j) {
-                            if (j.status == JetStatus.equipped) {
-                              return j.copyWith(status: JetStatus.owned);
-                            }
-                            if (j.id == jet.id) {
-                              return j.copyWith(status: JetStatus.equipped);
-                            }
-                            return j;
-                          }).toList();
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: _cAmberBg,
-                          border: Border.all(color: _cAmber, width: 0.5),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Confirm',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: _cAmber,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: _cCardBg,
-      behavior: SnackBarBehavior.floating,
-    ));
+  Future<void> _equipJet(String jetId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('equipped_jet', jetId);
+    if (!mounted) return;
+    setState(() => _equippedId = jetId);
+  }
+
+  /// Builds the ordered jet list with status computed from RC + player
+  /// progression. Returns empty when RC has no jet data (defensive).
+  List<JetModel> _buildJets(int currentWorld) {
+    final rcJets = RemoteConfigService.instance.jetBasePowers;
+    if (rcJets.isEmpty) return const [];
+    final out = <JetModel>[];
+    for (final codeId in _orderedJetIds) {
+      final rcName = _codeIdToRcName[codeId];
+      if (rcName == null) continue;
+      final entry = rcJets[rcName];
+      if (entry is! Map) continue;
+
+      final basePower = (entry['base_power'] as num?)?.toInt() ?? 0;
+      final unlockBiome = (entry['unlock_biome'] as String?) ?? 'jungle';
+      final unlockWorld = _biomeToWorld[unlockBiome] ?? 1;
+      final unlocked = currentWorld >= unlockWorld;
+
+      // Status: equipped > owned (if unlocked) > locked
+      final JetStatus status;
+      if (!unlocked) {
+        status = JetStatus.locked;
+      } else if (codeId == _equippedId) {
+        status = JetStatus.equipped;
+      } else {
+        status = JetStatus.owned;
+      }
+
+      // Normalized stat fill (0..100). v2 only ships base_power, so the
+      // three visual bars all show the same normalized value.
+      final stat = ((basePower / _maxBasePower) * 100).round().clamp(0, 100);
+
+      final palette =
+          _jetPalettes[codeId] ?? const _JetPalette(Color(0xFF444444), Color(0xFF141414));
+
+      out.add(JetModel(
+        id: codeId,
+        name: rcName, // display name from RC
+        tier: _jetTiers[codeId] ?? 'Tier ?',
+        speed: stat,
+        attack: stat,
+        armor: stat,
+        accentColor: palette.accent,
+        bgColor: palette.bg,
+        status: status,
+        price: 0, // jets are not gem-bought in v2
+        unlockCondition: unlocked ? null : 'Unlocks at ${unlockBiome.toUpperCase()} biome',
+        assetPath: _jetAssets[codeId] ?? 'assets/jets/jet_player.png',
+      ));
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------------------
@@ -285,6 +192,7 @@ class _JetsScreenState extends State<JetsScreen> {
   @override
   Widget build(BuildContext context) {
     final economy = context.watch<EconomyState>();
+    final jets = _buildJets(economy.currentWorld);
     return Scaffold(
       body: Stack(
         children: [
@@ -300,7 +208,7 @@ class _JetsScreenState extends State<JetsScreen> {
             child: Column(
               children: [
                 _buildTopBar(economy),
-                Expanded(child: _buildList()),
+                Expanded(child: _buildList(jets)),
               ],
             ),
           ),
@@ -310,8 +218,7 @@ class _JetsScreenState extends State<JetsScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Top bar — level pill on the left, coin + gem chips on the right.
-  // Mirrors the home screen so currencies feel consistent across tabs.
+  // Top bar — level pill + currency chips
   // ---------------------------------------------------------------------------
   Widget _buildTopBar(EconomyState economy) {
     return Padding(
@@ -404,23 +311,35 @@ class _JetsScreenState extends State<JetsScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Jet list — full-width cards, vertical scroll
+  // Jet list
   // ---------------------------------------------------------------------------
-  Widget _buildList() {
+  Widget _buildList(List<JetModel> jets) {
+    if (jets.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'No jet data — check Remote Config '
+            '(economy__jet_base_powers__v1)',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _cAmber, fontSize: 12),
+          ),
+        ),
+      );
+    }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(14, 6, 14, 14),
-      itemCount: _jets.length,
+      itemCount: jets.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
-        final jet = _jets[index];
+        final jet = jets[index];
         return JetCard(
           jet: jet,
-          onEquip: jet.status == JetStatus.owned
-              ? () => _equipJet(jet)
-              : null,
-          onBuy: jet.status == JetStatus.purchasable
-              ? () => _buyJet(jet)
-              : null,
+          onEquip: jet.status == JetStatus.owned ? () => _equipJet(jet.id) : null,
+          // Jets are not gem-bought in v2 — onBuy is intentionally null so
+          // the JetCard renders no buy button. Ownership comes from biome
+          // progression + biome chests (10% drop) + monetization bundles.
+          onBuy: null,
         );
       },
     );

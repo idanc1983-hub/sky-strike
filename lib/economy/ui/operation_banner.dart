@@ -60,7 +60,7 @@ class _OperationBannerState extends State<OperationBanner> {
     final remaining = view.remainingFrom(DateTime.now());
     final daysLeft = remaining.inDays;
     final hoursLeft = remaining.inHours % 24;
-    final canClaim = view.canClaim50 || view.canClaim100;
+    final canClaim = view.canClaim100;
 
     return GestureDetector(
       onTap: () {
@@ -144,23 +144,6 @@ class _OperationBannerState extends State<OperationBanner> {
                               ),
                             );
                           }),
-                          // 50% milestone tick
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: LayoutBuilder(
-                              builder: (ctx, constraints) {
-                                return Padding(
-                                  padding: EdgeInsets.only(
-                                    left: constraints.maxWidth * 0.5 - 1,
-                                  ),
-                                  child: Container(
-                                    width: 2,
-                                    color: _cAmber.withValues(alpha: 0.6),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
                           Center(
                             child: Text(
                               '${view.progress} / ${view.target}',
@@ -194,20 +177,11 @@ class _OperationBannerState extends State<OperationBanner> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      _MilestoneChip(
-                        label: '50%',
-                        active: view.reached50,
-                        claimed: view.milestone50Claimed,
-                      ),
-                      const SizedBox(width: 4),
-                      _MilestoneChip(
-                        label: '100%',
-                        active: view.reached100,
-                        claimed: view.milestone100Claimed,
-                      ),
-                    ],
+                  // v2: single completion milestone chip only.
+                  _MilestoneChip(
+                    label: '100%',
+                    active: view.reached100,
+                    claimed: view.milestone100Claimed,
                   ),
                   Text(
                     remaining == Duration.zero

@@ -1,40 +1,58 @@
 import '../constants/challenge_constants.dart';
 
-/// The four challenge types per GDD §4.2.
-enum ChallengeType { hunter, survivor, treasure, conqueror }
+/// Challenge cycle types per the v2 economy plan.
+///
+/// `newPlayers` is the **intro-only** cycle — runs exactly once per
+/// account when challenges first unlock (player reaches level 4), then
+/// never appears in rotation again. The other four rotate randomly with
+/// the "no repeat back-to-back" rule.
+enum ChallengeType {
+  newPlayers,
+  hunter,
+  survivor,
+  treasure,
+  conqueror,
+}
 
 extension ChallengeTypeJson on ChallengeType {
-  /// Stable persistence/server id for this type.
+  /// Stable persistence/server id for this type. Matches the RC keys in
+  /// `challenges__cycle_plan__v1` / `challenges__stage_ladders__v1`.
   String get jsonValue {
     switch (this) {
+      case ChallengeType.newPlayers:
+        return 'new_players';
       case ChallengeType.hunter:
-        return 'hunter';
+        return 'iron_skies';
       case ChallengeType.survivor:
-        return 'survivor';
+        return 'last_stand';
       case ChallengeType.treasure:
-        return 'treasure';
+        return 'golden_sky';
       case ChallengeType.conqueror:
-        return 'conqueror';
+        return 'star_ascent';
     }
   }
 
   /// Display label shown on the operation banner and reveal sequence.
   String get displayName {
     switch (this) {
+      case ChallengeType.newPlayers:
+        return 'New Pilots';
       case ChallengeType.hunter:
-        return 'Hunter';
+        return 'Iron Skies';
       case ChallengeType.survivor:
-        return 'Survivor';
+        return 'Last Stand';
       case ChallengeType.treasure:
-        return 'Treasure Hunter';
+        return 'Golden Sky';
       case ChallengeType.conqueror:
-        return 'Conqueror';
+        return 'Star Ascent';
     }
   }
 
   /// One-line description used by the reveal sequence and detail screen.
   String get description {
     switch (this) {
+      case ChallengeType.newPlayers:
+        return 'First operation — get a feel for the cycle';
       case ChallengeType.hunter:
         return 'Destroy enemies of the current biome';
       case ChallengeType.survivor:
@@ -46,11 +64,13 @@ extension ChallengeTypeJson on ChallengeType {
     }
   }
 
-  /// Ace's reveal line for the FIRST cycle of this type. The Hunter line
-  /// is also used unconditionally for the very first cycle since it's
-  /// locked to Hunter.
+  /// Ace's reveal line for the FIRST cycle of this type. New Pilots is
+  /// shown once at level-4 unlock; the other lines run on first
+  /// rotation pick of each type.
   String get aceRevealLine {
     switch (this) {
+      case ChallengeType.newPlayers:
+        return 'New op unlocked. Take it slow — this one\'s a warm-up.';
       case ChallengeType.hunter:
         return 'Big op coming up — grind some kills, claim a chest.';
       case ChallengeType.survivor:
@@ -62,7 +82,9 @@ extension ChallengeTypeJson on ChallengeType {
     }
   }
 
-  /// Default rotation order. Real value comes from remote config.
+  /// Post-intro rotation pool — the 4 types that cycle randomly after
+  /// the one-time `newPlayers` intro. **Does NOT include `newPlayers`**
+  /// by design: that type is intro-only.
   static const List<ChallengeType> defaultRotation = [
     ChallengeType.hunter,
     ChallengeType.survivor,
@@ -71,15 +93,22 @@ extension ChallengeTypeJson on ChallengeType {
   ];
 
   /// Parses a persisted/server JSON value back into a [ChallengeType].
-  /// Returns `null` for unknown values.
+  /// Accepts both the new v2 RC ids (e.g. `iron_skies`) and the legacy
+  /// pre-v2 ids (e.g. `hunter`) so old saves still load.
   static ChallengeType? fromJsonValue(String? raw) {
     switch (raw) {
+      case 'new_players':
+        return ChallengeType.newPlayers;
+      case 'iron_skies':
       case 'hunter':
         return ChallengeType.hunter;
+      case 'last_stand':
       case 'survivor':
         return ChallengeType.survivor;
+      case 'golden_sky':
       case 'treasure':
         return ChallengeType.treasure;
+      case 'star_ascent':
       case 'conqueror':
         return ChallengeType.conqueror;
       default:
@@ -91,12 +120,14 @@ extension ChallengeTypeJson on ChallengeType {
 /// Read-only computed view of the current challenge — used by UI widgets
 /// that don't need to mutate state. EconomyState builds one of these on
 /// demand from its mutable backing fields.
+///
+/// **v2 change:** the 50% mid-cycle milestone was removed. Players see a
+/// single reward at cycle completion (100%).
 class ChallengeView {
   final ChallengeType type;
   final DateTime startedAt;
   final int progress;
   final int target;
-  final bool milestone50Claimed;
   final bool milestone100Claimed;
 
   const ChallengeView({
@@ -104,7 +135,6 @@ class ChallengeView {
     required this.startedAt,
     required this.progress,
     required this.target,
-    required this.milestone50Claimed,
     required this.milestone100Claimed,
   });
 
@@ -116,14 +146,8 @@ class ChallengeView {
     return raw > 1.0 ? 1.0 : raw;
   }
 
-  /// True when at least the 50% threshold is reached.
-  bool get reached50 => fraction >= ChallengeConstants.milestone50Threshold;
-
   /// True when 100% target is reached.
   bool get reached100 => fraction >= ChallengeConstants.milestone100Threshold;
-
-  /// True when 50% milestone is reached AND not yet claimed.
-  bool get canClaim50 => reached50 && !milestone50Claimed;
 
   /// True when 100% milestone is reached AND not yet claimed.
   bool get canClaim100 => reached100 && !milestone100Claimed;

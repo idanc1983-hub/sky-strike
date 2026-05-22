@@ -19,11 +19,19 @@ class ChallengeFormulas {
   // ---------------------------------------------------------------------------
 
   /// Computes the target count for [type] at [playerLevel].
+  ///
+  /// The intro `newPlayers` cycle uses half the Hunter base target so it
+  /// feels accessible at the level-4 unlock point — players have just
+  /// reached the gate and shouldn't bounce off a hard target.
   static int targetFor({
     required ChallengeType type,
     required int playerLevel,
   }) {
     switch (type) {
+      case ChallengeType.newPlayers:
+        return ((ChallengeConstants.hunterBaseTarget / 2) *
+                (1 + playerLevel * ChallengeConstants.hunterTargetLevelStep))
+            .floor();
       case ChallengeType.hunter:
         return (ChallengeConstants.hunterBaseTarget *
                 (1 + playerLevel * ChallengeConstants.hunterTargetLevelStep))
@@ -46,16 +54,11 @@ class ChallengeFormulas {
   }
 
   // ---------------------------------------------------------------------------
-  // Milestone gem tiers — GDD §4.3 (post-rebalance, −25%)
+  // 100% milestone gem tier — GDD §4.3 (post-rebalance, −25%)
+  //
+  // v2 removed the 50% mid-cycle milestone. Only the completion reward
+  // remains.
   // ---------------------------------------------------------------------------
-
-  /// 50% milestone gem reward range `(min, maxInclusive)` by level bucket.
-  static (int, int) gemRange50ForLevel(int playerLevel) {
-    if (playerLevel < 11) return (4, 11);
-    if (playerLevel < 26) return (6, 14);
-    if (playerLevel < 51) return (9, 17);
-    return (13, 22);
-  }
 
   /// 100% milestone gem reward range `(min, maxInclusive)` by level bucket.
   static (int, int) gemRange100ForLevel(int playerLevel) {
@@ -66,29 +69,8 @@ class ChallengeFormulas {
   }
 
   // ---------------------------------------------------------------------------
-  // Milestone reward computations
+  // Completion reward computation
   // ---------------------------------------------------------------------------
-
-  /// Computes the 50% milestone reward for [playerLevel].
-  static Reward reward50({
-    required int playerLevel,
-    required int maxWorldReached,
-    Random? rng,
-  }) {
-    final r = rng ?? Random();
-    final coins = (ChallengeConstants.milestone50BaseCoins *
-            (1 +
-                playerLevel *
-                    ChallengeConstants.milestone50CoinLevelStep))
-        .floor();
-    final (gemMin, gemMax) = gemRange50ForLevel(playerLevel);
-    final gems = gemMin + r.nextInt(gemMax - gemMin + 1);
-    final powerUp = PowerUpPicker.pick(
-      maxWorldReached: maxWorldReached,
-      rng: r,
-    );
-    return Reward(coins: coins, gems: gems, powerUps: <String>[powerUp]);
-  }
 
   /// Computes the 100% milestone reward for [playerLevel]. Uses the
   /// `0.8..1.2` jitter from GDD §4.3.

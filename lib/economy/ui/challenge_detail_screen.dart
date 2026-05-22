@@ -134,20 +134,10 @@ class _Body extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
+        // v2: single completion reward at 100%. The mid-cycle 50%
+        // milestone was removed.
         _MilestoneCard(
-          title: '50% Milestone',
-          reached: view.reached50,
-          claimed: view.milestone50Claimed,
-          onClaim: () {
-            final reward = context
-                .read<EconomyState>()
-                .claimChallengeMilestone50();
-            _showRewardSnack(context, reward);
-          },
-        ),
-        const SizedBox(height: 12),
-        _MilestoneCard(
-          title: '100% Milestone',
+          title: 'Completion Reward',
           reached: view.reached100,
           claimed: view.milestone100Claimed,
           onClaim: () {

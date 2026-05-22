@@ -1,6 +1,30 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../config/level_config.dart';
 export 'power_ups.dart';
+
+// ---------------------------------------------------------------------------
+// Tuning constants — v2 level wiring
+// ---------------------------------------------------------------------------
+/// Converts the RC `boss.power` scalar into raw HP. The chosen factor
+/// keeps `bossHpForLevel` roughly aligned with the pre-v2
+/// [bossHpForWorld] hardcodes at the start of each biome while letting
+/// HP scale meaningfully across the 10-stage progression within a world.
+const int kBossHpPerPowerPoint = 50;
+
+/// Default wave count when an RC entry has no `waves` field (or RC is
+/// unreachable). Matches the legacy pre-v2 behavior.
+const int kDefaultWavesPerLevel = 10;
+
+/// Tag-to-tier mapping used by [activeEnemyTiersForLevel] when reading
+/// the v2 `enemies` list.
+const Map<String, EnemyTier> kTagToTier = {
+  'enemy_1': EnemyTier.grunt,
+  'enemy_2': EnemyTier.gunship,
+  'enemy_3': EnemyTier.drone,
+  'enemy_4': EnemyTier.bomber,
+  'boss': EnemyTier.boss,
+};
 
 // ---------------------------------------------------------------------------
 // Enemy tiers
@@ -168,13 +192,70 @@ double bossBulletSpeed(int world) => world == 1 ? 2.0 : 3.0;
 double bossBulletSpread(int world) => world == 1 ? 0.6 : 1.0;
 
 // ---------------------------------------------------------------------------
-// Which enemy tiers are active at a given stage
+// Which enemy tiers are active at a given stage (legacy fallback). The
+// v2-aware version is [activeEnemyTiersForLevel] which reads from RC.
 // ---------------------------------------------------------------------------
 List<EnemyTier> activeEnemyTiers(int stage) {
   if (stage <= 4)  return [EnemyTier.grunt];
   if (stage <= 9)  return [EnemyTier.grunt, EnemyTier.gunship];
   if (stage <= 14) return [EnemyTier.grunt, EnemyTier.gunship, EnemyTier.drone];
   return [EnemyTier.grunt, EnemyTier.gunship, EnemyTier.drone, EnemyTier.bomber];
+}
+
+// ---------------------------------------------------------------------------
+// v2 level-driven helpers — Scope 1 wiring
+//
+// Each reads the `(world, stage)` entry from
+// `levels__biome_levels__v1` via [LevelConfig]. Falls back to the
+// legacy hardcoded formula when the RC entry is missing so a stale
+// build or LiveOps gap never crashes gameplay.
+// ---------------------------------------------------------------------------
+
+/// Number of waves the supplied `(world, stage)` runs for. Reads
+/// `waves` from RC; defaults to [kDefaultWavesPerLevel] (=10).
+int wavesForLevel(int world, int stage) {
+  final cfg = LevelConfig.fromRc(world: world, stage: stage);
+  return cfg?.waves ?? kDefaultWavesPerLevel;
+}
+
+/// Boss HP for the supplied `(world, stage)`. Computed from RC
+/// `boss.power × kBossHpPerPowerPoint`; falls back to the per-world
+/// hardcode when RC has no entry or no boss tier on this level.
+int bossHpForLevel(int world, int stage) {
+  final cfg = LevelConfig.fromRc(world: world, stage: stage);
+  final bossPower = cfg?.powerFor('boss');
+  if (bossPower != null && bossPower > 0) {
+    return (bossPower * kBossHpPerPowerPoint).round();
+  }
+  return bossHpForWorld(world);
+}
+
+/// Tiers active at the supplied `(world, stage)`. Reads the RC
+/// `enemies` list and includes every tier with `count > 0`. Falls back
+/// to [activeEnemyTiers] (the legacy stage-bracket formula) when RC has
+/// no entry. The returned list excludes `boss` — callers handle the
+/// boss spawn separately (wave 10 of a boss-level).
+List<EnemyTier> activeEnemyTiersForLevel(int world, int stage) {
+  final cfg = LevelConfig.fromRc(world: world, stage: stage);
+  if (cfg == null) {
+    // Legacy callers passed a "stage" that was either local 1..10 or
+    // global 1..60. Keep the local interpretation by mapping back.
+    final globalLevel = (world - 1) * 10 + stage;
+    return activeEnemyTiers(globalLevel);
+  }
+  final out = <EnemyTier>[];
+  for (final e in cfg.enemies) {
+    if (e.count <= 0) continue;
+    final tier = kTagToTier[e.tag];
+    if (tier == null || tier == EnemyTier.boss) continue;
+    out.add(tier);
+  }
+  if (out.isEmpty) {
+    // Defensive: RC entry present but no non-boss tiers? Fall back to
+    // legacy formula so we at least spawn grunts.
+    return activeEnemyTiers((world - 1) * 10 + stage);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

@@ -105,7 +105,8 @@ class EconomyState extends ChangeNotifier {
   DateTime? _challengeStartedAt;
   int _challengeProgress = 0;
   int _challengeTarget = 0;
-  bool _challenge50ClaimedThisCycle = false;
+  // v2: only the 100% completion milestone exists. The old 50% mid-cycle
+  // claim was removed — players see a single end-of-cycle reward.
   bool _challenge100ClaimedThisCycle = false;
   bool _challengeRevealed = false;
 
@@ -150,7 +151,6 @@ class EconomyState extends ChangeNotifier {
   // Reentrancy guards — protect synchronous double-fire (e.g. UI button
   // tapped twice in one frame before rebuild disables it).
   bool _claimingDaily = false;
-  bool _claiming50 = false;
   bool _claiming100 = false;
 
   // Cap to prevent xpMax overflow as level grows. 2^30 fits comfortably
@@ -210,12 +210,11 @@ class EconomyState extends ChangeNotifier {
   int get challengeProgress => _challengeProgress;
   int get challengeTarget => _challengeTarget;
   DateTime? get challengeStartedAt => _challengeStartedAt;
-  bool get challenge50Claimed => _challenge50ClaimedThisCycle;
   bool get challenge100Claimed => _challenge100ClaimedThisCycle;
   String? get pendingMilestoneToast => _pendingMilestoneToast;
 
   /// Read-only computed view of the current challenge, or `null` if no
-  /// challenge is active yet (player hasn't cleared Stage 3).
+  /// challenge is active yet (player hasn't crossed the level-4 gate).
   ChallengeView? get challengeView {
     final type = _activeChallengeType;
     final start = _challengeStartedAt;
@@ -225,7 +224,6 @@ class EconomyState extends ChangeNotifier {
       startedAt: start,
       progress: _challengeProgress,
       target: _challengeTarget,
-      milestone50Claimed: _challenge50ClaimedThisCycle,
       milestone100Claimed: _challenge100ClaimedThisCycle,
     );
   }
@@ -348,7 +346,6 @@ class EconomyState extends ChangeNotifier {
     _challengeStartedAt = snap.challengeStartedAt;
     _challengeProgress = snap.challengeProgress;
     _challengeTarget = snap.challengeTarget;
-    _challenge50ClaimedThisCycle = snap.challenge50Claimed;
     _challenge100ClaimedThisCycle = snap.challenge100Claimed;
     _challengeRevealed = snap.challengeRevealed;
     _aceDialogueEnabled = snap.aceDialogueEnabled;
@@ -389,38 +386,37 @@ class EconomyState extends ChangeNotifier {
     _challengeProgress = 0;
     _challengeTarget =
         ChallengeFormulas.targetFor(type: type, playerLevel: _level);
-    _challenge50ClaimedThisCycle = false;
     _challenge100ClaimedThisCycle = false;
     _scheduleSync();
     notifyListeners();
   }
 
-  /// Marks the challenge as revealed (Stage 3 first clear) and starts
-  /// the very first cycle. No-op if [_challengeRevealed] is already true.
+  /// Marks the challenge as revealed (player crossed level 4) and starts
+  /// the very first cycle — the one-time `newPlayers` intro. No-op if
+  /// [_challengeRevealed] is already true.
   void markChallengeRevealed() {
     if (_challengeRevealed) return;
     _challengeRevealed = true;
     startNewChallengeCycle();
   }
 
-  /// Auto-claims any unclaimed milestones reached during an expired
+  /// Player-level gate for challenge unlock per the v2 economy plan.
+  /// Challenges are locked until the player reaches this level; at that
+  /// point the first cycle (always `newPlayers`) starts and the home
+  /// screen's reveal cinematic fires on the next stage-clear return.
+  static const int challengeUnlockLevel = 4;
+
+  /// Auto-claims the 100% completion reward if reached during an expired
   /// cycle, then starts the next cycle. Called from
   /// [_checkChallengeCycleExpiry] on app foreground.
+  ///
+  /// v2: there is only a single completion reward. If the player didn't
+  /// hit 100% before the cycle expired, nothing is granted.
   void _autoClaimAndAdvanceIfExpired() {
     final view = challengeView;
     if (view == null) return;
     if (!view.isExpired(_now())) return;
 
-    var milestoneFired = false;
-    if (view.canClaim50) {
-      _applyReward(ChallengeFormulas.reward50(
-        playerLevel: _level,
-        maxWorldReached: _maxWorldReached,
-        rng: _rng,
-      ));
-      _challenge50ClaimedThisCycle = true;
-      milestoneFired = true;
-    }
     if (view.canClaim100) {
       _applyReward(ChallengeFormulas.reward100(
         playerLevel: _level,
@@ -428,10 +424,7 @@ class EconomyState extends ChangeNotifier {
         rng: _rng,
       ));
       _challenge100ClaimedThisCycle = true;
-      milestoneFired = true;
-    }
-    if (milestoneFired) {
-      _pendingMilestoneToast = view.canClaim100 ? '100' : '50';
+      _pendingMilestoneToast = '100';
     }
     startNewChallengeCycle();
   }
@@ -450,31 +443,6 @@ class EconomyState extends ChangeNotifier {
     _checkChallengeCycleExpiry();
     _resetDailyAdWatchIfNewDay();
     notifyListeners();
-  }
-
-  /// Manual claim of the 50% milestone reward. Returns the reward, or
-  /// [Reward.empty] if the milestone is not currently claimable.
-  Reward claimChallengeMilestone50() {
-    if (_claiming50) return Reward.empty;
-    final view = challengeView;
-    if (view == null || !view.canClaim50) return Reward.empty;
-    _claiming50 = true;
-    // Set the gate flag BEFORE granting so a synchronous re-entry sees
-    // the claim already in flight.
-    _challenge50ClaimedThisCycle = true;
-    try {
-      final reward = ChallengeFormulas.reward50(
-        playerLevel: _level,
-        maxWorldReached: _maxWorldReached,
-        rng: _rng,
-      );
-      _applyReward(reward);
-      _scheduleSync();
-      notifyListeners();
-      return reward;
-    } finally {
-      _claiming50 = false;
-    }
   }
 
   /// Manual claim of the 100% milestone reward. Returns the reward, or
@@ -591,6 +559,13 @@ class EconomyState extends ChangeNotifier {
     }
     if (_level > priorLevel) {
       _maybeFireLevelMilestonesCrossed(priorLevel, _level);
+      // v2 challenge gate: crossing the challenge-unlock level fires the
+      // first-ever cycle (newPlayers). markChallengeRevealed is a no-op
+      // if already revealed, so this is safe to call unconditionally.
+      if (priorLevel < challengeUnlockLevel &&
+          _level >= challengeUnlockLevel) {
+        markChallengeRevealed();
+      }
     }
     notifyListeners();
   }
@@ -745,10 +720,14 @@ class EconomyState extends ChangeNotifier {
       requestAceLine(AceLineKeys.ftueStage1Clear);
     }
 
-    // Stage 3 challenge reveal trigger (one-time per account).
-    final shouldShowChallengeReveal = _currentWorld == 1 &&
-        _currentStage == 3 &&
-        !_challengeRevealed;
+    // v2 challenge reveal trigger: once the player has crossed the
+    // level-4 gate (markChallengeRevealed already ran inside addXP),
+    // the reveal cinematic fires on the very next stage-clear return
+    // to the home screen. The cinematic is responsible for marking the
+    // FtueTriggers.challengeRevealCinematicShown one-shot when it ends.
+    final shouldShowChallengeReveal = _challengeRevealed &&
+        !_firedFtueTriggers
+            .contains(FtueTriggers.challengeRevealCinematicShown);
 
     // Reset per-stage session state.
     _accumulatedRunCoins = 0;
@@ -1055,10 +1034,13 @@ class EconomyState extends ChangeNotifier {
   }
 
   /// Increments the operation kill counter. Called from the gameplay
-  /// loop on every confirmed enemy kill — drives the Hunter challenge
-  /// type when active.
+  /// Called by the gameplay loop on every confirmed enemy kill. Drives
+  /// kill-metric challenge cycles — Hunter (the standard rotation) and
+  /// the newPlayers intro (which also uses the `kills` metric per the
+  /// v2 RC `challenges__cycle_plan__v1.cycles.new_players.metric`).
   void onEnemyKilled() {
-    if (_activeChallengeType == ChallengeType.hunter) {
+    if (_activeChallengeType == ChallengeType.hunter ||
+        _activeChallengeType == ChallengeType.newPlayers) {
       _challengeProgress += 1;
     }
     _scheduleSync();
@@ -1282,7 +1264,6 @@ class EconomyState extends ChangeNotifier {
       challengeStartedAt: _challengeStartedAt,
       challengeProgress: _challengeProgress,
       challengeTarget: _challengeTarget,
-      challenge50Claimed: _challenge50ClaimedThisCycle,
       challenge100Claimed: _challenge100ClaimedThisCycle,
       challengeRevealed: _challengeRevealed,
       aceDialogueEnabled: _aceDialogueEnabled,
@@ -1389,7 +1370,6 @@ class EconomyState extends ChangeNotifier {
     _challengeStartedAt = null;
     _challengeProgress = 0;
     _challengeTarget = 0;
-    _challenge50ClaimedThisCycle = false;
     _challenge100ClaimedThisCycle = false;
     _pendingAceLine = null;
     _pendingMilestoneToast = null;
@@ -1442,7 +1422,6 @@ class EconomyState extends ChangeNotifier {
     _challengeStartedAt = null;
     _challengeProgress = 0;
     _challengeTarget = 0;
-    _challenge50ClaimedThisCycle = false;
     _challenge100ClaimedThisCycle = false;
     _scheduleSync();
     notifyListeners();
@@ -1489,7 +1468,6 @@ class EconomyState extends ChangeNotifier {
     _challengeStartedAt = null;
     _challengeProgress = 0;
     _challengeTarget = 0;
-    _challenge50ClaimedThisCycle = false;
     _challenge100ClaimedThisCycle = false;
     _challengeRevealed = false;
     _aceDialogueEnabled = true;

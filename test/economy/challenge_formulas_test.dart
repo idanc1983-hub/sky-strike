@@ -132,17 +132,7 @@ void main() {
   });
 
   group('ChallengeFormulas.gemRange (post-rebalance, -25%)', () {
-    test('50% milestone tiers match GDD §4.3', () {
-      expect(ChallengeFormulas.gemRange50ForLevel(1), (4, 11));
-      expect(ChallengeFormulas.gemRange50ForLevel(10), (4, 11));
-      expect(ChallengeFormulas.gemRange50ForLevel(11), (6, 14));
-      expect(ChallengeFormulas.gemRange50ForLevel(25), (6, 14));
-      expect(ChallengeFormulas.gemRange50ForLevel(26), (9, 17));
-      expect(ChallengeFormulas.gemRange50ForLevel(50), (9, 17));
-      expect(ChallengeFormulas.gemRange50ForLevel(51), (13, 22));
-      expect(ChallengeFormulas.gemRange50ForLevel(200), (13, 22));
-    });
-
+    // v2: 50% mid-cycle milestone removed; only the 100% tier remains.
     test('100% milestone tiers match GDD §4.3', () {
       expect(ChallengeFormulas.gemRange100ForLevel(1), (8, 15));
       expect(ChallengeFormulas.gemRange100ForLevel(10), (8, 15));
@@ -152,61 +142,6 @@ void main() {
       expect(ChallengeFormulas.gemRange100ForLevel(50), (18, 30));
       expect(ChallengeFormulas.gemRange100ForLevel(51), (26, 37));
       expect(ChallengeFormulas.gemRange100ForLevel(200), (26, 37));
-    });
-  });
-
-  group('ChallengeFormulas.reward50', () {
-    test('coin formula at locked benchmark levels', () {
-      // 300 × (1 + level × 0.05)
-      final r = Random(0);
-      final lv1 = ChallengeFormulas.reward50(
-        playerLevel: 1,
-        maxWorldReached: 1,
-        rng: r,
-      );
-      expect(lv1.coins, 315);
-
-      final lv14 = ChallengeFormulas.reward50(
-        playerLevel: 14,
-        maxWorldReached: 1,
-        rng: r,
-      );
-      expect(lv14.coins, 510);
-
-      final lv30 = ChallengeFormulas.reward50(
-        playerLevel: 30,
-        maxWorldReached: 1,
-        rng: r,
-      );
-      expect(lv30.coins, 750);
-
-      final lv50 = ChallengeFormulas.reward50(
-        playerLevel: 50,
-        maxWorldReached: 1,
-        rng: r,
-      );
-      expect(lv50.coins, 1050);
-    });
-
-    test('grants exactly 1 power-up', () {
-      final reward = ChallengeFormulas.reward50(
-        playerLevel: 14,
-        maxWorldReached: 3,
-        rng: Random(42),
-      );
-      expect(reward.powerUps.length, 1);
-    });
-
-    test('gem reward stays within tier range', () {
-      for (var seed = 0; seed < 30; seed++) {
-        final reward = ChallengeFormulas.reward50(
-          playerLevel: 14,
-          maxWorldReached: 3,
-          rng: Random(seed),
-        );
-        expect(reward.gems, greaterThanOrEqualTo(6));
-        expect(reward.gems, lessThanOrEqualTo(14));
-      }
     });
   });
 

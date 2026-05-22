@@ -41,7 +41,9 @@ class EconomySnapshot {
   final DateTime? challengeStartedAt;
   final int challengeProgress;
   final int challengeTarget;
-  final bool challenge50Claimed;
+  // v2: 50% mid-cycle milestone removed; only the 100% completion claim
+  // persists. Reads of legacy `challenge50Claimed` JSON are silently
+  // dropped on load.
   final bool challenge100Claimed;
   final bool challengeRevealed;
   final bool aceDialogueEnabled;
@@ -77,7 +79,6 @@ class EconomySnapshot {
     required this.challengeStartedAt,
     required this.challengeProgress,
     required this.challengeTarget,
-    required this.challenge50Claimed,
     required this.challenge100Claimed,
     required this.challengeRevealed,
     required this.aceDialogueEnabled,
@@ -120,7 +121,6 @@ class EconomySnapshot {
       challengeStartedAt: null,
       challengeProgress: 0,
       challengeTarget: 0,
-      challenge50Claimed: false,
       challenge100Claimed: false,
       challengeRevealed: false,
       aceDialogueEnabled: true,
@@ -205,7 +205,9 @@ class EconomyPersistence {
   static const _kChallengeStartedAt = 'ss_challengeStartedAt';
   static const _kChallengeProgress = 'ss_challengeProgress';
   static const _kChallengeTarget = 'ss_challengeTarget';
-  static const _kChallenge50Claimed = 'ss_challenge50Claimed';
+  // v2: legacy `ss_challenge50Claimed` is no longer read or written —
+  // kept here only so [clear] still scrubs the key from old installs.
+  static const _kChallenge50ClaimedLegacy = 'ss_challenge50Claimed';
   static const _kChallenge100Claimed = 'ss_challenge100Claimed';
   static const _kChallengeRevealed = 'ss_challengeRevealed';
   static const _kAceDialogueEnabled = 'ss_aceDialogueEnabled';
@@ -268,7 +270,6 @@ class EconomyPersistence {
         challengeStartedAt: _readDate(decoded['challengeStartedAt']),
         challengeProgress: _readInt(decoded['challengeProgress']) ?? 0,
         challengeTarget: _readInt(decoded['challengeTarget']) ?? 0,
-        challenge50Claimed: decoded['challenge50Claimed'] == true,
         challenge100Claimed: decoded['challenge100Claimed'] == true,
         challengeRevealed: decoded['challengeRevealed'] == true,
         aceDialogueEnabled: decoded['aceDialogueEnabled'] != false,
@@ -315,7 +316,6 @@ class EconomyPersistence {
       challengeStartedAt: _decodeDate(prefs.getString(_kChallengeStartedAt)),
       challengeProgress: prefs.getInt(_kChallengeProgress) ?? 0,
       challengeTarget: prefs.getInt(_kChallengeTarget) ?? 0,
-      challenge50Claimed: prefs.getBool(_kChallenge50Claimed) ?? false,
       challenge100Claimed: prefs.getBool(_kChallenge100Claimed) ?? false,
       challengeRevealed: prefs.getBool(_kChallengeRevealed) ?? false,
       aceDialogueEnabled: prefs.getBool(_kAceDialogueEnabled) ?? true,
@@ -371,7 +371,6 @@ class EconomyPersistence {
       'challengeStartedAt': s.challengeStartedAt?.toIso8601String(),
       'challengeProgress': s.challengeProgress,
       'challengeTarget': s.challengeTarget,
-      'challenge50Claimed': s.challenge50Claimed,
       'challenge100Claimed': s.challenge100Claimed,
       'challengeRevealed': s.challengeRevealed,
       'aceDialogueEnabled': s.aceDialogueEnabled,
@@ -441,7 +440,6 @@ class EconomyPersistence {
       challengeProgress:
           _clampInt(s.challengeProgress, 0, _Caps.challengeMax, 0),
       challengeTarget: _clampInt(s.challengeTarget, 0, _Caps.challengeMax, 0),
-      challenge50Claimed: s.challenge50Claimed,
       challenge100Claimed: s.challenge100Claimed,
       challengeRevealed: s.challengeRevealed,
       aceDialogueEnabled: s.aceDialogueEnabled,
@@ -551,7 +549,7 @@ class EconomyPersistence {
     _kCompletedStages, _k3StarStages, _kDefeatedBosses,
     _kAdsRemoved, _kPacksPurchased, _kInstallDate,
     _kActiveChallengeType, _kChallengeStartedAt, _kChallengeProgress,
-    _kChallengeTarget, _kChallenge50Claimed, _kChallenge100Claimed,
+    _kChallengeTarget, _kChallenge50ClaimedLegacy, _kChallenge100Claimed,
     _kChallengeRevealed, _kAceDialogueEnabled,
     _kFiredFtueTriggers, _kShownAceLines,
   ];

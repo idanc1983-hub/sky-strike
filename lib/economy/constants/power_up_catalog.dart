@@ -6,7 +6,9 @@ class PowerUpCatalog {
   PowerUpCatalog._();
 
   /// Biome at which each power-up unlocks. Keys are stable IDs used across
-  /// state, persistence, and analytics. Values are `1..6`.
+  /// state, persistence, and analytics. Values are `1..6` matching the
+  /// v2 RC `economy__shop_powerups__v1.power_ups[*].unlock_biome`:
+  /// 1=jungle, 2=desert, 3=sea, 4=ice, 5=volcano, 6=city.
   static const Map<String, int> unlockBiome = <String, int>{
     'rapid_fire': 1,
     'speed_boost': 1,
@@ -17,7 +19,7 @@ class PowerUpCatalog {
     'laser': 3,
     'freeze_time': 4,
     'ghost_mode': 5,
-    'drone_wingman': 5,
+    'drone_wingman': 6,
   };
 
   /// `world → list of power-ups newly unlocked when that world is reached`.

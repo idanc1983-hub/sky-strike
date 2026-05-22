@@ -137,7 +137,10 @@ class _GameScreenState extends State<GameScreen>
 
   // ── Wave state ───────────────────────────────────────────────────────────
   int _currentWave = 1;
-  static const int _maxWave = 10;
+  /// v2: wave count comes from `levels__biome_levels__v1.waves`. Defaults
+  /// to [kDefaultWavesPerLevel] before world/stage init, then is overwritten
+  /// in the init flow once `_world` + `_stage` are known.
+  int _maxWave = kDefaultWavesPerLevel;
   int _waveTarget = 0;      // kill quota for this wave (= pool size)
   int _waveKilled = 0;
   int _waveChipPulseFrames = 0;
@@ -324,7 +327,8 @@ class _GameScreenState extends State<GameScreen>
       _world = w ?? 1;
       _stage = s ?? 1;
       _diff = getDifficulty(_stage);
-      _activeTiers = activeEnemyTiers(_stage);
+      _activeTiers = activeEnemyTiersForLevel(_world, _stage);
+      _maxWave = wavesForLevel(_world, _stage);
       _argsLoaded = true;
       _loadAllAssets();
     }
@@ -1066,7 +1070,7 @@ class _GameScreenState extends State<GameScreen>
   // ─────────────────────────────────────────────────────────────────────────
 
   void _startBoss() {
-    _bossHp       = bossHpForWorld(_world);
+    _bossHp       = bossHpForLevel(_world, _stage);
     _bossMaxHp    = _bossHp;
     _bossX        = _screenW / 2;
     _bossY        = _kBossEntryStartY;

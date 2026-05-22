@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:skystrike/economy/services/economy_api.dart';
 import 'package:skystrike/economy/services/economy_persistence.dart';
+import 'package:skystrike/economy/services/ftue_triggers.dart';
 import 'package:skystrike/economy/services/mock_ads_service.dart';
 import 'package:skystrike/economy/services/mock_iap_service.dart';
 import 'package:skystrike/economy/state/challenge_state.dart';
@@ -66,8 +67,9 @@ void main() {
     test('advanceToWorld returns newly unlocked power-ups', () async {
       final s = _buildState();
       await s.initialize();
+      // World 2 (desert) unlocks shield + split_shot per v2 catalog.
       final unlocked = s.advanceToWorld(2);
-      expect(unlocked, containsAll(<String>{'bomb', 'magnet'}));
+      expect(unlocked, containsAll(<String>{'shield', 'split_shot'}));
       expect(s.maxWorldReached, 2);
       // Calling again with the same world is a no-op.
       expect(s.advanceToWorld(2), isEmpty);
@@ -141,10 +143,15 @@ void main() {
       s.dispose();
     });
 
-    test('Stage 3 first-clear surfaces the reveal flag', () async {
+    test(
+        'v2: post-level-4 stage clear surfaces the reveal flag until '
+        'the cinematic-shown trigger fires', () async {
       final s = _buildState();
       await s.initialize();
-      final outcome = s.debugSimulateStageClear(
+
+      // Before the level-4 gate fires, stage clears do NOT surface the
+      // reveal flag — challenges are locked.
+      final preGate = s.debugSimulateStageClear(
         world: 1,
         stage: 3,
         stars: 3,
@@ -152,29 +159,47 @@ void main() {
         diedDuringRun: false,
         simulatedRunCoins: 600,
       );
-      expect(outcome.shouldShowChallengeReveal, isTrue);
-      // Caller is responsible for flipping the flag — confirm second
-      // clear no longer triggers the reveal.
-      s.markChallengeRevealed();
+      expect(preGate.shouldShowChallengeReveal, isFalse);
+
+      // Cross the level-4 gate (xpMax default = 1000, so award 4*1000
+      // XP to land on level 5 — past the gate). markChallengeRevealed
+      // fires inside addXP.
+      s.addXP(EconomyState.challengeUnlockLevel * 1000);
+      expect(s.challengeRevealed, isTrue);
+
+      // Next stage clear surfaces the cinematic.
+      final firstAfterGate = s.debugSimulateStageClear(
+        world: 1,
+        stage: 4,
+        stars: 3,
+        isBossDefeat: false,
+        diedDuringRun: false,
+      );
+      expect(firstAfterGate.shouldShowChallengeReveal, isTrue);
+
+      // Once the cinematic is marked shown, subsequent clears stop
+      // surfacing it.
+      s.markFtueTriggerFired(FtueTriggers.challengeRevealCinematicShown);
       final second = s.debugSimulateStageClear(
         world: 1,
-        stage: 3,
+        stage: 4,
         stars: 3,
-        isBossDefeat: true,
+        isBossDefeat: false,
         diedDuringRun: false,
       );
       expect(second.shouldShowChallengeReveal, isFalse);
-      // First-ever cycle is locked to Hunter.
-      expect(s.activeChallengeType, ChallengeType.hunter);
+
+      // First-ever cycle is the newPlayers intro per v2.
+      expect(s.activeChallengeType, ChallengeType.newPlayers);
       expect(s.challengeTarget, greaterThan(0));
       s.dispose();
     });
 
-    test('Hunter challenge progress increments on enemy kills', () async {
+    test('challenge progress increments on enemy kills', () async {
       final s = _buildState();
       await s.initialize();
-      s.markChallengeRevealed(); // starts a Hunter cycle (first-ever).
-      expect(s.activeChallengeType, ChallengeType.hunter);
+      s.markChallengeRevealed(); // starts the newPlayers intro cycle.
+      expect(s.activeChallengeType, ChallengeType.newPlayers);
       final initialProgress = s.challengeProgress;
       s.onEnemyKilled();
       s.onEnemyKilled();
@@ -183,34 +208,21 @@ void main() {
       s.dispose();
     });
 
-    test('claim50 fails before threshold, succeeds at 50%', () async {
+    test('claim100 fails before threshold, succeeds at completion', () async {
       final s = _buildState();
       await s.initialize();
       s.markChallengeRevealed();
-      // Push progress to exactly 50% of target.
-      while (s.challengeProgress < (s.challengeTarget ~/ 2)) {
+      // Below 100% → empty reward.
+      final tooEarly = s.claimChallengeMilestone100();
+      expect(tooEarly.isEmpty, isTrue);
+      // Push progress to 100% of target.
+      while (s.challengeProgress < s.challengeTarget) {
         s.onEnemyKilled();
       }
-      // Below 50% → empty reward.
-      final tooEarly = s.claimChallengeMilestone50();
-      // Some implementations might be at exactly 50 here; check both.
-      if (s.challengeProgress < (s.challengeTarget * 0.5)) {
-        expect(tooEarly.isEmpty, isTrue);
-      }
-      // Bump to 50% if not already there.
-      while (s.challengeProgress < (s.challengeTarget / 2).ceil()) {
-        s.onEnemyKilled();
-      }
-      final reward = s.claimChallengeMilestone50();
-      if (!s.challenge50Claimed) {
-        // If we landed exactly on threshold edge cases, allow it to be
-        // claimed on the second attempt.
-        s.onEnemyKilled();
-        s.claimChallengeMilestone50();
-      }
-      expect(s.challenge50Claimed, isTrue);
+      final reward = s.claimChallengeMilestone100();
+      expect(s.challenge100Claimed, isTrue);
       // A second claim is rejected (idempotent).
-      final repeat = s.claimChallengeMilestone50();
+      final repeat = s.claimChallengeMilestone100();
       expect(repeat.isEmpty, isTrue);
       // Reward arrived in wallet.
       expect(s.coins, greaterThan(0));

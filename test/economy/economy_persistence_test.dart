@@ -55,7 +55,6 @@ void main() {
         challengeStartedAt: DateTime.utc(2026, 5, 7, 12, 0),
         challengeProgress: 64,
         challengeTarget: 156,
-        challenge50Claimed: true,
         challenge100Claimed: false,
         challengeRevealed: true,
         aceDialogueEnabled: false,
@@ -96,7 +95,6 @@ void main() {
       expect(restored.challengeStartedAt, original.challengeStartedAt);
       expect(restored.challengeProgress, 64);
       expect(restored.challengeTarget, 156);
-      expect(restored.challenge50Claimed, isTrue);
       expect(restored.challenge100Claimed, isFalse);
       expect(restored.challengeRevealed, isTrue);
       expect(restored.aceDialogueEnabled, isFalse);

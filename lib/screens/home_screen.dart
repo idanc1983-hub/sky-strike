@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import '../economy/constants/ace_dialogue_catalog.dart';
+import '../economy/services/ftue_triggers.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/challenge_prizes_popup.dart';
 import '../economy/ui/challenge_reveal_sequence.dart';
@@ -101,10 +102,9 @@ const _cChallengeBarTrack = Color(0xFF0d1a0d);
 // the simulator.
 // ---------------------------------------------------------------------------
 const String _kPlaceholderCycleDisplayName = 'Iron Skies';
-const String _kPlaceholderPrize50Asset = 'assets/ui/icon_coin.png';
-const int _kPlaceholderPrize50Amount = 300;
-const String _kPlaceholderPrize100Asset = 'assets/ui/icon_coin.png';
-const int _kPlaceholderPrize100Amount = 800;
+// v2: single completion prize at 100%. The 50% mid-cycle prize was removed.
+const String _kPlaceholderPrizeAsset = 'assets/ui/icon_coin.png';
+const int _kPlaceholderPrizeAmount = 800;
 const int _kPlaceholderProgress = 216;
 const int _kPlaceholderTarget = 350;
 
@@ -642,11 +642,8 @@ class _HomeScreenState extends State<HomeScreen>
             progress: progress,
             target: target,
             fraction: fraction,
-            milestone50Claimed: economy.challenge50Claimed,
-            prize50Asset: _kPlaceholderPrize50Asset,
-            prize50Amount: _kPlaceholderPrize50Amount,
-            prize100Asset: _kPlaceholderPrize100Asset,
-            prize100Amount: _kPlaceholderPrize100Amount,
+            prizeAsset: _kPlaceholderPrizeAsset,
+            prizeAmount: _kPlaceholderPrizeAmount,
             onTap: () => ChallengePrizesPopup.show(context),
             // Cycle bg + bar colour are dynamic via remote config. Until
             // the cycle plumbing lands, render the styled fallback.
@@ -699,9 +696,11 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  /// Long-press LAUNCH debug hook: simulates a Stage 3 clear so the
+  /// Long-press LAUNCH debug hook: simulates a stage clear so the
   /// challenge reveal sequence can be tested without the real gameplay
-  /// loop. Removed when real `onStageCleared` integration lands.
+  /// loop. Per v2, the gate is now player level 4 (set via Dev Tools);
+  /// markChallengeRevealed is idempotent so this stays safe after the
+  /// gate has already fired automatically.
   Future<void> _onLaunchLongPressed(EconomyState economy) async {
     final outcome = economy.debugSimulateStageClear(
       world: 1,
@@ -718,13 +717,16 @@ class _HomeScreenState extends State<HomeScreen>
       if (type != null) {
         await ChallengeRevealSequence.show(context, type);
         if (!mounted) return;
+        economy.markFtueTriggerFired(
+          FtueTriggers.challengeRevealCinematicShown,
+        );
         economy.requestAceLine(AceLineKeys.aceChallengeRevealClose);
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Stage 3 already cleared. Awarded ${outcome.reward.coins} coins.',
+            'Challenge already revealed. Awarded ${outcome.reward.coins} coins.',
           ),
         ),
       );
@@ -934,11 +936,9 @@ class _ChallengeCard extends StatelessWidget {
   final int progress;
   final int target;
   final double fraction;
-  final bool milestone50Claimed;
-  final String prize50Asset;
-  final int prize50Amount;
-  final String prize100Asset;
-  final int prize100Amount;
+  // v2: single completion prize at 100% — no mid-cycle 50% milestone.
+  final String prizeAsset;
+  final int prizeAmount;
 
   /// Tap target for the whole card. Opens the prize-ladder popup.
   final VoidCallback onTap;
@@ -955,11 +955,8 @@ class _ChallengeCard extends StatelessWidget {
     required this.progress,
     required this.target,
     required this.fraction,
-    required this.milestone50Claimed,
-    required this.prize50Asset,
-    required this.prize50Amount,
-    required this.prize100Asset,
-    required this.prize100Amount,
+    required this.prizeAsset,
+    required this.prizeAmount,
     required this.onTap,
     this.bgAsset,
     this.barColor = _cGreen,
@@ -1005,11 +1002,8 @@ class _ChallengeCard extends StatelessWidget {
                 fraction: fraction,
                 progress: progress,
                 target: target,
-                milestone50Claimed: milestone50Claimed,
-                prize50Asset: prize50Asset,
-                prize50Amount: prize50Amount,
-                prize100Asset: prize100Asset,
-                prize100Amount: prize100Amount,
+                prizeAsset: prizeAsset,
+                prizeAmount: prizeAmount,
                 barColor: barColor,
               ),
             ],
@@ -1021,15 +1015,17 @@ class _ChallengeCard extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Progress bar with prize overlays at both the 50% and 100% milestones.
+// Progress bar with a single completion-prize overlay at the 100% end.
 //
-// Layout rules (per design):
-//   - 100% prize sits at the right end of the bar; the icon's left 10%
-//     overlaps the bar (the bar is shortened by 90% of the icon width).
-//   - 50% prize is centred horizontally on the 50% milestone tick
-//     (halfway across the visible bar).
-//   - Under each prize icon sits an amount badge; the top 10% of the
+// Layout rules (per v2 design):
+//   - The completion prize sits at the right end of the bar; the icon's
+//     left 10% overlaps the bar (the bar is shortened by 90% of the icon
+//     width).
+//   - Under the prize icon sits an amount badge; the top 10% of the
 //     badge overlaps the bottom of the icon.
+//
+// v2 removed the 50% mid-cycle prize/tick; players see a single reward
+// at completion.
 // ---------------------------------------------------------------------------
 class _ChallengeBar extends StatelessWidget {
   static const double _barHeight = 14;
@@ -1043,22 +1039,16 @@ class _ChallengeBar extends StatelessWidget {
   final double fraction;
   final int progress;
   final int target;
-  final bool milestone50Claimed;
-  final String prize50Asset;
-  final int prize50Amount;
-  final String prize100Asset;
-  final int prize100Amount;
+  final String prizeAsset;
+  final int prizeAmount;
   final Color barColor;
 
   const _ChallengeBar({
     required this.fraction,
     required this.progress,
     required this.target,
-    required this.milestone50Claimed,
-    required this.prize50Asset,
-    required this.prize50Amount,
-    required this.prize100Asset,
-    required this.prize100Amount,
+    required this.prizeAsset,
+    required this.prizeAmount,
     required this.barColor,
   });
 
@@ -1077,57 +1067,36 @@ class _ChallengeBar extends StatelessWidget {
 
     return SizedBox(
       height: totalHeight,
-      child: LayoutBuilder(builder: (ctx, constraints) {
-        final stackW = constraints.maxWidth;
-        // X position of the 50% milestone tick — at the halfway point of
-        // the visible bar (which itself is shortened by barRightInset).
-        final midX = (stackW - barRightInset) * 0.5;
-
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Bar
-            Positioned(
-              left: 0,
-              right: barRightInset,
-              top: barTop,
-              height: _barHeight,
-              child: _BarTrack(
-                fraction: fraction,
-                barColor: barColor,
-                progressText: '$progress/$target',
-                milestone50Claimed: milestone50Claimed,
-              ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Bar
+          Positioned(
+            left: 0,
+            right: barRightInset,
+            top: barTop,
+            height: _barHeight,
+            child: _BarTrack(
+              fraction: fraction,
+              barColor: barColor,
+              progressText: '$progress/$target',
             ),
-            // 50% milestone prize — centred on the orange tick.
-            Positioned(
-              left: midX - _prizeIconSize / 2,
-              top: 0,
-              width: _prizeIconSize,
-              child: _PrizeOverlay(
-                asset: prize50Asset,
-                amount: prize50Amount,
-                iconSize: _prizeIconSize,
-                badgeHeight: _amountBadgeHeight,
-                badgeOverlapFraction: _badgeOverlapFraction,
-              ),
+          ),
+          // Completion prize — right end, 10% overlap with bar.
+          Positioned(
+            right: 0,
+            top: 0,
+            width: _prizeIconSize,
+            child: _PrizeOverlay(
+              asset: prizeAsset,
+              amount: prizeAmount,
+              iconSize: _prizeIconSize,
+              badgeHeight: _amountBadgeHeight,
+              badgeOverlapFraction: _badgeOverlapFraction,
             ),
-            // 100% milestone prize — right end, 10% overlap with bar.
-            Positioned(
-              right: 0,
-              top: 0,
-              width: _prizeIconSize,
-              child: _PrizeOverlay(
-                asset: prize100Asset,
-                amount: prize100Amount,
-                iconSize: _prizeIconSize,
-                badgeHeight: _amountBadgeHeight,
-                badgeOverlapFraction: _badgeOverlapFraction,
-              ),
-            ),
-          ],
-        );
-      }),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1137,24 +1106,14 @@ class _BarTrack extends StatelessWidget {
   final Color barColor;
   final String progressText;
 
-  /// When true the player has collected the 50% reward, so the progress
-  /// label moves from the left half (before the 50% prize) to the right
-  /// half (between the 50% and 100% prizes).
-  final bool milestone50Claimed;
-
   const _BarTrack({
     required this.fraction,
     required this.barColor,
     required this.progressText,
-    required this.milestone50Claimed,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Alignment maps [-1, 1] across the bar: -0.5 = 25% from left,
-    // +0.5 = 75% from left. The text's centre lands at that x.
-    final labelAlignmentX = milestone50Claimed ? 0.5 : -0.5;
-
     return ClipRRect(
       borderRadius: BorderRadius.circular(7),
       child: Stack(
@@ -1167,19 +1126,10 @@ class _BarTrack extends StatelessWidget {
               decoration: BoxDecoration(color: barColor),
             );
           }),
-          // 50% milestone tick
-          LayoutBuilder(builder: (ctx, constraints) {
-            return Padding(
-              padding: EdgeInsets.only(left: constraints.maxWidth * 0.5 - 1),
-              child: Container(
-                width: 2,
-                color: _cAmber.withValues(alpha: 0.75),
-              ),
-            );
-          }),
-          // Progress label
+          // Progress label — centred along the bar (v2 removed the 50%
+          // tick and the left/right label shift that depended on it).
           Align(
-            alignment: Alignment(labelAlignmentX, 0),
+            alignment: const Alignment(0, 0),
             child: Text(
               progressText,
               style: const TextStyle(
