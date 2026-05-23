@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:skystrike/economy/services/economy_api.dart';
 import 'package:skystrike/economy/services/economy_persistence.dart';
-import 'package:skystrike/economy/services/ftue_triggers.dart';
 import 'package:skystrike/economy/services/mock_ads_service.dart';
 import 'package:skystrike/economy/services/mock_iap_service.dart';
 import 'package:skystrike/economy/state/challenge_state.dart';
@@ -138,56 +137,21 @@ void main() {
       final outcome = s.onStageCleared(stars: 1, isBossDefeat: false);
       // Stage 1 forces 3★ regardless of input → reward includes star bonus.
       expect(outcome.reward.coins, greaterThan(0));
-      expect(outcome.shouldShowChallengeReveal, isFalse);
       expect(s.showHomeBalance, isTrue);
       s.dispose();
     });
 
-    test(
-        'v2: post-level-4 stage clear surfaces the reveal flag until '
-        'the cinematic-shown trigger fires', () async {
+    test('v2: crossing the level-4 gate starts the newPlayers cycle',
+        () async {
       final s = _buildState();
       await s.initialize();
-
-      // Before the level-4 gate fires, stage clears do NOT surface the
-      // reveal flag — challenges are locked.
-      final preGate = s.debugSimulateStageClear(
-        world: 1,
-        stage: 3,
-        stars: 3,
-        isBossDefeat: true,
-        diedDuringRun: false,
-        simulatedRunCoins: 600,
-      );
-      expect(preGate.shouldShowChallengeReveal, isFalse);
+      expect(s.challengeRevealed, isFalse);
 
       // Cross the level-4 gate (xpMax default = 1000, so award 4*1000
       // XP to land on level 5 — past the gate). markChallengeRevealed
       // fires inside addXP.
       s.addXP(EconomyState.challengeUnlockLevel * 1000);
       expect(s.challengeRevealed, isTrue);
-
-      // Next stage clear surfaces the cinematic.
-      final firstAfterGate = s.debugSimulateStageClear(
-        world: 1,
-        stage: 4,
-        stars: 3,
-        isBossDefeat: false,
-        diedDuringRun: false,
-      );
-      expect(firstAfterGate.shouldShowChallengeReveal, isTrue);
-
-      // Once the cinematic is marked shown, subsequent clears stop
-      // surfacing it.
-      s.markFtueTriggerFired(FtueTriggers.challengeRevealCinematicShown);
-      final second = s.debugSimulateStageClear(
-        world: 1,
-        stage: 4,
-        stars: 3,
-        isBossDefeat: false,
-        diedDuringRun: false,
-      );
-      expect(second.shouldShowChallengeReveal, isFalse);
 
       // First-ever cycle is the newPlayers intro per v2.
       expect(s.activeChallengeType, ChallengeType.newPlayers);
@@ -231,28 +195,5 @@ void main() {
       s.dispose();
     });
 
-    test('Ace dialogue toggle persists state', () async {
-      final s = _buildState();
-      await s.initialize();
-      expect(s.aceDialogueEnabled, isTrue);
-      s.setAceDialogueEnabled(false);
-      expect(s.aceDialogueEnabled, isFalse);
-      // requestAceLine respects the disabled toggle.
-      s.requestAceLine('ftue_pre_mission_1');
-      expect(s.pendingAceLine, isNull);
-      s.dispose();
-    });
-
-    test('FTUE one-shot Ace lines fire only once', () async {
-      final s = _buildState();
-      await s.initialize();
-      s.requestAceLine('ftue_pre_mission_1');
-      expect(s.pendingAceLine, 'ftue_pre_mission_1');
-      s.consumePendingAceLine();
-      // Second request for the same one-shot key is a no-op.
-      s.requestAceLine('ftue_pre_mission_1');
-      expect(s.pendingAceLine, isNull);
-      s.dispose();
-    });
   });
 }

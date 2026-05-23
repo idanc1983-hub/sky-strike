@@ -571,6 +571,7 @@ class _PowerUpRow extends StatelessWidget {
       );
       return;
     }
+    economy.grantPowerUp(entry.id);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('+1 ${entry.displayName}')),
     );
@@ -658,63 +659,309 @@ class _ChestRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _ChestPreviewSheet.show(context, chest, _label),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0d1a0d).withValues(alpha: 0.95),
+          border: Border.all(color: _cGreen, width: 0.5),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: Image.asset(
+                'assets/ui/icon_${chest.id}.png',
+                fit: BoxFit.contain,
+                errorBuilder: AssetPlaceholder.image(
+                    color: _cAmber, label: chest.id, borderRadius: 6),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_label,
+                      style: const TextStyle(
+                          color: _cGreenPale,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2)),
+                  const SizedBox(height: 2),
+                  Text(chest.id,
+                      style: const TextStyle(
+                          color: _cGreenMid,
+                          fontSize: 9,
+                          fontFamily: 'monospace')),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            _BuyPill(
+              onTap: () =>
+                  _ChestRowActions.buyWithCoins(context, chest, _label),
+              child: _CoinAmount(amount: chest.coinPrice),
+            ),
+            const SizedBox(width: 6),
+            _BuyPill(
+              onTap: () =>
+                  _ChestRowActions.buyWithGems(context, chest, _label),
+              color: _cGemBg,
+              borderColor: _cAmber,
+              child: _GemAmount(amount: chest.gemPrice),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ----- Chest preview sheet ---------------------------------------------------
+class _ChestPreviewSheet extends StatelessWidget {
+  final _ChestEntry chest;
+  final String label;
+  const _ChestPreviewSheet({required this.chest, required this.label});
+
+  static Future<void> show(
+      BuildContext context, _ChestEntry chest, String label) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF0d1a0d),
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (_) => _ChestPreviewSheet(chest: chest, label: label),
+    );
+  }
+
+  Map<String, dynamic> get _config {
+    final all = RemoteConfigService.instance.chests;
+    final v = all[chest.id];
+    return v is Map<String, dynamic> ? v : <String, dynamic>{};
+  }
+
+  int _readInt(String key) {
+    final v = _config[key];
+    return v is num ? v.toInt() : 0;
+  }
+
+  double _readDouble(String key) {
+    final v = _config[key];
+    return v is num ? v.toDouble() : 0.0;
+  }
+
+  String _formatRange(int lo, int hi) {
+    if (lo == hi) return _formatNumber(lo);
+    return '${_formatNumber(lo)} – ${_formatNumber(hi)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final coinLo = _readInt('coin_min');
+    final coinHi = _readInt('coin_max');
+    final gemLo = _readInt('gem_min');
+    final gemHi = _readInt('gem_max');
+    final jetChance = _readDouble('jet_drop_chance');
+    final jetId = _config['jet_id'] is String
+        ? _config['jet_id'] as String
+        : null;
+    final bonusCoinsForNoJet = _readInt('bonus_coins_in_place_of_jet');
+
+    return SafeArea(
+      child: Padding(
+        padding:
+            const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Row(
+              children: [
+                SizedBox(
+                  width: 64,
+                  height: 64,
+                  child: Image.asset(
+                    'assets/ui/icon_${chest.id}.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: AssetPlaceholder.image(
+                        color: _cAmber, label: chest.id, borderRadius: 8),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('$label CHEST',
+                          style: const TextStyle(
+                              color: _cAmberLight,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.4)),
+                      const SizedBox(height: 2),
+                      const Text('Possible rewards',
+                          style: TextStyle(
+                              color: _cGreenMid,
+                              fontSize: 11,
+                              fontStyle: FontStyle.italic)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.close,
+                      color: _cGreenLight, size: 22),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Reward rows
+            if (coinHi > 0)
+              _RewardRow(
+                icon: 'assets/ui/icon_coin.png',
+                fallback: 'c',
+                amount: _formatRange(coinLo, coinHi),
+                label: 'Coins',
+                tint: _cAmber,
+              ),
+            if (gemHi > 0) ...[
+              const SizedBox(height: 8),
+              _RewardRow(
+                icon: 'assets/ui/icon_gem.png',
+                fallback: 'g',
+                amount: _formatRange(gemLo, gemHi),
+                label: 'Gems',
+                tint: _cAmberLight,
+              ),
+            ],
+            if (jetId != null && jetChance > 0) ...[
+              const SizedBox(height: 8),
+              _RewardRow(
+                icon: 'assets/jets/jet_player.png',
+                fallback: 'j',
+                amount: '${(jetChance * 100).toStringAsFixed(0)}%',
+                label: 'Chance: $jetId',
+                tint: _cGreenLight,
+              ),
+            ],
+            if (bonusCoinsForNoJet > 0) ...[
+              const SizedBox(height: 8),
+              _RewardRow(
+                icon: 'assets/ui/icon_coin.png',
+                fallback: 'c',
+                amount: '+${_formatNumber(bonusCoinsForNoJet)}',
+                label: 'Bonus if no jet',
+                tint: _cAmber,
+              ),
+            ],
+            const SizedBox(height: 16),
+            // Buy actions
+            Row(
+              children: [
+                Expanded(
+                  child: _BuyPill(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _ChestRowActions.buyWithCoins(context, chest, label);
+                    },
+                    child: Center(
+                      child: _CoinAmount(amount: chest.coinPrice),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _BuyPill(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _ChestRowActions.buyWithGems(context, chest, label);
+                    },
+                    color: _cGemBg,
+                    borderColor: _cAmber,
+                    child: Center(
+                      child: _GemAmount(amount: chest.gemPrice),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RewardRow extends StatelessWidget {
+  final String icon;
+  final String fallback;
+  final String amount;
+  final String label;
+  final Color tint;
+  const _RewardRow({
+    required this.icon,
+    required this.fallback,
+    required this.amount,
+    required this.label,
+    required this.tint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF0d1a0d).withValues(alpha: 0.95),
-        border: Border.all(color: _cGreen, width: 0.5),
-        borderRadius: BorderRadius.circular(10),
+        color: const Color(0xFF0a1a0a),
+        border: Border.all(color: _cGreenDarker, width: 0.5),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
           SizedBox(
-            width: 48,
-            height: 48,
+            width: 28,
+            height: 28,
             child: Image.asset(
-              'assets/ui/icon_${chest.id}.png',
+              icon,
               fit: BoxFit.contain,
               errorBuilder: AssetPlaceholder.image(
-                  color: _cAmber, label: chest.id, borderRadius: 6),
+                  color: tint, label: fallback, borderRadius: 4),
             ),
           ),
           const SizedBox(width: 10),
+          Text(amount,
+              style: TextStyle(
+                  color: tint,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_label,
-                    style: const TextStyle(
-                        color: _cGreenPale,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2)),
-                const SizedBox(height: 2),
-                Text(chest.id,
-                    style: const TextStyle(
-                        color: _cGreenMid,
-                        fontSize: 9,
-                        fontFamily: 'monospace')),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          _BuyPill(
-            onTap: () => _buyWithCoins(context),
-            child: _CoinAmount(amount: chest.coinPrice),
-          ),
-          const SizedBox(width: 6),
-          _BuyPill(
-            onTap: () => _buyWithGems(context),
-            color: _cGemBg,
-            borderColor: _cAmber,
-            child: _GemAmount(amount: chest.gemPrice),
+            child: Text(label,
+                style: const TextStyle(
+                    color: _cGreenPale, fontSize: 12)),
           ),
         ],
       ),
     );
   }
+}
 
-  void _buyWithCoins(BuildContext context) {
+/// Shared chest purchase actions — used by both [_ChestRow] (inline pills)
+/// and [_ChestPreviewSheet] (preview buttons). Keeping the spend logic in
+/// one place so the snackbar copy stays consistent.
+class _ChestRowActions {
+  _ChestRowActions._();
+
+  static void buyWithCoins(
+      BuildContext context, _ChestEntry chest, String label) {
     final economy = context.read<EconomyState>();
     if (!economy.spendCoins(chest.coinPrice)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -723,11 +970,12 @@ class _ChestRow extends StatelessWidget {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$_label chest opened (sim)')),
+      SnackBar(content: Text('$label chest opened (sim)')),
     );
   }
 
-  void _buyWithGems(BuildContext context) {
+  static void buyWithGems(
+      BuildContext context, _ChestEntry chest, String label) {
     final economy = context.read<EconomyState>();
     if (!economy.spendGems(chest.gemPrice)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -736,7 +984,7 @@ class _ChestRow extends StatelessWidget {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$_label chest opened (sim)')),
+      SnackBar(content: Text('$label chest opened (sim)')),
     );
   }
 }

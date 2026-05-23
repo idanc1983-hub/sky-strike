@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_typography.dart';
 import '../../shared/widgets/asset_placeholder.dart';
-import '../constants/ace_dialogue_catalog.dart';
 import '../constants/power_up_catalog.dart';
-import '../state/economy_state.dart';
 
 /// Full-screen modal that celebrates a newly unlocked power-up.
 /// Triggered by [EconomyState.advanceToWorld] when the return list is
-/// non-empty. After the popup dismisses, requests the matching Ace
-/// reveal line via [EconomyState.requestAceLine] so the wingman speaks
-/// up about each new toy.
+/// non-empty.
 class PowerUpUnlockPopup extends StatefulWidget {
   final String powerUpId;
 
@@ -34,10 +29,6 @@ class PowerUpUnlockPopup extends StatefulWidget {
 
 class _PowerUpUnlockPopupState extends State<PowerUpUnlockPopup> {
   void _dismiss(String result) {
-    final aceKey = AceDialogueCatalog.unlockLineKeyForPowerUp(widget.powerUpId);
-    if (aceKey != null) {
-      context.read<EconomyState>().requestAceLine(aceKey);
-    }
     Navigator.of(context).pop(result);
   }
 

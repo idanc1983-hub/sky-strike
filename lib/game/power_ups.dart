@@ -44,18 +44,18 @@ extension PowerUpTypeX on PowerUpType {
   // Asset path for the falling orb on canvas (null = use placeholder)
   String? get dropAsset {
     switch (this) {
-      case PowerUpType.bomb:        return 'assets/ui/pu_bomb_drop.png';
-      case PowerUpType.laser:       return 'assets/ui/pu_laser_drop.png';
-      case PowerUpType.magnet:      return 'assets/ui/pu_magnet_drop.png';
-      case PowerUpType.ghostMode:   return 'assets/ui/pu_ghost_drop.png';
-      case PowerUpType.freezeTime:  return 'assets/ui/pu_freeze_drop.png';
-      case PowerUpType.rapidFire:   return 'assets/ui/pu_rapidfire.png';
-      case PowerUpType.speedBoost:  return 'assets/ui/pu_speed.png';
-      case PowerUpType.hp:          return 'assets/ui/pu_hp.png';
-      case PowerUpType.shield:      return 'assets/ui/pu_shield.png';
-      case PowerUpType.splitShot:   return 'assets/ui/pu_split_shot_drop.png';
-      case PowerUpType.droneWingman: return 'assets/ui/pu_drone_drop.png';
-      case PowerUpType.coins:       return 'assets/ui/pu_coins_drop.png';
+      case PowerUpType.bomb:         return 'assets/ui/pu_bomb_drop.png';
+      case PowerUpType.laser:        return 'assets/ui/pu_laser_drop.png';
+      case PowerUpType.magnet:       return 'assets/ui/pu_magnet_drop.png';
+      case PowerUpType.ghostMode:    return 'assets/ui/pu_ghost_mode_drop.png';
+      case PowerUpType.freezeTime:   return 'assets/ui/pu_freeze_time_drop.png';
+      case PowerUpType.rapidFire:    return 'assets/ui/pu_rapid_fire_drop.png';
+      case PowerUpType.speedBoost:   return 'assets/ui/pu_speed_boost_drop.png';
+      case PowerUpType.hp:           return 'assets/ui/pu_hp_drop.png';
+      case PowerUpType.shield:       return 'assets/ui/pu_shield_drop.png';
+      case PowerUpType.splitShot:    return 'assets/ui/pu_split_shot_drop.png';
+      case PowerUpType.droneWingman: return 'assets/ui/pu_drone_wingman_drop.png';
+      case PowerUpType.coins:        return 'assets/ui/pu_coins_drop.png';
     }
   }
 
@@ -65,8 +65,8 @@ extension PowerUpTypeX on PowerUpType {
       case PowerUpType.bomb:         return 'assets/ui/pu_bomb_slot.png';
       case PowerUpType.splitShot:    return 'assets/ui/pu_split_shot_slot.png';
       case PowerUpType.laser:        return 'assets/ui/pu_laser_slot.png';
-      case PowerUpType.freezeTime:   return 'assets/ui/pu_freeze_slot.png';
-      case PowerUpType.droneWingman: return 'assets/ui/pu_drone_slot.png';
+      case PowerUpType.freezeTime:   return 'assets/ui/pu_freeze_time_slot.png';
+      case PowerUpType.droneWingman: return 'assets/ui/pu_drone_wingman_slot.png';
       default:                       return null;
     }
   }
@@ -132,6 +132,26 @@ extension PowerUpTypeX on PowerUpType {
       case PowerUpType.freezeTime:   return 'Freeze';
       case PowerUpType.hp:           return 'HP';
       case PowerUpType.coins:        return 'Coins';
+    }
+  }
+
+  /// Stable id used by [PowerUpCatalog.unlockBiome] (and the rest of the
+  /// economy/shop layer). Returns `null` for types that are not in the
+  /// shop catalog (hp, coins) — those drop in every biome.
+  String? get catalogId {
+    switch (this) {
+      case PowerUpType.rapidFire:    return 'rapid_fire';
+      case PowerUpType.speedBoost:   return 'speed_boost';
+      case PowerUpType.shield:       return 'shield';
+      case PowerUpType.magnet:       return 'magnet';
+      case PowerUpType.ghostMode:    return 'ghost_mode';
+      case PowerUpType.bomb:         return 'bomb';
+      case PowerUpType.splitShot:    return 'split_shot';
+      case PowerUpType.laser:        return 'laser';
+      case PowerUpType.freezeTime:   return 'freeze_time';
+      case PowerUpType.droneWingman: return 'drone_wingman';
+      case PowerUpType.hp:           return null;
+      case PowerUpType.coins:        return null;
     }
   }
 }

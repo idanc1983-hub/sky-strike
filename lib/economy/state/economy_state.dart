@@ -3,7 +3,6 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
-import '../constants/ace_dialogue_catalog.dart';
 import '../constants/ad_placement_catalog.dart';
 import '../constants/economy_constants.dart';
 import '../constants/iap_catalog.dart';
@@ -39,15 +38,13 @@ class PowerUpPickupReport {
 }
 
 /// Outcome of a stage-clear event. Carries the granted [Reward] plus
-/// flags the host UI uses to drive cinematics (Stage 3 challenge reveal,
-/// power-up unlock celebration on world advance).
+/// the list of newly unlocked power-ups so the host UI can drive the
+/// world-advance celebration.
 class StageClearOutcome {
   final Reward reward;
-  final bool shouldShowChallengeReveal;
   final List<String> newlyUnlockedPowerUps;
   const StageClearOutcome({
     required this.reward,
-    required this.shouldShowChallengeReveal,
     required this.newlyUnlockedPowerUps,
   });
 }
@@ -131,16 +128,9 @@ class EconomyState extends ChangeNotifier {
   int _pendingNextJetDiscountPct = 0;
 
   // ---------------------------------------------------------------------------
-  // Ace NPC + FTUE — GDD v1.3 §10
+  // FTUE — GDD v1.3 §10
   // ---------------------------------------------------------------------------
-  bool _aceDialogueEnabled = true;
   final Set<String> _firedFtueTriggers = <String>{};
-  final Set<String> _shownAceLines = <String>{};
-
-  /// Pending Ace dialogue line key — UI listens for this and shows the
-  /// corresponding overlay. The UI clears it via [consumePendingAceLine]
-  /// after presentation.
-  String? _pendingAceLine;
 
   /// Pending challenge milestone for which the UI should surface a
   /// celebratory toast on next app open. One of `'50'` / `'100'` / null.
@@ -254,13 +244,9 @@ class EconomyState extends ChangeNotifier {
   Set<String> get packsPurchased => Set<String>.unmodifiable(_packsPurchased);
   int get pendingNextJetDiscountPct => _pendingNextJetDiscountPct;
 
-  // Ace + FTUE surface
-  bool get aceDialogueEnabled => _aceDialogueEnabled;
+  // FTUE surface
   Set<String> get firedFtueTriggers =>
       Set<String>.unmodifiable(_firedFtueTriggers);
-  Set<String> get shownAceLines =>
-      Set<String>.unmodifiable(_shownAceLines);
-  String? get pendingAceLine => _pendingAceLine;
 
   /// Whether the home-screen coin balance chip should be visible.
   /// Returns true once Stage 1 has been completed (per FTUE rules).
@@ -348,13 +334,9 @@ class EconomyState extends ChangeNotifier {
     _challengeTarget = snap.challengeTarget;
     _challenge100ClaimedThisCycle = snap.challenge100Claimed;
     _challengeRevealed = snap.challengeRevealed;
-    _aceDialogueEnabled = snap.aceDialogueEnabled;
     _firedFtueTriggers
       ..clear()
       ..addAll(snap.firedFtueTriggers);
-    _shownAceLines
-      ..clear()
-      ..addAll(snap.shownAceLines);
 
     if (snap.installDate == null) {
       // First launch — mark install timestamp so the BEST FIRST DEAL
@@ -402,8 +384,7 @@ class EconomyState extends ChangeNotifier {
 
   /// Player-level gate for challenge unlock per the v2 economy plan.
   /// Challenges are locked until the player reaches this level; at that
-  /// point the first cycle (always `newPlayers`) starts and the home
-  /// screen's reveal cinematic fires on the next stage-clear return.
+  /// point the first cycle (always `newPlayers`) starts.
   static const int challengeUnlockLevel = 4;
 
   /// Auto-claims the 100% completion reward if reached during an expired
@@ -545,7 +526,7 @@ class EconomyState extends ChangeNotifier {
 
   /// Adds XP and cascades level-ups. Each level raises [xpMax] by 10%
   /// (capped — see [_xpMaxCap]). Players never lose XP (GDD §2.3). Fires
-  /// Ace milestone lines on Lv 10 / 25 / 50 transitions even if multiple
+  /// milestone triggers on Lv 10 / 25 / 50 transitions even if multiple
   /// milestones are crossed in a single call.
   void addXP(int amount) {
     if (amount <= 0) return;
@@ -574,27 +555,8 @@ class EconomyState extends ChangeNotifier {
   /// XP grant that jumps level 9 → level 50 must fire 10/25/50 in turn,
   /// not just the highest.
   void _maybeFireLevelMilestonesCrossed(int from, int to) {
-    const milestones = <int, ({String trigger, String aceLine})>{
-      10: (
-        trigger: FtueTriggers.milestoneLevel10,
-        aceLine: 'ace_level_10',
-      ),
-      25: (
-        trigger: FtueTriggers.milestoneLevel25,
-        aceLine: 'ace_level_25',
-      ),
-      50: (
-        trigger: FtueTriggers.milestoneLevel50,
-        aceLine: 'ace_level_50',
-      ),
-    };
-    for (final entry in milestones.entries) {
-      final ml = entry.key;
-      if (ml > from && ml <= to) {
-        if (_firedFtueTriggers.add(entry.value.trigger)) {
-          requestAceLine(entry.value.aceLine);
-        }
-      }
+    for (final trigger in FtueRules.milestonesCrossed(from, to)) {
+      _firedFtueTriggers.add(trigger);
     }
   }
 
@@ -710,24 +672,12 @@ class EconomyState extends ChangeNotifier {
     if (isFirstThreeStar) _threeStarStages.add(stageId);
     if (isFirstBoss) _defeatedBosses.add('w$_currentWorld');
 
-    // FTUE: mark Stage 1 completion → unblocks home-screen coin chip,
-    // fires Ace's celebration line + the shop-intro suggestion.
+    // FTUE: mark Stage 1 completion → unblocks home-screen coin chip.
     if (_currentWorld == 1 &&
         _currentStage == 1 &&
         !_firedFtueTriggers.contains(FtueTriggers.stage1Completed)) {
       _firedFtueTriggers.add(FtueTriggers.stage1Completed);
-      // "Hell yes! That's how it's done!" — one-shot via shownAceLines.
-      requestAceLine(AceLineKeys.ftueStage1Clear);
     }
-
-    // v2 challenge reveal trigger: once the player has crossed the
-    // level-4 gate (markChallengeRevealed already ran inside addXP),
-    // the reveal cinematic fires on the very next stage-clear return
-    // to the home screen. The cinematic is responsible for marking the
-    // FtueTriggers.challengeRevealCinematicShown one-shot when it ends.
-    final shouldShowChallengeReveal = _challengeRevealed &&
-        !_firedFtueTriggers
-            .contains(FtueTriggers.challengeRevealCinematicShown);
 
     // Reset per-stage session state.
     _accumulatedRunCoins = 0;
@@ -739,14 +689,13 @@ class EconomyState extends ChangeNotifier {
     notifyListeners();
     return StageClearOutcome(
       reward: Reward(coins: coins, gems: gems),
-      shouldShowChallengeReveal: shouldShowChallengeReveal,
       newlyUnlockedPowerUps: const <String>[],
     );
   }
 
   /// Test/debug-only helper: drives the same code path as a real
   /// gameplay-loop stage clear. Use from the long-press LAUNCH debug
-  /// hook to simulate a Stage 3 clear and trigger the reveal cinematic.
+  /// hook to simulate a Stage 3 clear.
   StageClearOutcome debugSimulateStageClear({
     required int world,
     required int stage,
@@ -829,6 +778,35 @@ class EconomyState extends ChangeNotifier {
     if (!spendCoins(price)) return false;
     _powerUpInventory[powerUpId] =
         (_powerUpInventory[powerUpId] ?? 0) + packSize;
+    _scheduleSync();
+    notifyListeners();
+    return true;
+  }
+
+  /// Adds [count] copies of [powerUpId] to the inventory without charging
+  /// coins. Used by call sites (e.g. the v2 shop tab) that source pricing
+  /// from Remote Config and have already handled the spend themselves.
+  void grantPowerUp(String powerUpId, {int count = 1}) {
+    if (count <= 0) return;
+    _powerUpInventory[powerUpId] =
+        (_powerUpInventory[powerUpId] ?? 0) + count;
+    _scheduleSync();
+    notifyListeners();
+  }
+
+  /// Removes [count] copies of [powerUpId] from the inventory. Returns
+  /// true if the inventory had enough to deduct; false (no mutation) if
+  /// not. Used when the player consumes a stockpiled power-up.
+  bool consumePowerUp(String powerUpId, {int count = 1}) {
+    if (count <= 0) return false;
+    final have = _powerUpInventory[powerUpId] ?? 0;
+    if (have < count) return false;
+    final remaining = have - count;
+    if (remaining == 0) {
+      _powerUpInventory.remove(powerUpId);
+    } else {
+      _powerUpInventory[powerUpId] = remaining;
+    }
     _scheduleSync();
     notifyListeners();
     return true;
@@ -1266,9 +1244,7 @@ class EconomyState extends ChangeNotifier {
       challengeTarget: _challengeTarget,
       challenge100Claimed: _challenge100ClaimedThisCycle,
       challengeRevealed: _challengeRevealed,
-      aceDialogueEnabled: _aceDialogueEnabled,
       firedFtueTriggers: Set<String>.from(_firedFtueTriggers),
-      shownAceLines: Set<String>.from(_shownAceLines),
     );
     await _persistence.save(snap);
   }
@@ -1299,46 +1275,8 @@ class EconomyState extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
-  // Ace dialogue + FTUE triggers (GDD v1.3 §10)
+  // FTUE triggers (GDD v1.3 §10)
   // ---------------------------------------------------------------------------
-
-  /// Toggles whether Ace dialogue overlays should appear at all. Wired
-  /// to the Settings switch and to the master-skip confirmation prompt.
-  void setAceDialogueEnabled(bool enabled) {
-    if (_aceDialogueEnabled == enabled) return;
-    _aceDialogueEnabled = enabled;
-    _scheduleSync();
-    notifyListeners();
-  }
-
-  /// Returns true when [key] is an FTUE-track line that should fire only
-  /// once. We use the `ftue_` prefix as the convention.
-  bool _isOneShotLine(String key) => key.startsWith('ftue_');
-
-  /// Queues an Ace dialogue line for presentation. The host UI listens
-  /// to `pendingAceLine`, shows the overlay, and calls
-  /// [consumePendingAceLine] when dismissed.
-  ///
-  /// No-op if dialogue is disabled, the line is already shown
-  /// (one-shot rule for `ftue_*` lines), or [_pendingAceLine] is
-  /// already set (we never queue two lines).
-  void requestAceLine(String key) {
-    if (!_aceDialogueEnabled) return;
-    if (_pendingAceLine != null) return;
-    if (_isOneShotLine(key) && _shownAceLines.contains(key)) return;
-    _pendingAceLine = key;
-    _shownAceLines.add(key);
-    _scheduleSync();
-    notifyListeners();
-  }
-
-  /// Clears the pending Ace line — called by the overlay widget after
-  /// it has been displayed and dismissed.
-  void consumePendingAceLine() {
-    if (_pendingAceLine == null) return;
-    _pendingAceLine = null;
-    notifyListeners();
-  }
 
   /// Records that an FTUE one-time trigger has fired. Subsequent calls
   /// for the same trigger are no-ops.
@@ -1358,22 +1296,18 @@ class EconomyState extends ChangeNotifier {
   // Each method below mutates state directly and persists.
   // ---------------------------------------------------------------------------
 
-  /// Clears all FTUE-track flags so Ace's intro lines fire again on the
-  /// next pre-mission popup, the coin chip hides until Stage 1 first
-  /// clear, and the Stage 3 reveal can replay. Does NOT touch wallets or
-  /// progression.
+  /// Clears all FTUE-track flags so the coin chip hides until Stage 1
+  /// first clear and the Stage 3 reveal can replay. Does NOT touch
+  /// wallets or progression.
   void debugReplayFtue() {
     _firedFtueTriggers.clear();
-    _shownAceLines.clear();
     _challengeRevealed = false;
     _activeChallengeType = null;
     _challengeStartedAt = null;
     _challengeProgress = 0;
     _challengeTarget = 0;
     _challenge100ClaimedThisCycle = false;
-    _pendingAceLine = null;
     _pendingMilestoneToast = null;
-    _aceDialogueEnabled = true;
     _scheduleSync();
     notifyListeners();
   }
@@ -1470,10 +1404,7 @@ class EconomyState extends ChangeNotifier {
     _challengeTarget = 0;
     _challenge100ClaimedThisCycle = false;
     _challengeRevealed = false;
-    _aceDialogueEnabled = true;
     _firedFtueTriggers.clear();
-    _shownAceLines.clear();
-    _pendingAceLine = null;
     _pendingMilestoneToast = null;
     await _persist();
     notifyListeners();

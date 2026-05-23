@@ -32,7 +32,7 @@ extension ChallengeTypeJson on ChallengeType {
     }
   }
 
-  /// Display label shown on the operation banner and reveal sequence.
+  /// Display label shown on the operation banner.
   String get displayName {
     switch (this) {
       case ChallengeType.newPlayers:
@@ -48,7 +48,7 @@ extension ChallengeTypeJson on ChallengeType {
     }
   }
 
-  /// One-line description used by the reveal sequence and detail screen.
+  /// One-line description used by the challenge detail screen.
   String get description {
     switch (this) {
       case ChallengeType.newPlayers:

@@ -120,8 +120,8 @@ class DevToolsSheet extends StatelessWidget {
               _DevAction(
                 title: 'Replay FTUE',
                 subtitle:
-                    "Clears Ace dialogue history + Stage 3 reveal + Stage 1 "
-                    'completion flag. Wallets, level and progression preserved.',
+                    'Clears Stage 3 reveal + Stage 1 completion flag. '
+                    'Wallets, level and progression preserved.',
                 onConfirmed: (economy) async => economy.debugReplayFtue(),
                 confirmLabel: 'REPLAY',
               ),
@@ -129,8 +129,8 @@ class DevToolsSheet extends StatelessWidget {
               _DevAction(
                 title: 'Reset challenge cycle',
                 subtitle:
-                    'Wipes the active 72h cycle so long-press LAUNCH re-fires '
-                    'the Stage 3 reveal sequence.',
+                    'Wipes the active 72h cycle and re-locks the challenge '
+                    'reveal flag so a fresh cycle starts on next reveal.',
                 onConfirmed: (economy) async =>
                     economy.debugResetChallengeCycle(),
                 confirmLabel: 'RESET',
@@ -140,8 +140,7 @@ class DevToolsSheet extends StatelessWidget {
                 title: 'Sim Stage 1 clear',
                 subtitle:
                     'Awards a 3★ Stage 1 clear (≈600 coins + 2 gems) and '
-                    "fires Ace's \"Hell yes!\" line + the home-screen "
-                    'coin chip reveal.',
+                    'reveals the home-screen coin chip.',
                 onConfirmed: (economy) async =>
                     economy.debugSimulateStage1Clear(),
                 confirmLabel: 'CLEAR',
@@ -683,7 +682,6 @@ class _StateSummary extends StatelessWidget {
             ),
             Text('streak: day ${economy.streakDay} (longest '
                 '${economy.longestStreak})'),
-            Text('ace lines shown: ${economy.shownAceLines.length}'),
             Text('FTUE triggers fired: ${economy.firedFtueTriggers.length}'),
           ],
         ),

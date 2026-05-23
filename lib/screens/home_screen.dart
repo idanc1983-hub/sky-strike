@@ -4,11 +4,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
-import '../economy/constants/ace_dialogue_catalog.dart';
-import '../economy/services/ftue_triggers.dart';
+import '../economy/state/challenge_state.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/challenge_prizes_popup.dart';
-import '../economy/ui/challenge_reveal_sequence.dart';
 import '../economy/ui/pre_mission_popup.dart';
 import '../economy/ui/snake_offer_popup.dart';
 import '../economy/ui/three_plus_one_offer_popup.dart';
@@ -696,11 +694,10 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  /// Long-press LAUNCH debug hook: simulates a stage clear so the
-  /// challenge reveal sequence can be tested without the real gameplay
-  /// loop. Per v2, the gate is now player level 4 (set via Dev Tools);
-  /// markChallengeRevealed is idempotent so this stays safe after the
-  /// gate has already fired automatically.
+  /// Long-press LAUNCH debug hook: simulates a Stage 3 clear and reveals
+  /// the challenge system if it's still locked. Per v2 the gate is player
+  /// level 4 (set via Dev Tools); [EconomyState.markChallengeRevealed]
+  /// is idempotent so this stays safe after the gate has already fired.
   Future<void> _onLaunchLongPressed(EconomyState economy) async {
     final outcome = economy.debugSimulateStageClear(
       world: 1,
@@ -711,26 +708,16 @@ class _HomeScreenState extends State<HomeScreen>
       simulatedRunCoins: 600,
     );
     if (!mounted) return;
-    if (outcome.shouldShowChallengeReveal) {
-      economy.markChallengeRevealed();
-      final type = economy.activeChallengeType;
-      if (type != null) {
-        await ChallengeRevealSequence.show(context, type);
-        if (!mounted) return;
-        economy.markFtueTriggerFired(
-          FtueTriggers.challengeRevealCinematicShown,
-        );
-        economy.requestAceLine(AceLineKeys.aceChallengeRevealClose);
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Challenge already revealed. Awarded ${outcome.reward.coins} coins.',
-          ),
+    economy.markChallengeRevealed();
+    final type = economy.activeChallengeType;
+    final label = type?.displayName ?? 'no active cycle';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Stage 3 sim → $label. Awarded ${outcome.reward.coins} coins.',
         ),
-      );
-    }
+      ),
+    );
   }
 }
 

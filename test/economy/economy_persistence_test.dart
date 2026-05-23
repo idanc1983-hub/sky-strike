@@ -57,14 +57,9 @@ void main() {
         challengeTarget: 156,
         challenge100Claimed: false,
         challengeRevealed: true,
-        aceDialogueEnabled: false,
         firedFtueTriggers: const {
           'stage1_completed',
           'milestone_level_10',
-        },
-        shownAceLines: const {
-          'ftue_pre_mission_1',
-          'ftue_stage_1_clear',
         },
       );
       await p.save(original);
@@ -97,9 +92,7 @@ void main() {
       expect(restored.challengeTarget, 156);
       expect(restored.challenge100Claimed, isFalse);
       expect(restored.challengeRevealed, isTrue);
-      expect(restored.aceDialogueEnabled, isFalse);
       expect(restored.firedFtueTriggers, original.firedFtueTriggers);
-      expect(restored.shownAceLines, original.shownAceLines);
     });
 
     test('empty SharedPreferences returns defaults', () async {
@@ -113,9 +106,7 @@ void main() {
       expect(snap.adsRemoved, isFalse);
       expect(snap.challengeRevealed, isFalse);
       expect(snap.activeChallengeType, isNull);
-      expect(snap.aceDialogueEnabled, isTrue);
       expect(snap.firedFtueTriggers, isEmpty);
-      expect(snap.shownAceLines, isEmpty);
     });
   });
 }

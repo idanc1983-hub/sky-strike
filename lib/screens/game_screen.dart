@@ -5,13 +5,12 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../economy/constants/ace_dialogue_catalog.dart';
 import '../economy/constants/ad_placement_catalog.dart';
 import '../economy/constants/economy_constants.dart';
+import '../economy/constants/power_up_catalog.dart';
 import '../economy/services/ads_service.dart';
 import '../economy/services/ftue_triggers.dart';
 import '../economy/state/economy_state.dart';
-import '../economy/ui/ace_dialogue_overlay.dart';
 import '../game/models.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,6 +140,10 @@ class _GameScreenState extends State<GameScreen>
   /// to [kDefaultWavesPerLevel] before world/stage init, then is overwritten
   /// in the init flow once `_world` + `_stage` are known.
   int _maxWave = kDefaultWavesPerLevel;
+  /// Whether this stage's RC entry declares a boss tier. Overwritten in
+  /// the init flow alongside [_maxWave]. Non-boss stages skip the wave-N
+  /// boss encounter and clear directly after the final enemy wave.
+  bool _isBossStage = true;
   int _waveTarget = 0;      // kill quota for this wave (= pool size)
   int _waveKilled = 0;
   int _waveChipPulseFrames = 0;
@@ -329,6 +332,7 @@ class _GameScreenState extends State<GameScreen>
       _diff = getDifficulty(_stage);
       _activeTiers = activeEnemyTiersForLevel(_world, _stage);
       _maxWave = wavesForLevel(_world, _stage);
+      _isBossStage = isBossLevel(_world, _stage);
       _argsLoaded = true;
       _loadAllAssets();
     }
@@ -378,12 +382,6 @@ class _GameScreenState extends State<GameScreen>
     // mounted-check and now — createTicker after dispose throws.
     if (!mounted) return;
     _ticker = createTicker(_onTick)..start();
-    // Wave 1 FTUE line (Stage 1 only) — request after the first frame so
-    // the AceDialogueListener is mounted and ready to present.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _maybeFireWaveStartLine(1);
-    });
   }
 
   Future<ui.Image?> _loadUiImage(String assetPath) async {
@@ -891,6 +889,14 @@ class _GameScreenState extends State<GameScreen>
     final rates = _isBoostWave ? kBoostDropRates : normalDropRates(_world, _currentWave);
 
     for (final entry in rates.entries) {
+      // Gate by RC unlock_biome — power-ups that the player hasn't reached
+      // the unlock biome for shouldn't drop. Types without a catalog id
+      // (hp, coins) drop in every biome.
+      final id = entry.key.catalogId;
+      if (id != null) {
+        final unlock = PowerUpCatalog.unlockBiome[id];
+        if (unlock != null && unlock > _world) continue;
+      }
       if (_rng.nextDouble() < entry.value) {
         _pickups.add(_Pickup(x: x, y: y, type: entry.key));
         break;
@@ -1017,12 +1023,6 @@ class _GameScreenState extends State<GameScreen>
       if (!mounted) return;
       _advanceWave();
     });
-
-    // Surface the next wave's FTUE intro now — same trigger point as
-    // before; the bubble runs concurrently with the new wave entry stagger.
-    // Only fires on Stage 1 for the two pre-boss transitions.
-    final upcoming = _currentWave + 1;
-    if (upcoming < _maxWave) _maybeFireWaveStartLine(upcoming);
   }
 
   void _spawnWaveClearFloat() {
@@ -1050,7 +1050,14 @@ class _GameScreenState extends State<GameScreen>
     _waveClearPending = false;
     _currentWave++;
     _waveChipPulseFrames = 12;
-    if (_currentWave >= _maxWave) {
+    if (_currentWave > _maxWave) {
+      // Non-boss stage: cleared the final enemy wave → stage clears
+      // directly without spawning a boss. (Boss stages never reach this
+      // branch because the boss wave starts at _currentWave == _maxWave
+      // and exits via the boss explosion → stageClear path.)
+      _saveStageResult(cleared: true);
+      _phase = _Phase.stageClear;
+    } else if (_currentWave >= _maxWave && _isBossStage) {
       // Boss transition still does a hard reset — boss entry has its own
       // fly-in/red-flash sequence.
       _enemyBullets.clear();
@@ -1192,7 +1199,6 @@ class _GameScreenState extends State<GameScreen>
         firedTriggers: economy.firedFtueTriggers,
       )) {
         economy.markFtueTriggerFired(FtueTriggers.stage1FreeReviveUsed);
-        economy.requestAceLine(AceLineKeys.ftueFirstDeath);
         _applyRevive(consumeOneShot: false);
         return;
       }
@@ -1264,19 +1270,19 @@ class _GameScreenState extends State<GameScreen>
     if (_playerGems < revivePrice(_waveAtDeath)) return;
     _playerGems -= revivePrice(_waveAtDeath);
     _applyRevive();
-    context.read<EconomyState>().requestAceLine(AceLineKeys.ftueReviveYes);
   }
 
   void _applyRevive({bool consumeOneShot = true}) {
     if (consumeOneShot) _reviveUsed = true;
     _hp = _maxHp;
-    if (_currentWave >= _maxWave) {
+    final inBossPhase = _isBossStage && _currentWave >= _maxWave;
+    if (inBossPhase) {
       _bossHp = (_bossHpAtDeath * _bossMaxHp).round().clamp(1, _bossMaxHp);
       _bossExploding = false;
     }
     _playerInvincible = true;
     _invincibleFrames = _kInvincibleDuration;
-    _phase = _currentWave >= _maxWave ? _Phase.boss : _Phase.wave;
+    _phase = inBossPhase ? _Phase.boss : _Phase.wave;
   }
 
   Future<void> _watchAdToRevive() async {
@@ -1295,7 +1301,6 @@ class _GameScreenState extends State<GameScreen>
         _adInFlight = false;
         _applyRevive();
       });
-      economy.requestAceLine(AceLineKeys.ftueReviveYes);
     } else {
       setState(() => _adInFlight = false);
       _showAdSnack(_messageForAdOutcome(outcome.result));
@@ -1318,18 +1323,6 @@ class _GameScreenState extends State<GameScreen>
       setState(() => _adInFlight = false);
       _showAdSnack(_messageForAdOutcome(outcome.result));
     }
-  }
-
-  void _maybeFireWaveStartLine(int wave) {
-    if (_world != 1 || _stage != 1) return;
-    final key = switch (wave) {
-      1 => AceLineKeys.ftueWave1Start,
-      2 => AceLineKeys.ftueWave2Start,
-      3 => AceLineKeys.ftueWave3Start,
-      _ => null,
-    };
-    if (key == null) return;
-    context.read<EconomyState>().requestAceLine(key);
   }
 
   String _messageForAdOutcome(AdShowResult r) {
@@ -1393,8 +1386,7 @@ class _GameScreenState extends State<GameScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFF0a1a0a),
-      body: AceDialogueListener(
-        child: GestureDetector(
+      body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanUpdate: (d) {
           if (_phase != _Phase.wave && _phase != _Phase.boss) return;
@@ -1512,7 +1504,6 @@ class _GameScreenState extends State<GameScreen>
             if (_phase == _Phase.paused)     _buildPauseOverlay(),
           ],
         ),
-      ),
       ),
     );
   }
@@ -1862,7 +1853,7 @@ class _GameScreenState extends State<GameScreen>
           _statRow('Score', '$_totalScore', const Color(0xFFC0DD97)),
           _statRow('Wave reached', '$_waveAtDeath', const Color(0xFFEF9F27)),
           _statRow('Best combo', '×$_bestCombo', const Color(0xFF97C459)),
-          if (_waveAtDeath >= _maxWave)
+          if (_isBossStage && _waveAtDeath >= _maxWave)
             _statRow('Boss HP left',
                 '${(_bossHpAtDeath * 100).round()}%', const Color(0xFFE24B4A)),
 
@@ -1882,7 +1873,7 @@ class _GameScreenState extends State<GameScreen>
               ),
               child: Column(children: [
                 Text(
-                  _waveAtDeath >= _maxWave
+                  (_isBossStage && _waveAtDeath >= _maxWave)
                       ? 'Return to boss fight?'
                       : 'Continue from Wave $_waveAtDeath?',
                   style: const TextStyle(
@@ -1903,7 +1894,7 @@ class _GameScreenState extends State<GameScreen>
                 const Text('Restores full HP · one time only',
                     style: TextStyle(
                         color: Color(0xFF885555), fontSize: 9)),
-                if (_waveAtDeath >= _maxWave)
+                if (_isBossStage && _waveAtDeath >= _maxWave)
                   const Text('Boss HP preserved',
                       style: TextStyle(
                           color: Color(0xFF885555), fontSize: 9)),
@@ -1948,12 +1939,10 @@ class _GameScreenState extends State<GameScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _overlayBtn('Retry Stage', const Color(0xFF3B6D11), () {
-                _maybeFireReviveDeclined(canRevive);
                 setState(_fullReset);
               }),
               const SizedBox(width: 12),
               _overlayBtn('Home', const Color(0xFF1a1a1a), () {
-                _maybeFireReviveDeclined(canRevive);
                 Navigator.pop(context);
               }),
             ],
@@ -1961,11 +1950,6 @@ class _GameScreenState extends State<GameScreen>
         ],
       ),
     );
-  }
-
-  void _maybeFireReviveDeclined(bool hadReviveOption) {
-    if (!hadReviveOption) return;
-    context.read<EconomyState>().requestAceLine(AceLineKeys.ftueReviveNo);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2625,12 +2609,18 @@ class _PowerUpTrayState extends State<_PowerUpTray>
   late final Map<PowerUpType, _TraySlot> _slots;
   final Map<PowerUpType, AnimationController> _controllers = {};
 
+  // Slot cap — tray displays at most this many charges per power-up.
+  // Extra stock stays in [EconomyState.powerUpInventory] and refills the
+  // tray on stage retry as charges are consumed.
+  static const int _kSlotCap = 3;
+
   @override
   void initState() {
     super.initState();
     _slots = {
       for (final type in kCollectibleSlots) type: _TraySlot(count: 0),
     };
+    _hydrateFromInventory();
   }
 
   @override
@@ -2639,10 +2629,23 @@ class _PowerUpTrayState extends State<_PowerUpTray>
     super.dispose();
   }
 
+  /// Seeds slot counts from [EconomyState.powerUpInventory]. Called on
+  /// mount and on full stage reset so purchases / pre-mission top-ups
+  /// land in the tray before the run starts.
+  void _hydrateFromInventory() {
+    final inventory = context.read<EconomyState>().powerUpInventory;
+    for (final type in kCollectibleSlots) {
+      final id = type.catalogId;
+      if (id == null) continue;
+      final owned = inventory[id] ?? 0;
+      _slots[type]!.count = owned > _kSlotCap ? _kSlotCap : owned;
+    }
+  }
+
   // Called by parent when a collectible orb is picked up
   void addCharge(PowerUpType type) {
     if (!mounted) return;
-    if (_slots[type]!.count >= 3) return;
+    if (_slots[type]!.count >= _kSlotCap) return;
     setState(() => _slots[type]!.count++);
   }
 
@@ -2656,6 +2659,7 @@ class _PowerUpTrayState extends State<_PowerUpTray>
         _slots[type]!.count = 0;
         _slots[type]!.isActive = false;
       }
+      _hydrateFromInventory();
     });
   }
 
@@ -2678,6 +2682,13 @@ class _PowerUpTrayState extends State<_PowerUpTray>
       slot.count--;
       slot.isActive = true;
     });
+    // Decrement the persistent stockpile. consumePowerUp no-ops when the
+    // inventory is already 0, which is the right behavior for charges
+    // that came from in-stage pickups beyond what the player owned.
+    final id = type.catalogId;
+    if (id != null) {
+      context.read<EconomyState>().consumePowerUp(id);
+    }
     widget.onActivate(type);
     _controllers[type]?.dispose();
     _controllers.remove(type);

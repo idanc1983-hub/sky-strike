@@ -106,54 +106,14 @@ class PowerUpCatalog {
     10: 0.30,
   };
 
-  /// Returns the slot-icon asset path for [id]. Falls back to a
-  /// known-existing sprite when no slot variant is on disk.
-  static String slotIcon(String id) {
-    switch (id) {
-      case 'bomb':
-        return 'assets/ui/pu_bomb_slot.png';
-      case 'magnet':
-        return 'assets/ui/pu_magnet_slot.png';
-      case 'laser':
-        return 'assets/ui/pu_laser_slot.png';
-      case 'ghost_mode':
-        return 'assets/ui/pu_ghost_slot.png';
-      case 'freeze_time':
-        return 'assets/ui/pu_freeze_slot.png';
-      case 'rapid_fire':
-        return 'assets/ui/pu_rapidfire.png';
-      case 'speed_boost':
-        return 'assets/ui/pu_speed.png';
-      case 'shield':
-        return 'assets/ui/pu_shield.png';
-      case 'split_shot':
-        return 'assets/ui/pu_split_shot_slot.png';
-      case 'drone_wingman':
-        return 'assets/ui/pu_drone_slot.png';
-      default:
-        return 'assets/ui/pu_bomb_slot.png';
-    }
-  }
+  /// Returns the slot-icon asset path for [id]. All deployed slot files
+  /// follow the `pu_<id>_slot.png` convention so the path can be derived
+  /// directly from the catalog id.
+  static String slotIcon(String id) => 'assets/ui/pu_${id}_slot.png';
 
-  /// Returns the in-world drop-sprite asset path for [id].
-  static String dropSprite(String id) {
-    switch (id) {
-      case 'bomb':
-        return 'assets/ui/pu_bomb_drop.png';
-      case 'magnet':
-        return 'assets/ui/pu_magnet_drop.png';
-      case 'laser':
-        return 'assets/ui/pu_laser_drop.png';
-      case 'ghost_mode':
-        return 'assets/ui/pu_ghost_drop.png';
-      case 'freeze_time':
-        return 'assets/ui/pu_freeze_drop.png';
-      case 'drone_wingman':
-        return 'assets/ui/pu_drone_drop.png';
-      default:
-        return slotIcon(id);
-    }
-  }
+  /// Returns the in-world drop-sprite asset path for [id]. Deployed
+  /// under the `pu_<id>_drop.png` convention.
+  static String dropSprite(String id) => 'assets/ui/pu_${id}_drop.png';
 
   static Map<int, List<String>> _byWorld() {
     final out = <int, List<String>>{for (var w = 1; w <= 6; w++) w: []};

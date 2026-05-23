@@ -20,14 +20,6 @@ class FtueTriggers {
   static const stage1FreeReviveUsed = 'stage1_free_revive_used';
 
   // ---------------------------------------------------------------------------
-  // Master skip + dialogue gating — GDD §10.3
-  // ---------------------------------------------------------------------------
-
-  /// Fired on the FIRST time the player taps the X on an Ace bubble.
-  /// Drives the one-time "Skip Ace's lines?" confirmation modal.
-  static const aceMasterSkipPrompted = 'ace_master_skip_prompted';
-
-  // ---------------------------------------------------------------------------
   // Long-term milestones — fire-once gates
   // ---------------------------------------------------------------------------
 
@@ -45,12 +37,6 @@ class FtueTriggers {
 
   /// Player bought their first jet from the shop.
   static const milestoneFirstJet = 'milestone_first_jet';
-
-  /// One-shot: the challenge-reveal cinematic has been shown to the
-  /// player. Set after the cinematic plays so it never replays. Driven
-  /// by v2 challenge unlock (player crosses level 4).
-  static const challengeRevealCinematicShown =
-      'challenge_reveal_cinematic_shown';
 }
 
 /// Pure-function decision rules for the FTUE forced behaviors. The

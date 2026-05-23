@@ -36,7 +36,7 @@ class EconomySnapshot {
   final DateTime? installDate;
   final int pendingNextJetDiscountPct;
 
-  // v1.3 additions — Challenge System + Ace + FTUE
+  // v1.3 additions — Challenge System + FTUE
   final ChallengeType? activeChallengeType;
   final DateTime? challengeStartedAt;
   final int challengeProgress;
@@ -46,9 +46,7 @@ class EconomySnapshot {
   // dropped on load.
   final bool challenge100Claimed;
   final bool challengeRevealed;
-  final bool aceDialogueEnabled;
   final Set<String> firedFtueTriggers;
-  final Set<String> shownAceLines;
 
   const EconomySnapshot({
     required this.coins,
@@ -81,9 +79,7 @@ class EconomySnapshot {
     required this.challengeTarget,
     required this.challenge100Claimed,
     required this.challengeRevealed,
-    required this.aceDialogueEnabled,
     required this.firedFtueTriggers,
-    required this.shownAceLines,
   });
 
   /// Brand-new player defaults — used when SharedPreferences has no
@@ -123,9 +119,7 @@ class EconomySnapshot {
       challengeTarget: 0,
       challenge100Claimed: false,
       challengeRevealed: false,
-      aceDialogueEnabled: true,
       firedFtueTriggers: <String>{},
-      shownAceLines: <String>{},
     );
   }
 }
@@ -272,10 +266,8 @@ class EconomyPersistence {
         challengeTarget: _readInt(decoded['challengeTarget']) ?? 0,
         challenge100Claimed: decoded['challenge100Claimed'] == true,
         challengeRevealed: decoded['challengeRevealed'] == true,
-        aceDialogueEnabled: decoded['aceDialogueEnabled'] != false,
         firedFtueTriggers:
             _decodeStringSetDynamic(decoded['firedFtueTriggers']),
-        shownAceLines: _decodeStringSetDynamic(decoded['shownAceLines']),
       ));
     } catch (_) {
       return null;
@@ -318,9 +310,7 @@ class EconomyPersistence {
       challengeTarget: prefs.getInt(_kChallengeTarget) ?? 0,
       challenge100Claimed: prefs.getBool(_kChallenge100Claimed) ?? false,
       challengeRevealed: prefs.getBool(_kChallengeRevealed) ?? false,
-      aceDialogueEnabled: prefs.getBool(_kAceDialogueEnabled) ?? true,
       firedFtueTriggers: _decodeStringSet(prefs.getString(_kFiredFtueTriggers)),
-      shownAceLines: _decodeStringSet(prefs.getString(_kShownAceLines)),
     ));
   }
 
@@ -373,9 +363,7 @@ class EconomyPersistence {
       'challengeTarget': s.challengeTarget,
       'challenge100Claimed': s.challenge100Claimed,
       'challengeRevealed': s.challengeRevealed,
-      'aceDialogueEnabled': s.aceDialogueEnabled,
       'firedFtueTriggers': s.firedFtueTriggers.toList(),
-      'shownAceLines': s.shownAceLines.toList(),
     };
   }
 
@@ -442,9 +430,7 @@ class EconomyPersistence {
       challengeTarget: _clampInt(s.challengeTarget, 0, _Caps.challengeMax, 0),
       challenge100Claimed: s.challenge100Claimed,
       challengeRevealed: s.challengeRevealed,
-      aceDialogueEnabled: s.aceDialogueEnabled,
       firedFtueTriggers: s.firedFtueTriggers,
-      shownAceLines: s.shownAceLines,
     );
   }
 

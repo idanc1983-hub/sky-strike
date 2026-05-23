@@ -218,6 +218,16 @@ int wavesForLevel(int world, int stage) {
   return cfg?.waves ?? kDefaultWavesPerLevel;
 }
 
+/// Whether the supplied `(world, stage)` is a boss level — i.e. the RC
+/// `enemies` list contains a `boss` tier entry with `count > 0`. When
+/// RC has no entry for this level, defaults to true so the legacy
+/// "wave 10 is always boss" behavior holds.
+bool isBossLevel(int world, int stage) {
+  final cfg = LevelConfig.fromRc(world: world, stage: stage);
+  if (cfg == null) return true;
+  return cfg.isBossLevel;
+}
+
 /// Boss HP for the supplied `(world, stage)`. Computed from RC
 /// `boss.power × kBossHpPerPowerPoint`; falls back to the per-world
 /// hardcode when RC has no entry or no boss tier on this level.

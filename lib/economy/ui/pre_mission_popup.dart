@@ -1,12 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_typography.dart';
 import '../../shared/widgets/asset_placeholder.dart';
-import '../constants/ace_dialogue_catalog.dart';
 import '../constants/economy_constants.dart';
 import '../constants/power_up_catalog.dart';
 import '../services/pack_pricing.dart';
@@ -15,11 +12,6 @@ import 'coins_offer_popup.dart';
 
 /// Last-chance loadout review before launch. Shows the active loadout's
 /// jet + tray plus a quick-add row of frequently-bought power-ups.
-///
-/// Fires Ace's pre-mission intro lines the first time the player opens
-/// the popup for Stage 1 (FTUE one-shot per GDD §10.4): the first line
-/// requests immediately; the second is scheduled ~1.5s later so the
-/// player gets a chance to dismiss the first before the second lands.
 class PreMissionPopup extends StatefulWidget {
   final int world;
   final int stage;
@@ -47,40 +39,6 @@ class PreMissionPopup extends StatefulWidget {
 }
 
 class _PreMissionPopupState extends State<PreMissionPopup> {
-  Timer? _secondBeatTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    // Only Stage 1's pre-mission popup gates the rookie intro. Later
-    // stages skip Ace entirely — per GDD §10.4 the intro lines are
-    // strictly first-mission territory.
-    if (widget.world != 1 || widget.stage != 1) return;
-    // Schedule Ace's pre-mission lines AFTER the first frame so the
-    // bottom sheet has finished its slide-in animation and the
-    // AceDialogueListener gets a clean overlay context.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final economy = context.read<EconomyState>();
-      economy.requestAceLine(AceLineKeys.ftuePreMission1);
-      // Line 2 follows ~1.5s later — long enough for the player to
-      // dismiss the first bubble before the second is queued.
-      _secondBeatTimer = Timer(const Duration(milliseconds: 1500), () {
-        if (!mounted) return;
-        context.read<EconomyState>().requestAceLine(
-              AceLineKeys.ftuePreMission2,
-            );
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _secondBeatTimer?.cancel();
-    _secondBeatTimer = null;
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final economy = context.watch<EconomyState>();

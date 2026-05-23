@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../economy/ui/ace_settings_tile.dart';
 import '../economy/ui/dev_tools_sheet.dart';
 import 'menu_popup.dart';
 
@@ -230,8 +229,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _sectionLabel('GAME'),
                         const SizedBox(height: 6),
                         _buildGameCard(),
-                        const SizedBox(height: 8),
-                        const AceSettingsTile(),
                         const SizedBox(height: 14),
 
                         _sectionLabel('SUPPORT'),
