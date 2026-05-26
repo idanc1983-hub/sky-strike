@@ -23,9 +23,15 @@ class IapCatalog {
     'coin_tycoon',
   ];
 
+  /// One-shot "full experience" contextual offer fired by the shop when
+  /// the player can't afford a purchase. Sized at 10k coins to match a
+  /// realistic mid-game spend (epic chest + a couple of power-ups).
+  static const String fullExperienceCoinPackId = 'coin_essentials';
+
   /// Combined product id list — the IAP SDK queries platform stores using
   /// this whole set on app launch.
-  static List<String> allIds() => [...mainPackIds, ...contextualCoinPackIds];
+  static List<String> allIds() =>
+      [...mainPackIds, ...contextualCoinPackIds, fullExperienceCoinPackId];
 
   /// Customer-facing USD price for each pack. Localized via the platform
   /// store layer in production; this value is shown unlocalized in dev.
@@ -37,6 +43,7 @@ class IapCatalog {
     'coin_stockup': 0.99,
     'coin_surge': 2.99,
     'coin_tycoon': 4.99,
+    'coin_essentials': 0.99,
   };
 
   /// Player-facing display name.
@@ -48,6 +55,7 @@ class IapCatalog {
     'coin_stockup': 'Coin Stock-Up',
     'coin_surge': 'Coin Surge',
     'coin_tycoon': 'Coin Tycoon',
+    'coin_essentials': 'Coin Essentials',
   };
 
   // ---------------------------------------------------------------------------
@@ -78,6 +86,7 @@ class IapCatalog {
     'coin_stockup': 5000,
     'coin_surge': 18000,
     'coin_tycoon': 35000,
+    'coin_essentials': 10000,
   };
 
   /// Random power-up grants per coin pack.
@@ -85,6 +94,7 @@ class IapCatalog {
     'coin_stockup': 2,
     'coin_surge': 5,
     'coin_tycoon': 10,
+    'coin_essentials': 3,
   };
 
   /// Gems bundled with the larger coin packs.
@@ -92,6 +102,7 @@ class IapCatalog {
     'coin_stockup': 0,
     'coin_surge': 10,
     'coin_tycoon': 25,
+    'coin_essentials': 5,
   };
 
   // ---------------------------------------------------------------------------

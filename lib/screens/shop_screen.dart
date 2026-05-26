@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../config/remote_config_service.dart';
 import '../economy/state/economy_state.dart';
+import '../economy/ui/not_enough_coins_popup.dart';
+import '../shared/widgets/app_top_bar.dart';
 import '../shared/widgets/asset_placeholder.dart';
 
 // ---------------------------------------------------------------------------
@@ -57,7 +59,7 @@ class _ShopScreenState extends State<ShopScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              const _TopBar(),
+              const AppTopBar.full(),
               const SizedBox(height: 8),
               _TabRow(
                 activeIndex: _activeTab,
@@ -79,100 +81,6 @@ class _ShopScreenState extends State<ShopScreen> {
       ),
     );
   }
-}
-
-// =============================================================================
-// Top bar — level + coin/gem chips
-// =============================================================================
-class _TopBar extends StatelessWidget {
-  const _TopBar();
-
-  @override
-  Widget build(BuildContext context) {
-    final economy = context.watch<EconomyState>();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
-        children: [
-          _PillChip(
-            text: 'Lv ${economy.level}',
-            bg: _cGreenDark,
-            textColor: _cGreenLight,
-          ),
-          const Spacer(),
-          _IconChip(
-            asset: 'assets/ui/icon_coin.png',
-            value: _formatNumber(economy.coins),
-            bg: _cGreenDark,
-            textColor: _cGreenPale,
-          ),
-          const SizedBox(width: 6),
-          _IconChip(
-            asset: 'assets/ui/icon_gem.png',
-            value: '${economy.gems}',
-            bg: _cGemBg,
-            textColor: _cAmber,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PillChip extends StatelessWidget {
-  final String text;
-  final Color bg;
-  final Color textColor;
-  const _PillChip({required this.text, required this.bg, required this.textColor});
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: bg.withValues(alpha: 0.85),
-          borderRadius: BorderRadius.circular(5),
-        ),
-        child: Text(text,
-            style: TextStyle(
-                color: textColor, fontSize: 11, fontWeight: FontWeight.w600)),
-      );
-}
-
-class _IconChip extends StatelessWidget {
-  final String asset;
-  final String value;
-  final Color bg;
-  final Color textColor;
-  const _IconChip(
-      {required this.asset,
-      required this.value,
-      required this.bg,
-      required this.textColor});
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: bg.withValues(alpha: 0.85),
-          borderRadius: BorderRadius.circular(5),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(asset,
-                width: 16,
-                height: 16,
-                errorBuilder: AssetPlaceholder.image(
-                    color: _cAmber, label: 'icon', borderRadius: 3)),
-            const SizedBox(width: 4),
-            Text(value,
-                style: TextStyle(
-                    color: textColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600)),
-          ],
-        ),
-      );
 }
 
 // =============================================================================
@@ -566,9 +474,7 @@ class _PowerUpRow extends StatelessWidget {
   void _attemptPurchase(BuildContext context) {
     final economy = context.read<EconomyState>();
     if (!economy.spendCoins(entry.coinPrice)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Not enough coins')),
-      );
+      NotEnoughCoinsPopup.show(context);
       return;
     }
     economy.grantPowerUp(entry.id);
@@ -964,9 +870,7 @@ class _ChestRowActions {
       BuildContext context, _ChestEntry chest, String label) {
     final economy = context.read<EconomyState>();
     if (!economy.spendCoins(chest.coinPrice)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Not enough coins')),
-      );
+      NotEnoughCoinsPopup.show(context);
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1134,11 +1038,15 @@ class _SectionHint extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Image.asset(icon,
-                width: 14,
-                height: 14,
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: Image.asset(
+                icon,
                 errorBuilder: AssetPlaceholder.image(
-                    color: _cAmber, label: 'h', borderRadius: 2)),
+                    color: _cAmber, label: 'h', borderRadius: 2),
+              ),
+            ),
             const SizedBox(width: 6),
             Expanded(
               child: Text(

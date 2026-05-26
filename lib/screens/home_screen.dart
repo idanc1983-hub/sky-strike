@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
+import '../config/remote_config_service.dart';
 import '../economy/state/challenge_state.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/challenge_prizes_popup.dart';
@@ -11,8 +12,8 @@ import '../economy/ui/pre_mission_popup.dart';
 import '../economy/ui/snake_offer_popup.dart';
 import '../economy/ui/three_plus_one_offer_popup.dart';
 import '../game/models.dart';
+import '../shared/widgets/app_top_bar.dart';
 import '../shared/widgets/asset_placeholder.dart';
-import 'menu_popup.dart';
 
 // ---------------------------------------------------------------------------
 // Biome config
@@ -201,10 +202,21 @@ class _HomeScreenState extends State<HomeScreen>
   /// when the launched route returns.
   bool _launchInFlight = false;
 
+  /// Ticks every 30 seconds so the challenge-card countdown stays fresh.
+  /// Display granularity is "Xd Yh remaining" so a 30s cadence is plenty
+  /// without burning frames.
+  Timer? _countdownTimer;
+
   @override
   void initState() {
     super.initState();
     // Ticker is started once all images resolve (see _onImageLoaded).
+    _countdownTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) {
+        if (mounted) setState(() {});
+      },
+    );
   }
 
   @override
@@ -395,6 +407,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     _ticker?.dispose();
+    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -446,7 +459,7 @@ class _HomeScreenState extends State<HomeScreen>
           SafeArea(
             child: Column(
               children: [
-                _buildTopBar(economy),
+                const AppTopBar.full(),
                 _buildOffersRow(),
                 Expanded(child: _buildCentreContent()),
                 _buildChallengeAndLaunch(economy),
@@ -460,127 +473,53 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ---------------------------------------------------------------------------
-  // Top bar — menu button on the left, coins + gems on the right
-  // ---------------------------------------------------------------------------
-  Widget _buildTopBar(EconomyState economy) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _menuButton(),
-          Row(
-            children: [
-              // FTUE: coin chip is hidden until Stage 1 first clear.
-              if (economy.showHomeBalance)
-                _currencyChip(
-                  amount: economy.coins,
-                  asset: 'assets/ui/icon_coin.png',
-                  placeholderLabel: 'coin',
-                  placeholderColor: _cAmber,
-                ),
-              if (economy.showHomeBalance) const SizedBox(width: 8),
-              _currencyChip(
-                amount: economy.gems,
-                asset: 'assets/ui/icon_gem.png',
-                placeholderLabel: 'gem',
-                placeholderColor: const Color(0xFF7BB8FF),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _menuButton() {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => MenuPopup.show(context),
-      child: Container(
-        width: 36,
-        height: 32,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: const Color(0xFF0A1606).withValues(alpha: 0.92),
-          border: Border.all(color: _cAmber.withValues(alpha: 0.55), width: 0.6),
-          borderRadius: BorderRadius.circular(7),
-        ),
-        child: const Icon(Icons.menu, color: _cGreenPale, size: 20),
-      ),
-    );
-  }
-
-  Widget _currencyChip({
-    required int amount,
-    required String asset,
-    required String placeholderLabel,
-    required Color placeholderColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A1606).withValues(alpha: 0.92),
-        border: Border.all(color: _cAmber.withValues(alpha: 0.55), width: 0.6),
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$amount',
-            style: const TextStyle(
-              color: _cGreenPale,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: Image.asset(
-              asset,
-              errorBuilder: AssetPlaceholder.image(
-                color: placeholderColor,
-                label: placeholderLabel,
-                borderRadius: 3,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Offers row — small icons docked under the top bar that open the
-  // limited-time sales popups. Both use placeholder styling today; swap
-  // the inner `Container`s for `Image.asset(...)` once the icon art lands.
+  // Offers row — up to 4 monetization slots, left-aligned. Only offers
+  // marked `active: true` in remote config render; the row hides entirely
+  // when no offers are active.
+  //
+  // Add a new entry to [specs] when a new offer popup is wired. The order
+  // here determines the left-to-right display order.
   // ---------------------------------------------------------------------------
   Widget _buildOffersRow() {
+    final rc = RemoteConfigService.instance;
+    final specs = <_OfferSpec>[
+      _OfferSpec(
+        assetId: '1+2_ironsky',
+        iconAsset: 'assets/ui/home/1plus3_lobby_iron_skies.png',
+        placeholderLabel: '1+3',
+        onTap: () => ThreePlusOneOfferPopup.show(
+          context,
+          assetId: '1+2_ironsky',
+        ),
+      ),
+      _OfferSpec(
+        assetId: 'snake_ironsky',
+        iconAsset: 'assets/ui/home/snake_lobby_iron_skies.png',
+        placeholderLabel: 'SNAKE',
+        onTap: () => SnakeOfferPopup.show(
+          context,
+          assetId: 'snake_ironsky',
+        ),
+      ),
+    ];
+    final active =
+        specs.where((s) => rc.isOfferActive(s.assetId)).take(4).toList();
+    if (active.isEmpty) {
+      return const SizedBox(height: 8);
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          _OfferIcon(
-            asset: 'assets/ui/home/1plus3_lobby_iron_skies.png',
-            placeholderLabel: '1+3',
-            onTap: () => ThreePlusOneOfferPopup.show(
-              context,
-              assetId: '1+2_ironsky',
+          for (int i = 0; i < active.length; i++) ...[
+            if (i > 0) const SizedBox(width: 10),
+            _OfferIcon(
+              asset: active[i].iconAsset,
+              placeholderLabel: active[i].placeholderLabel,
+              onTap: active[i].onTap,
             ),
-          ),
-          const SizedBox(width: 10),
-          _OfferIcon(
-            asset: 'assets/ui/home/snake_lobby_iron_skies.png',
-            placeholderLabel: 'SNAKE',
-            onTap: () => SnakeOfferPopup.show(
-              context,
-              assetId: 'snake_ironsky',
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -629,6 +568,9 @@ class _HomeScreenState extends State<HomeScreen>
     final fraction = target > 0
         ? (progress / target).clamp(0.0, 1.0).toDouble()
         : 0.0;
+    // Live countdown — null when no real cycle exists so the timer row
+    // hides instead of showing a misleading static placeholder.
+    final remaining = view?.remainingFrom(DateTime.now());
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
@@ -642,6 +584,7 @@ class _HomeScreenState extends State<HomeScreen>
             fraction: fraction,
             prizeAsset: _kPlaceholderPrizeAsset,
             prizeAmount: _kPlaceholderPrizeAmount,
+            remaining: remaining,
             onTap: () => ChallengePrizesPopup.show(context),
             // Cycle bg + bar colour are dynamic via remote config. Until
             // the cycle plumbing lands, render the styled fallback.
@@ -927,6 +870,10 @@ class _ChallengeCard extends StatelessWidget {
   final String prizeAsset;
   final int prizeAmount;
 
+  /// Time left in the active cycle, or null when no real cycle exists
+  /// (pre-FTUE / placeholder mode) — in which case the timer row hides.
+  final Duration? remaining;
+
   /// Tap target for the whole card. Opens the prize-ladder popup.
   final VoidCallback onTap;
 
@@ -945,6 +892,7 @@ class _ChallengeCard extends StatelessWidget {
     required this.prizeAsset,
     required this.prizeAmount,
     required this.onTap,
+    this.remaining,
     this.bgAsset,
     this.barColor = _cGreen,
   });
@@ -993,11 +941,62 @@ class _ChallengeCard extends StatelessWidget {
                 prizeAmount: prizeAmount,
                 barColor: barColor,
               ),
+              if (remaining != null) ...[
+                const SizedBox(height: 8),
+                _CountdownRow(remaining: remaining!),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+}
+
+/// Compact "🕐 1d 3h remaining" row. Formats:
+///   - `≥1d`  → `Xd Yh remaining`
+///   - `<1d`  → `Xh Ym remaining`
+///   - `<1h`  → `Xm remaining`
+///   - `=0`   → hidden (cycle has elapsed; caller should refresh state)
+class _CountdownRow extends StatelessWidget {
+  final Duration remaining;
+  const _CountdownRow({required this.remaining});
+
+  @override
+  Widget build(BuildContext context) {
+    if (remaining.inSeconds <= 0) return const SizedBox.shrink();
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(
+          Icons.access_time,
+          color: _cGreenPale,
+          size: 13,
+        ),
+        const SizedBox(width: 5),
+        Text(
+          '${_formatRemaining(remaining)} remaining',
+          style: const TextStyle(
+            color: _cGreenPale,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _formatRemaining(Duration d) {
+    if (d.inDays >= 1) {
+      final h = d.inHours - d.inDays * 24;
+      return '${d.inDays}d ${h}h';
+    }
+    if (d.inHours >= 1) {
+      final m = d.inMinutes - d.inHours * 60;
+      return '${d.inHours}h ${m}m';
+    }
+    final m = d.inMinutes;
+    return '${m < 1 ? 1 : m}m';
   }
 }
 
@@ -1215,6 +1214,24 @@ class _PrizeOverlay extends StatelessWidget {
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// One monetization slot in the home offers row. The row supports up to 4
+// of these and filters them by `RemoteConfigService.isOfferActive`.
+// ---------------------------------------------------------------------------
+class _OfferSpec {
+  final String assetId;
+  final String iconAsset;
+  final String placeholderLabel;
+  final VoidCallback onTap;
+
+  const _OfferSpec({
+    required this.assetId,
+    required this.iconAsset,
+    required this.placeholderLabel,
+    required this.onTap,
+  });
 }
 
 // ---------------------------------------------------------------------------

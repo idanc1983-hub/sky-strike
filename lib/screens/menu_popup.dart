@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../economy/ui/daily_rewards_popup.dart';
+import '../economy/ui/daily_reward_screen.dart';
 import 'settings_screen.dart';
 import 'world_map_screen.dart';
 
@@ -73,7 +73,11 @@ class MenuPopup extends StatelessWidget {
               label: 'Daily Rewards',
               onTap: () {
                 nav.pop();
-                DailyRewardsPopup.show(nav.context);
+                nav.push(
+                  MaterialPageRoute(
+                    builder: (_) => const DailyRewardScreen(),
+                  ),
+                );
               },
             ),
           ],

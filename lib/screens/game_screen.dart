@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -12,6 +13,9 @@ import '../economy/services/ads_service.dart';
 import '../economy/services/ftue_triggers.dart';
 import '../economy/state/economy_state.dart';
 import '../game/models.dart';
+import '../shared/theme/app_colors.dart';
+import '../shared/widgets/app_buttons.dart';
+import '../shared/widgets/result_overlay.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data classes
@@ -1577,27 +1581,22 @@ class _GameScreenState extends State<GameScreen>
           // main Stack so it stays mounted across phase changes —
           // see _GameScreenState.build.
 
-          // Pause button
+          // Pause button — dedicated icon, bottom-right corner. Larger
+          // tap target than the pre-redesign `II` text button so it's
+          // discoverable on first play.
           Positioned(
-            bottom: 8, right: 8,
+            bottom: 14,
+            right: 14,
             child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: () {
                 _prevPhase = _phase;
                 setState(() => _phase = _Phase.paused);
               },
-              child: Container(
-                width: 32, height: 22,
-                decoration: BoxDecoration(
-                  color: const Color(0x99000000),
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(color: const Color(0xFF3B6D11), width: 0.5),
-                ),
-                alignment: Alignment.center,
-                child: const Text('II',
-                    style: TextStyle(
-                        color: Color(0xFF639922),
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold)),
+              child: Icon(
+                Icons.pause_circle_filled,
+                size: 44,
+                color: AppColors.greenLight.withValues(alpha: 0.95),
               ),
             ),
           ),
@@ -1727,97 +1726,77 @@ class _GameScreenState extends State<GameScreen>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildStageClearOverlay() {
-    final avgAcc = _waveAccuracies.isEmpty
-        ? 0
-        : _waveAccuracies.reduce((a, b) => a + b) ~/ _waveAccuracies.length;
-    final maxScore = maxPossibleScore(_world);
-    final got2 = _totalScore >= (maxScore * 0.60).round() && avgAcc >= 70;
-    final got3 = !_reviveUsed &&
-        _totalScore >= (maxScore * 0.85).round() &&
-        avgAcc >= 85;
-    final stars    = got3 ? 3 : got2 ? 2 : 1;
-    final mult     = _rewardDoubled ? 2 : 1;
+    final hpFrac = _hp / _maxHp;
+    // Per redesign decisions, star thresholds are hard-coded:
+    //   1★ = clear the stage
+    //   2★ = clear with HP ≥ 50%
+    //   3★ = clear without taking damage (HP == max)
+    final hp50 = hpFrac >= 0.5;
+    final noDamage = _hp >= _maxHp && !_reviveUsed;
+    final stars = noDamage ? 3 : hp50 ? 2 : 1;
+    final mult = _rewardDoubled ? 2 : 1;
     final baseReward = 500 * mult;
-    final starBonus = (50 + (got2 ? 100 : 0) + (got3 ? 200 : 0)) * mult;
-    final gemBonus  = (got3 ? 1 : 0) * mult;
+    final starBonus = (50 + (hp50 ? 100 : 0) + (noDamage ? 200 : 0)) * mult;
+    final coinsEarned = baseReward + starBonus;
+    final hpPct = (hpFrac * 100).round();
 
-    return Container(
-      color: Colors.black.withValues(alpha: 0.5),
-      alignment: Alignment.center,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('Stage $_stage Complete',
-              style: const TextStyle(
-                  color: Color(0xFFEF9F27),
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 3)),
-          const SizedBox(height: 4),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFEF9F27), width: 0.5),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(worldName(_world).toUpperCase(),
-                style: const TextStyle(
-                    color: Color(0xFFEF9F27),
-                    fontSize: 9,
-                    letterSpacing: 2)),
+    // Biome complete = boss stage cleared. Title + primary CTA change
+    // accordingly; unlock row replaces reward row.
+    final isBiomeClear = _isBossStage;
+
+    return ResultOverlay(
+      stars: stars,
+      title: isBiomeClear
+          ? 'BIOME $_world\nCOMPLETE!'
+          : 'STAGE $_stage\nCOMPLETE',
+      subtitle: '$_totalScore pts  ·  $hpPct% HP',
+      extraContent: isBiomeClear
+          ? _UnlockRow(world: _world, coinBonus: coinsEarned)
+          : _RewardRow(coins: coinsEarned, doubled: _rewardDoubled),
+      buttons: [
+        if (!_rewardDoubled)
+          AppButton.rewardedAd(
+            label: 'Watch Ad - 2x Reward',
+            onPressed: _adInFlight ? null : _watchAdToDoubleReward,
           ),
-          const SizedBox(height: 16),
-          Text('★' * stars + '☆' * (3 - stars),
-              style: const TextStyle(
-                  fontSize: 28, color: Color(0xFFEF9F27))),
-          const SizedBox(height: 14),
-          _statRow('Total score', '$_totalScore', const Color(0xFFC0DD97)),
-          _statRow('Avg accuracy', '$avgAcc%', const Color(0xFF97C459)),
-          _statRow('Best combo', '×$_bestCombo', const Color(0xFFEF9F27)),
-          const SizedBox(height: 10),
-          _statRow('Base reward', '+$baseReward ★', const Color(0xFFEF9F27)),
-          _statRow('Star bonus', '+$starBonus ★', const Color(0xFFEF9F27)),
-          if (gemBonus > 0)
-            _statRow('3★ bonus', '+$gemBonus 💎', const Color(0xFF97C459)),
-          const SizedBox(height: 18),
-          if (_rewardDoubled)
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0x222B6D11),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: const Color(0xFF97C459), width: 0.5),
-              ),
-              child: const Text('Reward Doubled ✓',
-                  style: TextStyle(
-                      color: Color(0xFFC0DD97),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.5)),
-            )
-          else
-            _watchAdButton(
-              label: 'Watch Ad — 2× Reward',
-              onTap: _watchAdToDoubleReward,
-            ),
-          const SizedBox(height: 18),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _overlayBtn('Next Stage →', const Color(0xFF3B6D11),
-                  () => Navigator.pop(context,
-                      {'stageDelta': 1, 'score': _totalScore})),
-              const SizedBox(width: 12),
-              _overlayBtn('Home', const Color(0xFF1a1a1a),
-                  () => Navigator.pop(context)),
-            ],
-          ),
-        ],
-      ),
+        AppButton.secondary(
+          label: 'Home',
+          onPressed: () => Navigator.pop(context),
+        ),
+        AppButton.primary(
+          label: isBiomeClear ? 'Next Biome' : 'Next Stage',
+          leadingIcon: Icons.play_arrow_rounded,
+          onPressed: () => _onNextStage(isBiomeClear: isBiomeClear),
+        ),
+      ],
     );
+  }
+
+  /// Advances to the next stage. Biome clear gets a 1.2s fade-zoom
+  /// cinematic before returning so the player feels the biome change.
+  Future<void> _onNextStage({required bool isBiomeClear}) async {
+    if (isBiomeClear) {
+      await _playBiomeTransition();
+      if (!mounted) return;
+    }
+    if (!mounted) return;
+    Navigator.pop(context, {'stageDelta': 1, 'score': _totalScore});
+  }
+
+  /// 1.2s fade-zoom transition shown after Biome Complete. Lightweight
+  /// stub per redesign decision — full cinematic art comes later.
+  Future<void> _playBiomeTransition() async {
+    if (!mounted) return;
+    final completer = Completer<void>();
+    final entry = OverlayEntry(
+      builder: (_) => const _BiomeTransitionOverlay(),
+    );
+    Overlay.of(context).insert(entry);
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      entry.remove();
+      completer.complete();
+    });
+    return completer.future;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1825,130 +1804,36 @@ class _GameScreenState extends State<GameScreen>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildGameOverOverlay() {
-    final price    = revivePrice(_waveAtDeath);
+    final price = revivePrice(_waveAtDeath);
     final canRevive = !_reviveUsed && !_reviveExpired;
-    final hasGems   = _playerGems >= price;
-    final canAdRevive = canRevive &&
-        context.watch<EconomyState>().canTakeAdRevive();
+    final hasGems = _playerGems >= price;
+    final canAdRevive =
+        canRevive && context.watch<EconomyState>().canTakeAdRevive();
 
-    return Container(
-      color: const Color(0xB8000000),
-      alignment: Alignment.center,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Mission Failed',
-              style: TextStyle(
-                  color: Color(0xFFE24B4A),
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 3)),
-          const SizedBox(height: 4),
-          Text(
-            'WAVE $_waveAtDeath  ·  ${worldName(_world).toUpperCase()} STAGE $_stage',
-            style: const TextStyle(
-                color: Color(0xFF791F1F), fontSize: 9, letterSpacing: 2),
+    return ResultOverlay(
+      wash: ResultWash.red,
+      title: 'MISSION\nFAILED',
+      subtitle: 'Wave $_waveAtDeath  ·  $_totalScore pts',
+      buttons: [
+        if (canAdRevive)
+          AppButton.rewardedAd(
+            label: 'Watch Ad - Free Revive',
+            onPressed: _adInFlight ? null : _watchAdToRevive,
           ),
-          const SizedBox(height: 16),
-          _statRow('Score', '$_totalScore', const Color(0xFFC0DD97)),
-          _statRow('Wave reached', '$_waveAtDeath', const Color(0xFFEF9F27)),
-          _statRow('Best combo', '×$_bestCombo', const Color(0xFF97C459)),
-          if (_isBossStage && _waveAtDeath >= _maxWave)
-            _statRow('Boss HP left',
-                '${(_bossHpAtDeath * 100).round()}%', const Color(0xFFE24B4A)),
-
-          if (canRevive) ...[
-            const SizedBox(height: 18),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 32),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0x88200000),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: hasGems
-                        ? const Color(0xFFE24B4A)
-                        : const Color(0xFF553333),
-                    width: 0.5),
-              ),
-              child: Column(children: [
-                Text(
-                  (_isBossStage && _waveAtDeath >= _maxWave)
-                      ? 'Return to boss fight?'
-                      : 'Continue from Wave $_waveAtDeath?',
-                  style: const TextStyle(
-                      color: Color(0xFFEF9F27),
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '$_reviveCountdown s  ·  $price 💎 gems',
-                  style: TextStyle(
-                      color: hasGems
-                          ? const Color(0xFFCC8833)
-                          : const Color(0xFF664444),
-                      fontSize: 11),
-                ),
-                const SizedBox(height: 4),
-                const Text('Restores full HP · one time only',
-                    style: TextStyle(
-                        color: Color(0xFF885555), fontSize: 9)),
-                if (_isBossStage && _waveAtDeath >= _maxWave)
-                  const Text('Boss HP preserved',
-                      style: TextStyle(
-                          color: Color(0xFF885555), fontSize: 9)),
-                const SizedBox(height: 10),
-                if (hasGems)
-                  GestureDetector(
-                    onTap: () => setState(_revive),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF6B1A1A),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                            color: const Color(0xFFE24B4A), width: 0.5),
-                      ),
-                      child: const Text('Revive',
-                          style: TextStyle(
-                              color: Color(0xFFFF8888),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13)),
-                    ),
-                  )
-                else
-                  const Text('Not enough gems',
-                      style: TextStyle(
-                          color: Color(0xFF664444), fontSize: 11)),
-              ]),
-            ),
-          ],
-
-          if (canAdRevive) ...[
-            const SizedBox(height: 14),
-            _watchAdButton(
-              label: 'Watch Ad — Free Revive',
-              onTap: _watchAdToRevive,
-            ),
-          ],
-
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _overlayBtn('Retry Stage', const Color(0xFF3B6D11), () {
-                setState(_fullReset);
-              }),
-              const SizedBox(width: 12),
-              _overlayBtn('Home', const Color(0xFF1a1a1a), () {
-                Navigator.pop(context);
-              }),
-            ],
+        AppButton.secondary(
+          label: 'Home',
+          onPressed: () => Navigator.pop(context),
+        ),
+        AppButton.primary(
+          label: 'Restart',
+          onPressed: () => setState(_fullReset),
+        ),
+        if (canRevive && hasGems)
+          AppButton.gem(
+            label: 'Revive - ${price}x 💎',
+            onPressed: () => setState(_revive),
           ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -1957,124 +1842,266 @@ class _GameScreenState extends State<GameScreen>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildPauseOverlay() {
-    return Container(
-      color: Colors.black.withValues(alpha: 0.72),
-      alignment: Alignment.center,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Paused',
-              style: TextStyle(
-                  color: Color(0xFFC0DD97),
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 4)),
-          const SizedBox(height: 6),
-          Text(
-            'Wave $_currentWave/$_maxWave  ·  $_totalScore pts  ·  ${(_hp / _maxHp * 100).round()}% HP',
-            style: const TextStyle(color: Color(0xFF639922), fontSize: 10),
-          ),
-          const SizedBox(height: 28),
-          _overlayBtn('Resume', const Color(0xFF3B6D11),
-              () => setState(() => _phase = _prevPhase)),
-          const SizedBox(height: 10),
-          _overlayBtn('Restart', const Color(0xFF1a2a0a),
-              () => setState(_fullReset)),
-          const SizedBox(height: 10),
-          _overlayBtn('Quit to Menu', const Color(0xFF1a1a1a),
-              () => Navigator.pop(context)),
-        ],
-      ),
+    final hpPct = (_hp / _maxHp * 100).round();
+    return ResultOverlay(
+      title: 'PAUSED',
+      subtitle: 'Wave $_currentWave/$_maxWave  ·  $_totalScore pts  ·  $hpPct% HP',
+      buttons: [
+        AppButton.secondary(
+          label: 'Abort Mission',
+          onPressed: () => _confirmAbort(),
+        ),
+        AppButton.secondary(
+          label: 'Restart',
+          onPressed: () => _confirmRestart(),
+        ),
+        AppButton.primary(
+          label: 'Resume',
+          onPressed: () => setState(() => _phase = _prevPhase),
+        ),
+      ],
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Shared helpers
-  // ─────────────────────────────────────────────────────────────────────────
+  Future<void> _confirmAbort() async {
+    final ok = await _showConfirm(
+      title: 'Abort mission?',
+      body: 'You will lose this run’s progress.',
+      confirmLabel: 'Abort',
+    );
+    if (!mounted || !ok) return;
+    Navigator.pop(context);
+  }
 
-  Widget _statRow(String label, String value, Color col) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('$label: ',
-                style: const TextStyle(
-                    color: Color(0xFF557755), fontSize: 12)),
-            Text(value,
-                style: TextStyle(
-                    color: col,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold)),
-          ],
-        ),
-      );
+  Future<void> _confirmRestart() async {
+    final ok = await _showConfirm(
+      title: 'Restart?',
+      body: 'Restart this stage from wave 1.',
+      confirmLabel: 'Restart',
+    );
+    if (!mounted || !ok) return;
+    setState(_fullReset);
+  }
 
-  Widget _overlayBtn(String label, Color bg, VoidCallback onTap) =>
-      GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 28, vertical: 13),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.white24, width: 0.5),
-          ),
-          child: Text(label,
-              style: const TextStyle(
-                  color: Color(0xFFC0DD97),
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5)),
-        ),
-      );
-
-  Widget _watchAdButton({
-    required String label,
-    required Future<void> Function() onTap,
-  }) {
-    final loading = _adInFlight;
-    return GestureDetector(
-      onTap: loading ? null : () => onTap(),
-      child: Opacity(
-        opacity: loading ? 0.6 : 1,
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFCC8833), Color(0xFFEF9F27)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+  Future<bool> _showConfirm({
+    required String title,
+    required String body,
+    required String confirmLabel,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: AppColors.surfaceBlack,
+          shape: RoundedRectangleBorder(
+            side: BorderSide(
+              color: AppColors.amber.withValues(alpha: 0.55),
+              width: 0.7,
             ),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-                color: const Color(0xFFFFD27A), width: 0.5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  body,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFFBDC9A8),
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppButton.secondary(
+                        label: 'Cancel',
+                        height: 44,
+                        onPressed: () => Navigator.pop(ctx, false),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AppButton.primary(
+                        label: confirmLabel,
+                        height: 44,
+                        onPressed: () => Navigator.pop(ctx, true),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    return result == true;
+  }
+
+}
+
+// ---------------------------------------------------------------------------
+// Stage Complete reward row — "+coins" chip with optional 2x toast
+// ---------------------------------------------------------------------------
+class _RewardRow extends StatelessWidget {
+  final int coins;
+  final bool doubled;
+  const _RewardRow({required this.coins, required this.doubled});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.star_rounded, color: AppColors.amber, size: 22),
+        const SizedBox(width: 6),
+        Text(
+          '+$coins',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (doubled) ...[
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.green.withValues(alpha: 0.25),
+              border: Border.all(color: AppColors.greenLight, width: 0.6),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text(
+              '2x',
+              style: TextStyle(
+                color: AppColors.greenPale,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Biome Complete unlock row — "Power-Up unlocked: <name>  ·  +coins"
+// ---------------------------------------------------------------------------
+class _UnlockRow extends StatelessWidget {
+  final int world;
+  final int coinBonus;
+  const _UnlockRow({required this.world, required this.coinBonus});
+
+  /// Power-up name granted on completing each biome. Hard-coded to mirror
+  /// the existing Shop unlock order. When biome-clear unlock logic is
+  /// data-driven through remote config, swap this for the RC lookup.
+  static const _biomeUnlock = <int, String>{
+    1: 'Speed Boost',
+    2: 'Rapid Fire',
+    3: 'Bomb',
+    4: 'Split Shot',
+    5: 'Shield',
+    6: 'Magnet',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _biomeUnlock[world] ?? 'New Power-Up';
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceBlack.withValues(alpha: 0.85),
+            border: Border.all(color: AppColors.amber, width: 0.7),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (loading)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Color(0xFF1a1a1a)),
-                )
-              else
-                const Icon(Icons.play_arrow_rounded,
-                    size: 18, color: Color(0xFF1a1a1a)),
+              const Icon(Icons.lock_open_rounded,
+                  color: AppColors.amber, size: 18),
               const SizedBox(width: 8),
-              Text(label,
-                  style: const TextStyle(
-                      color: Color(0xFF1a1a1a),
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2)),
+              Text(
+                'Power-Up unlocked: $name',
+                style: const TextStyle(
+                  color: AppColors.amber,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
-      ),
+        const SizedBox(height: 8),
+        _RewardRow(coins: coinBonus, doubled: false),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Biome transition — 1.2s fade-to-black + zoom flash. Lightweight stub
+// per redesign decision; replace with cinematic art when delivered.
+// ---------------------------------------------------------------------------
+class _BiomeTransitionOverlay extends StatefulWidget {
+  const _BiomeTransitionOverlay();
+
+  @override
+  State<_BiomeTransitionOverlay> createState() =>
+      _BiomeTransitionOverlayState();
+}
+
+class _BiomeTransitionOverlayState extends State<_BiomeTransitionOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) {
+        // Triangle: 0→1→0 alpha so it fades in then back out within 1.2s.
+        final t = _ctrl.value;
+        final alpha = t < 0.5 ? t * 2 : (1 - t) * 2;
+        return IgnorePointer(
+          child: Container(
+            color: Colors.black.withValues(alpha: alpha),
+          ),
+        );
+      },
     );
   }
 }

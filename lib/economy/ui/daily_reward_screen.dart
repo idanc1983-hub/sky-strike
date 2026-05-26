@@ -1,90 +1,95 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/remote_config_service.dart';
 import '../../shared/theme/app_colors.dart';
-import '../../shared/theme/app_typography.dart';
+import '../../shared/widgets/app_buttons.dart';
+import '../../shared/widgets/app_top_bar.dart';
 import '../../shared/widgets/asset_placeholder.dart';
-import '../constants/economy_constants.dart';
 import '../state/economy_state.dart';
-import '../state/reward.dart';
 
-/// 7-day login ladder. The Day 7 card is rendered larger and themed gold
-/// per GDD §5.
+/// 7-day login ladder — full-screen route launched from the home menu.
+/// Layout: 3 columns × 2 rows for D1–D6, then a full-width D7 tile.
+///
+/// Reward values come from remote config (`challenges__daily_reward__v1`)
+/// using the player's current week and 1..7 day. Each tile renders in one
+/// of three states:
+///
+/// - **claimed**  — green border, "Day N" header in green
+/// - **today**    — solid green fill (claimable)
+/// - **future**   — amber border (locked / upcoming)
 class DailyRewardScreen extends StatelessWidget {
   const DailyRewardScreen({super.key});
+
+  static const _bgAsset = 'assets/backgrounds/Home_screen_Airstrip.png';
 
   @override
   Widget build(BuildContext context) {
     final economy = context.watch<EconomyState>();
+    final week = economy.streakWeeksCompleted + 1;
+    final today = economy.streakDay;
+    final canClaimToday = economy.canClaimStreakToday;
+
     return Scaffold(
       backgroundColor: AppColors.greenDeep,
-      appBar: AppBar(
-        backgroundColor: AppColors.cardBg,
-        title: const Text('Daily Rewards', style: AppTypography.title),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              'Streak: Day ${economy.streakDay}',
-              style: AppTypography.bodyPale,
-            ),
-            Text(
-              'Longest streak: ${economy.longestStreak}',
-              style: AppTypography.label,
-            ),
-            const SizedBox(height: 16),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.78,
+      body: Stack(
+        children: [
+          // Hangar bg (same as home) — dimmed for legibility.
+          Positioned.fill(
+            child: Image.asset(
+              _bgAsset,
+              fit: BoxFit.cover,
+              errorBuilder: AssetPlaceholder.image(
+                color: AppColors.greenDeep,
+                label: 'home_bg',
               ),
-              itemCount: 6,
-              itemBuilder: (ctx, i) {
-                final day = i + 1;
-                return _DayCard(
-                  day: day,
-                  state: _stateForDay(day, economy.streakDay),
-                  reward: _rewardForDay(day),
-                  onClaim: economy.canClaimStreakToday && day == economy.streakDay
-                      ? () => _handleClaim(context)
-                      : null,
-                );
-              },
             ),
-            const SizedBox(height: 16),
-            _Day7Card(
-              state: _stateForDay(7, economy.streakDay),
-              onClaim: economy.canClaimStreakToday && economy.streakDay == 7
-                  ? () => _handleClaim(context)
-                  : null,
+          ),
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: ColoredBox(color: Color(0x99000000)),
             ),
-          ],
-        ),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                AppTopBar.close(
+                  onClose: () => Navigator.of(context).pop(),
+                ),
+                const SizedBox(height: 8),
+                _ChestHero(),
+                const SizedBox(height: 12),
+                const _Title(),
+                const SizedBox(height: 18),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        _DayGrid(week: week, today: today),
+                        const SizedBox(height: 12),
+                        _Day7Tile(week: week, today: today),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: AppButton.primary(
+                    label: 'CLAIM',
+                    onPressed: canClaimToday
+                        ? () => _handleClaim(context)
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ],
       ),
-    );
-  }
-
-  _CardState _stateForDay(int day, int streakDay) {
-    if (day < streakDay) return _CardState.claimed;
-    if (day == streakDay) return _CardState.active;
-    return _CardState.locked;
-  }
-
-  Reward _rewardForDay(int day) {
-    final i = day - 1;
-    return Reward(
-      coins: i >= 0 && i < EconomyConstants.streakDailyCoins.length
-          ? EconomyConstants.streakDailyCoins[i]
-          : 0,
-      gems: i >= 0 && i < EconomyConstants.streakDailyGems.length
-          ? EconomyConstants.streakDailyGems[i]
-          : 0,
     );
   }
 
@@ -96,179 +101,359 @@ class DailyRewardScreen extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Already claimed today.')),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Got ${reward.coins} coins, ${reward.gems} gems'
-            '${reward.powerUps.isEmpty ? '' : ', ${reward.powerUps.length} power-up(s)'}',
-          ),
-        ),
-      );
+      return;
     }
+    final parts = <String>[
+      if (reward.coins > 0) '${reward.coins} coins',
+      if (reward.gems > 0) '${reward.gems} gems',
+      if (reward.powerUps.isNotEmpty)
+        '${reward.powerUps.length} power-up(s)',
+    ];
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Claimed: ${parts.join(', ')}')),
+    );
   }
 }
 
-enum _CardState { locked, active, claimed }
+// ---------------------------------------------------------------------------
+// Hero — large treasure chest icon centred at the top.
+// ---------------------------------------------------------------------------
+class _ChestHero extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 96,
+      height: 96,
+      child: Image.asset(
+        'assets/ui/icon_chest_basic.png',
+        fit: BoxFit.contain,
+        errorBuilder: AssetPlaceholder.image(
+          color: AppColors.amber,
+          label: 'chest',
+          borderRadius: 8,
+        ),
+      ),
+    );
+  }
+}
 
-class _DayCard extends StatelessWidget {
+// ---------------------------------------------------------------------------
+// Title — "REWARD / CALENDAR"
+// ---------------------------------------------------------------------------
+class _Title extends StatelessWidget {
+  const _Title();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        Text(
+          'REWARD',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 32,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 8,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          'CALENDAR',
+          style: TextStyle(
+            color: Color(0xFFD8E6C0),
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+            letterSpacing: 6,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Day 1–6 grid (3 cols × 2 rows).
+// ---------------------------------------------------------------------------
+class _DayGrid extends StatelessWidget {
+  final int week;
+  final int today;
+  const _DayGrid({required this.week, required this.today});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1.05,
+      ),
+      itemCount: 6,
+      itemBuilder: (ctx, i) {
+        final day = i + 1;
+        return _DayTile(
+          day: day,
+          state: _stateForDay(day, today),
+          rewardConfig: RemoteConfigService.instance.dailyReward(week, day),
+        );
+      },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Day 7 — full-width tile, visually distinct as the climax reward.
+// ---------------------------------------------------------------------------
+class _Day7Tile extends StatelessWidget {
+  final int week;
+  final int today;
+  const _Day7Tile({required this.week, required this.today});
+
+  @override
+  Widget build(BuildContext context) {
+    return _DayTile(
+      day: 7,
+      state: _stateForDay(7, today),
+      rewardConfig: RemoteConfigService.instance.dailyReward(week, 7),
+      fullWidth: true,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Day tile — used for both 3-col grid cells and the full-width D7 row.
+// ---------------------------------------------------------------------------
+class _DayTile extends StatelessWidget {
   final int day;
-  final _CardState state;
-  final Reward reward;
-  final VoidCallback? onClaim;
+  final _TileState state;
+  final Map<String, dynamic>? rewardConfig;
+  final bool fullWidth;
 
-  const _DayCard({
+  const _DayTile({
     required this.day,
     required this.state,
-    required this.reward,
-    this.onClaim,
+    required this.rewardConfig,
+    this.fullWidth = false,
   });
 
-  String get _frameAsset {
+  Color get _borderColor {
     switch (state) {
-      case _CardState.active:
-        return 'assets/ui/card_active.png';
-      case _CardState.claimed:
-        return 'assets/ui/card_claimed.png';
-      case _CardState.locked:
-        return 'assets/ui/card_locked.png';
+      case _TileState.claimed:
+        return AppColors.greenLight;
+      case _TileState.today:
+        return AppColors.greenLight;
+      case _TileState.future:
+        return AppColors.amber.withValues(alpha: 0.7);
     }
   }
 
-  Color get _frameTint {
+  Color get _fillColor {
     switch (state) {
-      case _CardState.active:
+      case _TileState.today:
+        return AppColors.green;
+      case _TileState.claimed:
+      case _TileState.future:
+        return AppColors.surfaceBlack;
+    }
+  }
+
+  Color get _headerColor {
+    switch (state) {
+      case _TileState.claimed:
+        return AppColors.greenLight;
+      case _TileState.today:
+        return Colors.white;
+      case _TileState.future:
         return AppColors.amber;
-      case _CardState.claimed:
-        return AppColors.greenDeep;
-      case _CardState.locked:
-        return AppColors.greenTrack;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onClaim,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            _frameAsset,
-            fit: BoxFit.cover,
-            errorBuilder: AssetPlaceholder.image(
-              color: _frameTint,
-              label: 'card_${state.name}',
-              borderRadius: 8,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: fullWidth ? 14 : 8,
+        vertical: fullWidth ? 14 : 10,
+      ),
+      decoration: BoxDecoration(
+        color: _fillColor,
+        border: Border.all(color: _borderColor, width: 1.2),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: fullWidth
+          ? Column(
+              children: [
+                Text(
+                  'Day $day',
+                  style: TextStyle(
+                    color: _headerColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _RewardRow(reward: rewardConfig, large: true),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Day $day', style: AppTypography.label),
-                if (state == _CardState.claimed)
-                  const Icon(Icons.check_circle,
-                      color: AppColors.greenLight, size: 22)
-                else
-                  Column(
-                    children: [
-                      if (reward.coins > 0)
-                        Text('${reward.coins}c',
-                            style: AppTypography.bodyPale.copyWith(
-                              fontWeight: FontWeight.w700,
-                            )),
-                      if (reward.gems > 0)
-                        Text('${reward.gems}💎',
-                            style: AppTypography.bodyPale.copyWith(
-                              fontWeight: FontWeight.w700,
-                            )),
-                    ],
+                Text(
+                  'Day $day',
+                  style: TextStyle(
+                    color: _headerColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                   ),
-                if (state == _CardState.active)
-                  ElevatedButton(
-                    onPressed: onClaim,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.amber,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text('CLAIM',
-                        style: TextStyle(fontSize: 11)),
-                  )
-                else
-                  const SizedBox(height: 24),
+                ),
+                _RewardRow(reward: rewardConfig, large: false),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
 
-class _Day7Card extends StatelessWidget {
-  final _CardState state;
-  final VoidCallback? onClaim;
-  const _Day7Card({required this.state, this.onClaim});
+// ---------------------------------------------------------------------------
+// Reward row — renders the per-day reward icon(s) + amount text, parsed
+// from the remote-config entry's `coin / gem / chest / jet / jet_fallback`
+// fields. Day 7 can show a multi-item bundle (jet OR fallback).
+// ---------------------------------------------------------------------------
+class _RewardRow extends StatelessWidget {
+  final Map<String, dynamic>? reward;
+  final bool large;
+  const _RewardRow({required this.reward, required this.large});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onClaim,
-      child: SizedBox(
-        height: 200,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.asset(
-              'assets/ui/card_day7.png',
-              fit: BoxFit.cover,
-              errorBuilder: AssetPlaceholder.image(
-                color: AppColors.amber,
-                label: 'card_day7',
-                borderRadius: 12,
+    final items = _parseRewards(reward);
+    final iconSize = large ? 28.0 : 22.0;
+    final textStyle = TextStyle(
+      color: AppColors.amber,
+      fontSize: large ? 16 : 13,
+      fontWeight: FontWeight.w700,
+    );
+    return Row(
+      mainAxisAlignment:
+          large ? MainAxisAlignment.center : MainAxisAlignment.start,
+      children: [
+        for (int i = 0; i < items.length; i++) ...[
+          if (i > 0) ...[
+            const SizedBox(width: 6),
+            Text(
+              '|',
+              style: TextStyle(
+                color: AppColors.amber.withValues(alpha: 0.5),
+                fontSize: large ? 16 : 13,
+                fontWeight: FontWeight.w400,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Day 7 — CHEST',
-                      style: TextStyle(
-                        color: AppColors.amberLight,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.5,
-                      )),
-                  const Text(
-                    'Level-scaled coins, gems, power-ups',
-                    style: AppTypography.bodyPale,
-                  ),
-                  if (state == _CardState.active && onClaim != null)
-                    ElevatedButton(
-                      onPressed: onClaim,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.amber,
-                        foregroundColor: Colors.black,
-                      ),
-                      child: const Text('CLAIM CHEST'),
-                    ),
-                  if (state == _CardState.claimed)
-                    const Icon(Icons.check_circle,
-                        color: AppColors.greenLight, size: 32),
-                ],
-              ),
-            ),
+            const SizedBox(width: 6),
           ],
-        ),
-      ),
+          SizedBox(
+            width: iconSize,
+            height: iconSize,
+            child: Image.asset(
+              items[i].iconAsset,
+              fit: BoxFit.contain,
+              errorBuilder: AssetPlaceholder.image(
+                color: items[i].iconColor,
+                label: items[i].label,
+                borderRadius: 4,
+              ),
+            ),
+          ),
+          if (items[i].amountLabel != null) ...[
+            const SizedBox(width: 4),
+            Text(items[i].amountLabel!, style: textStyle),
+          ],
+        ],
+      ],
     );
   }
+}
+
+/// Translates an RC daily-reward entry into renderable items. Day 7 may
+/// produce multiple items (jet + fallback bundle); other days produce 1.
+List<_RewardItem> _parseRewards(Map<String, dynamic>? reward) {
+  if (reward == null) {
+    return const [
+      _RewardItem(
+        iconAsset: 'assets/ui/icon_coin.png',
+        iconColor: AppColors.amber,
+        label: 'coin',
+        amountLabel: 'x?',
+      ),
+    ];
+  }
+  final coin = (reward['coin'] as num?)?.toInt() ?? 0;
+  final gem = (reward['gem'] as num?)?.toInt() ?? 0;
+  final chest = reward['chest'] as String?;
+  final jet = reward['jet'] as String?;
+  final items = <_RewardItem>[];
+  if (coin > 0) {
+    items.add(_RewardItem(
+      iconAsset: 'assets/ui/icon_coin.png',
+      iconColor: AppColors.amber,
+      label: 'coin',
+      amountLabel: 'x$coin',
+    ));
+  }
+  if (gem > 0) {
+    items.add(_RewardItem(
+      iconAsset: 'assets/ui/icon_gem.png',
+      iconColor: const Color(0xFF7BB8FF),
+      label: 'gem',
+      amountLabel: 'x$gem',
+    ));
+  }
+  if (chest != null) {
+    items.add(_RewardItem(
+      iconAsset: 'assets/ui/icon_chest_${chest.replaceAll('_chest', '')}.png',
+      iconColor: AppColors.amber,
+      label: chest,
+      amountLabel: null,
+    ));
+  }
+  if (jet != null) {
+    items.add(const _RewardItem(
+      iconAsset: 'assets/ui/icon_jet_reward.png',
+      iconColor: Color(0xFF7BB8FF),
+      label: 'jet',
+      amountLabel: 'x1',
+    ));
+  }
+  // If empty (all zero / null), show a placeholder so the tile isn't blank.
+  if (items.isEmpty) {
+    items.add(const _RewardItem(
+      iconAsset: 'assets/ui/icon_coin.png',
+      iconColor: AppColors.amber,
+      label: 'reward',
+      amountLabel: '?',
+    ));
+  }
+  return items;
+}
+
+class _RewardItem {
+  final String iconAsset;
+  final Color iconColor;
+  final String label;
+  final String? amountLabel;
+  const _RewardItem({
+    required this.iconAsset,
+    required this.iconColor,
+    required this.label,
+    required this.amountLabel,
+  });
+}
+
+enum _TileState { claimed, today, future }
+
+_TileState _stateForDay(int day, int today) {
+  if (day < today) return _TileState.claimed;
+  if (day == today) return _TileState.today;
+  return _TileState.future;
 }
