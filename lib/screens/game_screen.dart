@@ -12,6 +12,7 @@ import '../economy/constants/power_up_catalog.dart';
 import '../economy/services/ads_service.dart';
 import '../economy/services/ftue_triggers.dart';
 import '../economy/state/economy_state.dart';
+import '../economy/ui/pre_mission_popup.dart';
 import '../game/models.dart';
 import '../shared/theme/app_colors.dart';
 import '../shared/widgets/app_buttons.dart';
@@ -1426,7 +1427,12 @@ class _GameScreenState extends State<GameScreen>
                     enemyBullets: List.unmodifiable(_enemyBullets),
                     enemies: List.unmodifiable(_enemies),
                     pickups: List.unmodifiable(_pickups),
-                    floatTexts: List.unmodifiable(_floatTexts),
+                    // Hide all gameplay-canvas float texts (wave-clear toast,
+                    // reward floats, kill scores) when a result/pause overlay
+                    // is up so they don't bleed through the chrome.
+                    floatTexts: (_phase == _Phase.wave || _phase == _Phase.boss)
+                        ? List.unmodifiable(_floatTexts)
+                        : const [],
                     bossX: _bossX,
                     bossY: _bossY,
                     bossFlashing: _bossFlashing,
@@ -1745,6 +1751,7 @@ class _GameScreenState extends State<GameScreen>
     final isBiomeClear = _isBossStage;
 
     return ResultOverlay(
+      wash: ResultWash.green,
       stars: stars,
       title: isBiomeClear
           ? 'BIOME $_world\nCOMPLETE!'
@@ -1772,15 +1779,49 @@ class _GameScreenState extends State<GameScreen>
     );
   }
 
-  /// Advances to the next stage. Biome clear gets a 1.2s fade-zoom
-  /// cinematic before returning so the player feels the biome change.
+  /// Advances to the next stage via the same pre-mission popup the home
+  /// "Launch Mission" CTA uses, so loadout selection is consistent.
+  ///
+  /// Flow:
+  ///   1. (biome clear) play 1.2s fade-zoom transition
+  ///   2. bump `economy.currentStage`
+  ///   3. show pre-mission popup for the new stage
+  ///   4. LAUNCH → `pushReplacementNamed('/loading')` so the current /game
+  ///      route is swapped for the new run (no Home flash)
+  ///   5. BACK   → pop /game back to Home
+  ///
+  /// `economy.currentStage` is updated directly (instead of via pop result)
+  /// because the loading screen uses `pushReplacementNamed` to get to
+  /// /game, which disposes itself the moment /game is pushed — so home's
+  /// await has already resolved with `null` long before this fires.
   Future<void> _onNextStage({required bool isBiomeClear}) async {
+    final economy = context.read<EconomyState>();
     if (isBiomeClear) {
       await _playBiomeTransition();
       if (!mounted) return;
     }
+    economy.setCurrentStage(economy.currentStage + 1);
     if (!mounted) return;
-    Navigator.pop(context, {'stageDelta': 1, 'score': _totalScore});
+    final ok = await PreMissionPopup.show(
+      context,
+      world: economy.currentWorld,
+      stage: economy.currentStage,
+    );
+    if (!mounted) return;
+    if (!ok) {
+      Navigator.pop(context);
+      return;
+    }
+    economy.beginStage(economy.currentStage);
+    if (!mounted) return;
+    Navigator.pushReplacementNamed(
+      context,
+      '/loading',
+      arguments: {
+        'world': economy.currentWorld,
+        'stage': economy.currentStage,
+      },
+    );
   }
 
   /// 1.2s fade-zoom transition shown after Biome Complete. Lightweight

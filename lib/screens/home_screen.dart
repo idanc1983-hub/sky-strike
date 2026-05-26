@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import '../config/remote_config_service.dart';
+import '../economy/constants/challenge_constants.dart';
 import '../economy/state/challenge_state.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/challenge_prizes_popup.dart';
@@ -94,18 +95,25 @@ const _cChallengeBarTrack = Color(0xFF0d1a0d);
 // ---------------------------------------------------------------------------
 // Placeholder challenge cycle data
 //
-// The real values come from the active cycle's remote-config entry —
-// `display_name`, `bg_asset`, `bar_color`, and the 100% milestone prize.
-// Until the cycle plumbing is in place we render the screenshot's
-// "Iron Skies" + coin-prize sample so the home screen is reviewable in
-// the simulator.
+// The real cycle name, background, and bar colour come from the active
+// cycle's remote-config entry — wired here for the no-cycle preview path.
+// Progress + target come from `EconomyState.challengeView`; the 100%
+// prize amount is computed by the formula below so it scales with the
+// player's level.
 // ---------------------------------------------------------------------------
 const String _kPlaceholderCycleDisplayName = 'Iron Skies';
-// v2: single completion prize at 100%. The 50% mid-cycle prize was removed.
 const String _kPlaceholderPrizeAsset = 'assets/ui/icon_coin.png';
-const int _kPlaceholderPrizeAmount = 800;
 const int _kPlaceholderProgress = 216;
 const int _kPlaceholderTarget = 350;
+
+/// Deterministic preview of the 100% milestone reward in coins. Uses the
+/// same `baseCoins × (1 + level × step)` formula as `ChallengeFormulas`
+/// but skips the random 0.8–1.2 jitter so the home screen shows a stable
+/// number (the actual award still jitters on claim).
+int _previewMilestoneCoins(int playerLevel) {
+  final mult = 1 + playerLevel * ChallengeConstants.milestone100CoinLevelStep;
+  return (ChallengeConstants.milestone100BaseCoins * mult).floor();
+}
 
 // ---------------------------------------------------------------------------
 // Enemy state
@@ -459,7 +467,7 @@ class _HomeScreenState extends State<HomeScreen>
           SafeArea(
             child: Column(
               children: [
-                const AppTopBar.full(),
+                const AppTopBar.full(forceShowCoin: true),
                 _buildOffersRow(),
                 Expanded(child: _buildCentreContent()),
                 _buildChallengeAndLaunch(economy),
@@ -507,19 +515,23 @@ class _HomeScreenState extends State<HomeScreen>
     if (active.isEmpty) {
       return const SizedBox(height: 8);
     }
+    // 4 evenly-spaced slots, each 64×64. Active offers fill from the left;
+    // remaining slots are invisible spacers that hold the layout so the 2
+    // real icons sit in the same positions as slots 1 and 2 of the mock.
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          for (int i = 0; i < active.length; i++) ...[
-            if (i > 0) const SizedBox(width: 10),
-            _OfferIcon(
-              asset: active[i].iconAsset,
-              placeholderLabel: active[i].placeholderLabel,
-              onTap: active[i].onTap,
-            ),
-          ],
+          for (int i = 0; i < 4; i++)
+            if (i < active.length)
+              _OfferIcon(
+                asset: active[i].iconAsset,
+                placeholderLabel: active[i].placeholderLabel,
+                onTap: active[i].onTap,
+              )
+            else
+              const SizedBox(width: 64, height: 64),
         ],
       ),
     );
@@ -568,9 +580,10 @@ class _HomeScreenState extends State<HomeScreen>
     final fraction = target > 0
         ? (progress / target).clamp(0.0, 1.0).toDouble()
         : 0.0;
-    // Live countdown — null when no real cycle exists so the timer row
-    // hides instead of showing a misleading static placeholder.
-    final remaining = view?.remainingFrom(DateTime.now());
+    // Live countdown. When no real cycle exists yet (pre-FTUE), show a
+    // static "1d 3h" placeholder so the timer row mirrors the mock.
+    final remaining = view?.remainingFrom(DateTime.now()) ??
+        const Duration(days: 1, hours: 3);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
@@ -583,7 +596,7 @@ class _HomeScreenState extends State<HomeScreen>
             target: target,
             fraction: fraction,
             prizeAsset: _kPlaceholderPrizeAsset,
-            prizeAmount: _kPlaceholderPrizeAmount,
+            prizeAmount: _previewMilestoneCoins(economy.level),
             remaining: remaining,
             onTap: () => ChallengePrizesPopup.show(context),
             // Cycle bg + bar colour are dynamic via remote config. Until
@@ -591,7 +604,7 @@ class _HomeScreenState extends State<HomeScreen>
             bgAsset: null,
             barColor: _cGreen,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 48),
           _LaunchMissionCta(
             onPressed: () => _onLaunchPressed(economy),
             onLongPress: () => _onLaunchLongPressed(economy),
@@ -926,7 +939,7 @@ class _ChallengeCard extends StatelessWidget {
               Text(
                 displayName,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: _cAmber,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1001,22 +1014,21 @@ class _CountdownRow extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Progress bar with a single completion-prize overlay at the 100% end.
+// Progress bar with a single completion-prize icon at the 100% end.
 //
-// Layout rules (per v2 design):
+// Layout rules (per May 2026 redesign mock):
 //   - The completion prize sits at the right end of the bar; the icon's
 //     left 10% overlaps the bar (the bar is shortened by 90% of the icon
 //     width).
-//   - Under the prize icon sits an amount badge; the top 10% of the
-//     badge overlaps the bottom of the icon.
-//
-// v2 removed the 50% mid-cycle prize/tick; players see a single reward
-// at completion.
+//   - No amount badge under the icon (removed per mock).
 // ---------------------------------------------------------------------------
 class _ChallengeBar extends StatelessWidget {
-  static const double _barHeight = 14;
-  static const double _prizeIconSize = 34;
-  static const double _amountBadgeHeight = 14;
+  static const double _barHeight = 18;
+  static const double _prizeIconSize = 32;
+  static const double _amountBadgeHeight = 18;
+  // Wide-enough envelope to fit 3–4-digit prize numbers centred on the
+  // icon centre without horizontal overflow.
+  static const double _badgeBoxWidth = 56;
   // Fraction of the icon's width that overlaps the bar at the 100% end.
   static const double _barOverlapFraction = 0.10;
   // Fraction of the amount badge's height that overlaps the prize icon.
@@ -1040,23 +1052,17 @@ class _ChallengeBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The bar stops short of the row's right edge by (1 - overlap) × icon
-    // size so the icon's right edge lands at the row's right edge while
-    // its left 10% overlaps the bar.
     const barRightInset = _prizeIconSize * (1 - _barOverlapFraction);
-    // Total height = icon stack + (1 - overlap) × badge height. Lets the
-    // amount badge sit fully under the icon with exactly 10% overlap and
-    // without bleeding past this widget's bounds.
-    const totalHeight =
-        _prizeIconSize + _amountBadgeHeight * (1 - _badgeOverlapFraction);
     const barTop = (_prizeIconSize - _barHeight) / 2;
+    const badgeTop = _prizeIconSize - _amountBadgeHeight * _badgeOverlapFraction;
+    const totalHeight = _prizeIconSize +
+        _amountBadgeHeight * (1 - _badgeOverlapFraction);
 
     return SizedBox(
       height: totalHeight,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Bar
           Positioned(
             left: 0,
             right: barRightInset,
@@ -1068,17 +1074,55 @@ class _ChallengeBar extends StatelessWidget {
               progressText: '$progress/$target',
             ),
           ),
-          // Completion prize — right end, 10% overlap with bar.
           Positioned(
             right: 0,
             top: 0,
             width: _prizeIconSize,
-            child: _PrizeOverlay(
-              asset: prizeAsset,
-              amount: prizeAmount,
-              iconSize: _prizeIconSize,
-              badgeHeight: _amountBadgeHeight,
-              badgeOverlapFraction: _badgeOverlapFraction,
+            height: _prizeIconSize,
+            child: Image.asset(
+              prizeAsset,
+              errorBuilder: AssetPlaceholder.image(
+                color: _cAmber,
+                label: 'prize',
+                borderRadius: 4,
+              ),
+            ),
+          ),
+          // Amount badge centred horizontally on the prize icon's centre.
+          // The Positioned area is wider than the icon so a badge with a
+          // 3-digit number still fits centred (Align would otherwise let
+          // the container overflow asymmetrically).
+          //
+          // Icon centre is at `right: _prizeIconSize / 2` from the Stack's
+          // right edge → 16px. To centre a `_badgeBoxWidth`-wide area on
+          // that point, the box's `right` value is
+          //   centre − boxWidth/2 = 16 − boxWidth/2.
+          Positioned(
+            right: 16 - _badgeBoxWidth / 2,
+            top: badgeTop,
+            width: _badgeBoxWidth,
+            height: _amountBadgeHeight,
+            child: Center(
+              child: Container(
+                height: _amountBadgeHeight,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0A1606),
+                  border: Border.all(color: _cAmber, width: 0.7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$prizeAmount',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: _cGreenPale,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    height: 1.0,
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -1130,83 +1174,6 @@ class _BarTrack extends StatelessWidget {
                     blurRadius: 2,
                   ),
                 ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PrizeOverlay extends StatelessWidget {
-  final String asset;
-  final int amount;
-  final double iconSize;
-  final double badgeHeight;
-  final double badgeOverlapFraction;
-
-  const _PrizeOverlay({
-    required this.asset,
-    required this.amount,
-    required this.iconSize,
-    required this.badgeHeight,
-    required this.badgeOverlapFraction,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final totalH = iconSize + badgeHeight * (1 - badgeOverlapFraction);
-    // Badge's top edge — sits at (iconSize - 10% of badge height) so its
-    // top 10% overlaps the bottom of the prize icon.
-    final badgeTop = iconSize - badgeHeight * badgeOverlapFraction;
-
-    return SizedBox(
-      width: iconSize,
-      height: totalH,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // Prize icon — anchored to the top of the overlay box.
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: iconSize,
-            child: Image.asset(
-              asset,
-              errorBuilder: AssetPlaceholder.image(
-                color: _cAmber,
-                label: 'prize',
-                borderRadius: 4,
-              ),
-            ),
-          ),
-          // Amount badge — centred horizontally below the icon.
-          Positioned(
-            top: badgeTop,
-            left: 0,
-            right: 0,
-            height: badgeHeight,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: Container(
-                height: badgeHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0A1606),
-                  border: Border.all(color: _cAmber, width: 0.6),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '$amount',
-                  style: const TextStyle(
-                    color: _cGreenPale,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
               ),
             ),
           ),
@@ -1291,14 +1258,14 @@ class _LaunchMissionCta extends StatelessWidget {
       onTap: onPressed,
       onLongPress: onLongPress,
       child: Container(
-        height: 64,
+        height: 60,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [Color(0xFF6FAD1F), _cGreen],
           ),
-          borderRadius: BorderRadius.circular(32),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _cGreenLight, width: 1),
           boxShadow: [
             BoxShadow(

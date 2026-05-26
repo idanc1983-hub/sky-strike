@@ -28,7 +28,7 @@ class AppTopBar extends StatelessWidget {
 
   const AppTopBar.full({
     super.key,
-    bool forceShowCoin = false,
+    bool forceShowCoin = true,
   })  : _variant = _Variant.full,
         _title = null,
         _onClose = null,
@@ -37,7 +37,7 @@ class AppTopBar extends StatelessWidget {
   const AppTopBar.close({
     super.key,
     required VoidCallback onClose,
-    bool forceShowCoin = false,
+    bool forceShowCoin = true,
   })  : _variant = _Variant.close,
         _title = null,
         _onClose = onClose,
@@ -165,7 +165,7 @@ class _LvChip extends StatelessWidget {
         child: Text(
           'Lv. $level',
           style: const TextStyle(
-            color: AppColors.greenPale,
+            color: AppColors.amber,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -198,7 +198,7 @@ class _CurrencyChip extends StatelessWidget {
           Text(
             '$amount',
             style: const TextStyle(
-              color: AppColors.greenPale,
+              color: AppColors.amber,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),

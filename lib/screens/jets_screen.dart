@@ -5,13 +5,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/remote_config_service.dart';
 import '../economy/state/economy_state.dart';
 import '../models/jet_model.dart';
-import '../shared/widgets/asset_placeholder.dart';
+import '../shared/widgets/app_top_bar.dart';
 import '../widgets/jet_card.dart';
 
 // ---------------------------------------------------------------------------
 // Palette
 // ---------------------------------------------------------------------------
-const _cGreenPale = Color(0xFFC0DD97);
 const _cAmber = Color(0xFFEF9F27);
 
 // ---------------------------------------------------------------------------
@@ -207,102 +206,9 @@ class _JetsScreenState extends State<JetsScreen> {
           SafeArea(
             child: Column(
               children: [
-                _buildTopBar(economy),
+                const AppTopBar.full(),
                 Expanded(child: _buildList(jets)),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Top bar — level pill + currency chips
-  // ---------------------------------------------------------------------------
-  Widget _buildTopBar(EconomyState economy) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _levelChip(economy.level),
-          Row(
-            children: [
-              _currencyChip(
-                amount: economy.coins,
-                asset: 'assets/ui/icon_coin.png',
-                placeholderLabel: 'coin',
-                placeholderColor: _cAmber,
-              ),
-              const SizedBox(width: 8),
-              _currencyChip(
-                amount: economy.gems,
-                asset: 'assets/ui/icon_gem.png',
-                placeholderLabel: 'gem',
-                placeholderColor: const Color(0xFF7BB8FF),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _levelChip(int level) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A1606).withValues(alpha: 0.92),
-        border: Border.all(color: _cAmber.withValues(alpha: 0.55), width: 0.6),
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: Text(
-        'Lv. $level',
-        style: const TextStyle(
-          color: _cGreenPale,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _currencyChip({
-    required int amount,
-    required String asset,
-    required String placeholderLabel,
-    required Color placeholderColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A1606).withValues(alpha: 0.92),
-        border: Border.all(color: _cAmber.withValues(alpha: 0.55), width: 0.6),
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$amount',
-            style: const TextStyle(
-              color: _cGreenPale,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: Image.asset(
-              asset,
-              errorBuilder: AssetPlaceholder.image(
-                color: placeholderColor,
-                label: placeholderLabel,
-                borderRadius: 3,
-              ),
             ),
           ),
         ],

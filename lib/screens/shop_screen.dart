@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../config/remote_config_service.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/not_enough_coins_popup.dart';
+import '../shared/theme/app_colors.dart';
+import '../shared/widgets/app_buttons.dart';
 import '../shared/widgets/app_top_bar.dart';
 import '../shared/widgets/asset_placeholder.dart';
 
@@ -14,7 +16,6 @@ const _cGreen = Color(0xFF3B6D11);
 const _cGreenLight = Color(0xFF97C459);
 const _cGreenPale = Color(0xFFC0DD97);
 const _cGreenMid = Color(0xFF639922);
-const _cGreenDark = Color(0xFF173404);
 const _cGreenDarker = Color(0xFF27500A);
 const _cAmber = Color(0xFFEF9F27);
 const _cAmberDark = Color(0xFF854F0B);
@@ -157,9 +158,9 @@ class _DealsTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _GemPacksSection(),
-          SizedBox(height: 18),
+          SizedBox(height: 14),
           _ChestsSection(),
-          SizedBox(height: 18),
+          SizedBox(height: 14),
           _CoinPacksSection(),
         ],
       ),
@@ -175,18 +176,15 @@ class _GemPacksSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final packs = _readGemPacks();
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionLabel(text: 'GEMS'),
-        const SizedBox(height: 6),
-        const _SectionHint(
-          icon: 'assets/ui/icon_gem.png',
-          text: 'Premium currency · Chests, biome jets & monetization offers',
-          tintBg: _cGemBg,
-          tintBorder: _cGemBg,
-          textColor: _cAmberDark,
+        const _DealsSectionHeader(
+          title: 'Gems',
+          iconAsset: 'assets/ui/icon_gem.png',
+          iconColor: Color(0xFF7BB8FF),
+          subtitle: 'Revives, exclusive jets & chests',
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (packs.isEmpty)
           const _EmptyDataNote(label: 'gem_packs')
         else
@@ -194,11 +192,12 @@ class _GemPacksSection extends StatelessWidget {
             crossAxisCount: 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 1.05,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 0.78,
             children: [
-              for (final p in packs) _IapPackCard(pack: p, isGem: true),
+              for (int i = 0; i < packs.length; i++)
+                _PackCard(pack: packs[i], isGem: true, tierIndex: i),
             ],
           ),
       ],
@@ -225,29 +224,46 @@ class _GemPacksSection extends StatelessWidget {
 class _ChestsSection extends StatelessWidget {
   const _ChestsSection();
 
+  // Per-tier display copy. Names + one-line perks per redesign mock.
+  // Prices come from remote config (`chest_prices.<id>.coin_price`).
+  static const _chestCopy = <String, ({String name, String perk})>{
+    'basic_chest': (name: 'Basic', perk: 'Coins\n+\npower-ups'),
+    'unique_chest': (name: 'Rare', perk: '2x Coins\nbooster'),
+    'epic_chest': (name: 'Epic', perk: 'Epic jet\n+\ngem bonus'),
+  };
+
   @override
   Widget build(BuildContext context) {
     final chests = _readChests();
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionLabel(text: 'CHESTS'),
-        const SizedBox(height: 6),
-        const _SectionHint(
-          icon: 'assets/ui/icon_chest_basic.png',
-          text: 'Buy with Coins or Gems · earn more from challenges',
-          tintBg: _cGreenDark,
-          tintBorder: _cGreen,
-          textColor: _cGreenMid,
+        const _DealsSectionHeader(
+          title: 'Chests',
+          iconAsset: 'assets/ui/icon_chest_basic.png',
+          iconColor: AppColors.amber,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (chests.isEmpty)
           const _EmptyDataNote(label: 'chest_prices')
         else
-          for (final c in chests) ...[
-            _ChestRow(chest: c),
-            const SizedBox(height: 8),
-          ],
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (int i = 0; i < chests.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: _ChestCard(
+                      chest: chests[i],
+                      copy: _chestCopy[chests[i].id] ??
+                          (name: chests[i].id, perk: ''),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -280,18 +296,15 @@ class _CoinPacksSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final packs = _readCoinPacks();
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionLabel(text: 'COINS'),
-        const SizedBox(height: 6),
-        const _SectionHint(
-          icon: 'assets/ui/icon_coin.png',
-          text: 'Soft currency · Buy chests, power-ups & jet shortcuts',
-          tintBg: _cGreenDark,
-          tintBorder: _cGreen,
-          textColor: _cGreenMid,
+        const _DealsSectionHeader(
+          title: 'Coins',
+          iconAsset: 'assets/ui/icon_coin.png',
+          iconColor: AppColors.amber,
+          subtitle: 'Earn in gameplay or buy pack below',
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (packs.isEmpty)
           const _EmptyDataNote(label: 'coin_packs')
         else
@@ -299,11 +312,12 @@ class _CoinPacksSection extends StatelessWidget {
             crossAxisCount: 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 1.05,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 0.78,
             children: [
-              for (final p in packs) _IapPackCard(pack: p, isGem: false),
+              for (int i = 0; i < packs.length; i++)
+                _PackCard(pack: packs[i], isGem: false, tierIndex: i),
             ],
           ),
       ],
@@ -327,10 +341,25 @@ class _CoinPacksSection extends StatelessWidget {
 }
 
 // =============================================================================
-// POWER-UPS TAB  —  all 10 from RC, locked rows greyed-out per unlock_biome
+// POWER-UPS TAB  —  RC-driven list in unlock-biome order
 // =============================================================================
 class _PowerUpsTab extends StatelessWidget {
   const _PowerUpsTab();
+
+  /// One-line player-facing description per power-up id. Hard-coded for
+  /// now; move to remote config when a `description` field is added.
+  static const _descriptions = <String, String>{
+    'speed_boost': 'Increase jets movement',
+    'rapid_fire': 'Increase jet fire rate',
+    'bomb': 'Clears the screen of enemies',
+    'split_shot': 'Fires three bullets in a spread',
+    'shield': 'Block enemies fire',
+    'magnet': 'Pull all enemies drops',
+    'laser': 'Continuous beam, pierces enemies',
+    'freeze_time': 'Slow time briefly',
+    'drone_wingman': 'Spawns a wingman drone',
+    'ghost_mode': 'Brief invincibility',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -339,13 +368,12 @@ class _PowerUpsTab extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _SectionHint(
-            icon: 'assets/ui/icon_powerup_pack.png',
-            text: 'Unlock by reaching new biomes · Buy spares with Coins',
-            tintBg: _cGreenDark,
-            tintBorder: _cGreen,
-            textColor: _cGreenMid,
+          const _DealsSectionHeader(
+            title: 'Power-Ups',
+            iconColor: AppColors.amber,
+            subtitle: 'Unlock by reaching new biomes, buy spares with coins',
           ),
           const SizedBox(height: 10),
           if (entries.isEmpty)
@@ -354,9 +382,10 @@ class _PowerUpsTab extends StatelessWidget {
             for (final pu in entries) ...[
               _PowerUpRow(
                 entry: pu,
+                description: _descriptions[pu.id] ?? '',
                 playerWorld: economy.currentWorld,
               ),
-              const SizedBox(height: 7),
+              const SizedBox(height: 8),
             ],
         ],
       ),
@@ -384,7 +413,8 @@ class _PowerUpsTab extends StatelessWidget {
         coinPrice: price,
       ));
     });
-    // Sort by unlock_biome order, then by price within biome.
+    // Sort by unlock_biome order, then by price within biome — matches the
+    // progression in `Power-ups unlock.xlsx`.
     out.sort((a, b) {
       final aw = _biomeToWorld[a.unlockBiome] ?? 99;
       final bw = _biomeToWorld[b.unlockBiome] ?? 99;
@@ -397,8 +427,13 @@ class _PowerUpsTab extends StatelessWidget {
 
 class _PowerUpRow extends StatelessWidget {
   final _PowerUpEntry entry;
+  final String description;
   final int playerWorld;
-  const _PowerUpRow({required this.entry, required this.playerWorld});
+  const _PowerUpRow({
+    required this.entry,
+    required this.description,
+    required this.playerWorld,
+  });
 
   bool get _isUnlocked {
     final reqWorld = _biomeToWorld[entry.unlockBiome] ?? 1;
@@ -408,65 +443,67 @@ class _PowerUpRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unlocked = _isUnlocked;
-    return Opacity(
-      opacity: unlocked ? 1.0 : 0.5,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0d1a0d).withValues(alpha: 0.95),
-          border: Border.all(color: _cGreenDarker, width: 0.5),
-          borderRadius: BorderRadius.circular(10),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceBlack.withValues(alpha: 0.94),
+        border: Border.all(
+          color: AppColors.amber.withValues(alpha: 0.55),
+          width: 0.7,
         ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 40,
-              height: 40,
-              child: Image.asset(
-                'assets/ui/pu_${entry.id}_slot.png',
-                fit: BoxFit.contain,
-                errorBuilder: AssetPlaceholder.image(
-                    color: _cAmber, label: entry.id, borderRadius: 6),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: Image.asset(
+              'assets/ui/pu_${entry.id}_slot.png',
+              fit: BoxFit.contain,
+              errorBuilder: AssetPlaceholder.image(
+                color: AppColors.amber,
+                label: entry.id,
+                borderRadius: 6,
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(entry.displayName,
-                      style: const TextStyle(
-                          color: _cGreenPale,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${entry.category.toUpperCase()} · ${entry.duration}',
-                    style: const TextStyle(color: _cGreenMid, fontSize: 9),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  entry.displayName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
                   ),
-                  if (!unlocked) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      'Unlocks at ${entry.unlockBiome.toUpperCase()} biome',
-                      style: const TextStyle(
-                          color: _cAmberDark,
-                          fontSize: 9,
-                          fontStyle: FontStyle.italic),
-                    ),
-                  ],
-                ],
-              ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description.isNotEmpty
+                      ? description
+                      : '${entry.category.toUpperCase()} · ${entry.duration}',
+                  style: TextStyle(
+                    color: AppColors.amber.withValues(alpha: 0.85),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            if (unlocked)
-              _BuyPill(
-                onTap: () => _attemptPurchase(context),
-                child: _CoinAmount(amount: entry.coinPrice),
-              )
-            else
-              const _LockedPill(),
-          ],
-        ),
+          ),
+          const SizedBox(width: 10),
+          if (unlocked)
+            _PuBuyChip(
+              amount: entry.coinPrice,
+              onTap: () => _attemptPurchase(context),
+            )
+          else
+            _PuLockedChip(onTap: () => _showLockedInfo(context)),
+        ],
       ),
     );
   }
@@ -482,63 +519,301 @@ class _PowerUpRow extends StatelessWidget {
       SnackBar(content: Text('+1 ${entry.displayName}')),
     );
   }
+
+  void _showLockedInfo(BuildContext context) {
+    final biome = entry.unlockBiome;
+    final world = _biomeToWorld[biome] ?? 1;
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.surfaceBlack,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(
+            color: AppColors.amber.withValues(alpha: 0.55),
+            width: 0.7,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                entry.displayName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Unlock at biome ${_capitalize(biome)}'
+                ' — World $world',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFFBDC9A8),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 18),
+              AppButton.primary(
+                label: 'OK',
+                height: 44,
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _capitalize(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+}
+
+/// Green pill with the coin price — used on unlocked power-up rows.
+class _PuBuyChip extends StatelessWidget {
+  final int amount;
+  final VoidCallback onTap;
+  const _PuBuyChip({required this.amount, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.green,
+          border: Border.all(color: AppColors.greenLight, width: 0.7),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _formatNumber(amount),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 5),
+            SizedBox(
+              width: 13,
+              height: 13,
+              child: Image.asset(
+                'assets/ui/icon_coin.png',
+                fit: BoxFit.contain,
+                errorBuilder: AssetPlaceholder.image(
+                  color: AppColors.amber,
+                  label: 'c',
+                  borderRadius: 2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Green-bordered button with a lock icon — used on locked power-up rows.
+/// Tapping it surfaces an info popup with the unlock biome + world.
+class _PuLockedChip extends StatelessWidget {
+  final VoidCallback onTap;
+  const _PuLockedChip({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 50,
+        height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.green,
+          border: Border.all(color: AppColors.greenLight, width: 0.7),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(
+          Icons.lock,
+          color: Colors.white,
+          size: 18,
+        ),
+      ),
+    );
+  }
 }
 
 // =============================================================================
 // Cards / pills / placeholders
 // =============================================================================
-class _IapPackCard extends StatelessWidget {
-  final _PackEntry pack;
-  final bool isGem;
-  const _IapPackCard({required this.pack, required this.isGem});
+// ----- Section header (mock layout) -----------------------------------------
+class _DealsSectionHeader extends StatelessWidget {
+  final String title;
+  final String? iconAsset;
+  final Color iconColor;
+  final String? subtitle;
+
+  const _DealsSectionHeader({
+    required this.title,
+    required this.iconColor,
+    this.iconAsset,
+    this.subtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final accent = isGem ? _cAmber : _cGreenLight;
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0d1a0d).withValues(alpha: 0.95),
-        border: Border.all(color: accent.withValues(alpha: 0.6), width: 0.6),
+        color: AppColors.surfaceBlack.withValues(alpha: 0.94),
+        border: Border.all(
+          color: AppColors.amber.withValues(alpha: 0.55),
+          width: 0.7,
+        ),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Image.asset(
-            isGem ? 'assets/ui/icon_gem.png' : 'assets/ui/icon_coin.png',
-            width: 36,
-            height: 36,
-            errorBuilder: AssetPlaceholder.image(
-                color: accent, label: pack.id, borderRadius: 6),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _formatNumber(pack.amount),
-            style: TextStyle(
-                color: accent, fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            pack.id,
-            style: const TextStyle(
-                color: _cGreenMid, fontSize: 9, fontFamily: 'monospace'),
-          ),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () => _showSnack(context),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: _cGreen,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                '\$${pack.priceUsd.toStringAsFixed(2)}',
+          Row(
+            children: [
+              Text(
+                title,
                 style: const TextStyle(
-                    color: _cGreenPale,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800),
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (iconAsset != null) ...[
+                const SizedBox(width: 6),
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: Image.asset(
+                    iconAsset!,
+                    fit: BoxFit.contain,
+                    // When the asset is missing in dev, render nothing
+                    // (no "P:" placeholder badge inside the title row).
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle!,
+              style: TextStyle(
+                color: AppColors.amber.withValues(alpha: 0.85),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ----- Gem / coin pack card (mock layout) -----------------------------------
+class _PackCard extends StatelessWidget {
+  final _PackEntry pack;
+  final bool isGem;
+  // 0-based tier index used to pick the illustration: tier 0 = smallest
+  // pile, tier 5 = largest pile. Clamped to [1..6] when building the
+  // asset path so a 7th+ pack falls back to the largest tier.
+  final int tierIndex;
+  const _PackCard({
+    required this.pack,
+    required this.isGem,
+    required this.tierIndex,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final smallIcon =
+        isGem ? 'assets/ui/icon_gem.png' : 'assets/ui/icon_coin.png';
+    final iconColor =
+        isGem ? const Color(0xFF7BB8FF) : AppColors.amber;
+    final tier = (tierIndex + 1).clamp(1, 6);
+    final pileAsset = isGem
+        ? 'assets/ui/gems_$tier.png'
+        : 'assets/ui/coins_$tier.png';
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceBlack.withValues(alpha: 0.94),
+        border: Border.all(
+          color: AppColors.amber.withValues(alpha: 0.55),
+          width: 0.7,
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          // Amount badge — top right
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+            child: Align(
+              alignment: Alignment.topRight,
+              child: _AmountBadge(
+                amount: pack.amount,
+                iconAsset: smallIcon,
+                iconColor: iconColor,
+              ),
+            ),
+          ),
+          // Illustration — tier-specific pile artwork.
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              child: Image.asset(
+                pileAsset,
+                fit: BoxFit.contain,
+                errorBuilder: AssetPlaceholder.image(
+                  color: iconColor,
+                  label: pack.id,
+                  borderRadius: 8,
+                ),
+              ),
+            ),
+          ),
+          // Price button
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            child: GestureDetector(
+              onTap: () => _showSnack(context),
+              child: Container(
+                width: double.infinity,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.green,
+                  border: Border.all(color: AppColors.greenLight, width: 0.7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '\$${pack.priceUsd.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
           ),
@@ -554,72 +829,136 @@ class _IapPackCard extends StatelessWidget {
   }
 }
 
-class _ChestRow extends StatelessWidget {
-  final _ChestEntry chest;
-  const _ChestRow({required this.chest});
+// ----- Amount badge (top-right of pack cards) -------------------------------
+class _AmountBadge extends StatelessWidget {
+  final int amount;
+  final String iconAsset;
+  final Color iconColor;
 
-  String get _label {
-    final base = chest.id.replaceAll('_chest', '');
-    return base.toUpperCase();
+  const _AmountBadge({
+    required this.amount,
+    required this.iconAsset,
+    required this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceBlack.withValues(alpha: 0.7),
+        border: Border.all(
+          color: AppColors.amber.withValues(alpha: 0.6),
+          width: 0.6,
+        ),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _formatNumber(amount),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: Image.asset(
+              iconAsset,
+              fit: BoxFit.contain,
+              errorBuilder: AssetPlaceholder.image(
+                color: iconColor,
+                label: 'b',
+                borderRadius: 2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
+}
+
+// ----- Chest card (3-col grid) ----------------------------------------------
+class _ChestCard extends StatelessWidget {
+  final _ChestEntry chest;
+  final ({String name, String perk}) copy;
+  const _ChestCard({required this.chest, required this.copy});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _ChestPreviewSheet.show(context, chest, _label),
+      onTap: () => _ChestPreviewSheet.show(context, chest, copy.name),
       child: Container(
-        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: const Color(0xFF0d1a0d).withValues(alpha: 0.95),
-          border: Border.all(color: _cGreen, width: 0.5),
+          color: AppColors.surfaceBlack.withValues(alpha: 0.94),
+          border: Border.all(
+            color: AppColors.amber.withValues(alpha: 0.55),
+            width: 0.7,
+          ),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+        child: Column(
           children: [
-            SizedBox(
-              width: 48,
-              height: 48,
+            Expanded(
               child: Image.asset(
                 'assets/ui/icon_${chest.id}.png',
                 fit: BoxFit.contain,
                 errorBuilder: AssetPlaceholder.image(
-                    color: _cAmber, label: chest.id, borderRadius: 6),
+                  color: AppColors.amber,
+                  label: chest.id,
+                  borderRadius: 6,
+                ),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_label,
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () =>
+                  _ChestRowActions.buyWithCoins(context, chest, copy.name),
+              child: Container(
+                width: double.infinity,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.green,
+                  border: Border.all(color: AppColors.greenLight, width: 0.7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _formatNumber(chest.coinPrice),
                       style: const TextStyle(
-                          color: _cGreenPale,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2)),
-                  const SizedBox(height: 2),
-                  Text(chest.id,
-                      style: const TextStyle(
-                          color: _cGreenMid,
-                          fontSize: 9,
-                          fontFamily: 'monospace')),
-                ],
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      width: 13,
+                      height: 13,
+                      child: Image.asset(
+                        'assets/ui/icon_coin.png',
+                        fit: BoxFit.contain,
+                        errorBuilder: AssetPlaceholder.image(
+                          color: AppColors.amber,
+                          label: 'c',
+                          borderRadius: 2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 6),
-            _BuyPill(
-              onTap: () =>
-                  _ChestRowActions.buyWithCoins(context, chest, _label),
-              child: _CoinAmount(amount: chest.coinPrice),
-            ),
-            const SizedBox(width: 6),
-            _BuyPill(
-              onTap: () =>
-                  _ChestRowActions.buyWithGems(context, chest, _label),
-              color: _cGemBg,
-              borderColor: _cAmber,
-              child: _GemAmount(amount: chest.gemPrice),
             ),
           ],
         ),
@@ -922,33 +1261,6 @@ class _BuyPill extends StatelessWidget {
   }
 }
 
-class _LockedPill extends StatelessWidget {
-  const _LockedPill();
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: _cGreenDark,
-          border: Border.all(color: _cAmberDark, width: 0.5),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.lock, size: 12, color: _cAmberDark),
-            SizedBox(width: 4),
-            Text('LOCKED',
-                style: TextStyle(
-                    color: _cAmberDark,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6)),
-          ],
-        ),
-      );
-}
-
 class _CoinAmount extends StatelessWidget {
   final int amount;
   const _CoinAmount({required this.amount});
@@ -997,67 +1309,6 @@ class _GemAmount extends StatelessWidget {
       );
 }
 
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel({required this.text});
-
-  @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(
-          color: _cAmberDark,
-          fontSize: 10,
-          letterSpacing: 2,
-          fontWeight: FontWeight.w700,
-        ),
-      );
-}
-
-class _SectionHint extends StatelessWidget {
-  final String icon;
-  final String text;
-  final Color tintBg;
-  final Color tintBorder;
-  final Color textColor;
-  const _SectionHint({
-    required this.icon,
-    required this.text,
-    required this.tintBg,
-    required this.tintBorder,
-    required this.textColor,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: tintBg.withValues(alpha: 0.3),
-          border: Border.all(color: tintBorder, width: 0.5),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 14,
-              height: 14,
-              child: Image.asset(
-                icon,
-                errorBuilder: AssetPlaceholder.image(
-                    color: _cAmber, label: 'h', borderRadius: 2),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(color: textColor, fontSize: 10),
-              ),
-            ),
-          ],
-        ),
-      );
-}
 
 class _EmptyDataNote extends StatelessWidget {
   final String label;

@@ -118,6 +118,8 @@ class ResultOverlay extends StatelessWidget {
     switch (w) {
       case ResultWash.red:
         return const Color(0xFFD23B3B).withValues(alpha: 0.55);
+      case ResultWash.green:
+        return AppColors.green.withValues(alpha: 0.45);
       case ResultWash.none:
         return Colors.transparent;
     }
@@ -126,11 +128,14 @@ class ResultOverlay extends StatelessWidget {
 
 /// State-colour wash painted over the gameplay scene.
 enum ResultWash {
-  /// No wash — used for Pause, Stage Complete, Biome Complete.
+  /// No wash — used for Pause.
   none,
 
   /// Crimson wash — used for Mission Failed.
   red,
+
+  /// Green wash — used for Stage Complete + Biome Complete (success).
+  green,
 }
 
 class _Title extends StatelessWidget {
@@ -166,7 +171,7 @@ class _StarsRow extends StatelessWidget {
           if (i > 0) const SizedBox(width: 10),
           Icon(
             i < filled ? Icons.star : Icons.star_border,
-            color: i < filled ? AppColors.amber : AppColors.greenPale,
+            color: i < filled ? AppColors.amber : Colors.white,
             size: 36,
           ),
         ],

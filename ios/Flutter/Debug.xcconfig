@@ -1,2 +1,6 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
 #include "Generated.xcconfig"
+
+// Override Flutter 3.41.7's EXCLUDED_ARCHS that drops arm64 from the
+// iphonesimulator slice — required for Apple Silicon hosts.
+EXCLUDED_ARCHS[sdk=iphonesimulator*] = i386
