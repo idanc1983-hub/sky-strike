@@ -35,11 +35,16 @@ class _MainShellState extends State<MainShell> {
           SocialScreen(),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: ColoredBox(
+        color: _cNavBg,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 18),
+          child: NavigationBar(
         backgroundColor: _cNavBg,
         indicatorColor: _cNavIndicator,
         surfaceTintColor: Colors.transparent,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        height: 60,
         selectedIndex: _index,
         onDestinationSelected: _onTabSelected,
         destinations: const [
@@ -64,6 +69,8 @@ class _MainShellState extends State<MainShell> {
             label: 'Social',
           ),
         ],
+      ),
+        ),
       ),
     );
   }

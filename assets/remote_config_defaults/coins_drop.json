@@ -1,0 +1,24 @@
+{
+  "world1_sources": {
+    "coin_pickup_regular": 8,
+    "coin_pickup_elite": 25,
+    "coin_pickup_boss_phase": 80,
+    "hp_pack_at_max_hp": 80,
+    "stage_clear_bonus": 150,
+    "star_bonus_2star": 40,
+    "star_bonus_3star": 80
+  },
+  "wave_clear": {
+    "wave_1": 25,
+    "wave_2": 28,
+    "wave_3": 30,
+    "wave_4": 35,
+    "wave_5": 40,
+    "wave_6": 45,
+    "wave_7": 50,
+    "wave_8": 55,
+    "wave_9": 60,
+    "wave_10": 180
+  },
+  "_note": "multiply by levels_economy.world_coin_mult (keyed by biome) for worlds 2-6"
+}

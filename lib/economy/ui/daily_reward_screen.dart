@@ -67,9 +67,17 @@ class DailyRewardScreen extends StatelessWidget {
                         const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       children: [
-                        _DayGrid(week: week, today: today),
+                        _DayGrid(
+                          week: week,
+                          today: today,
+                          currentWorld: economy.currentWorld,
+                        ),
                         const SizedBox(height: 12),
-                        _Day7Tile(week: week, today: today),
+                        _Day7Tile(
+                          week: week,
+                          today: today,
+                          currentWorld: economy.currentWorld,
+                        ),
                       ],
                     ),
                   ),
@@ -103,15 +111,6 @@ class DailyRewardScreen extends StatelessWidget {
       );
       return;
     }
-    final parts = <String>[
-      if (reward.coins > 0) '${reward.coins} coins',
-      if (reward.gems > 0) '${reward.gems} gems',
-      if (reward.powerUps.isNotEmpty)
-        '${reward.powerUps.length} power-up(s)',
-    ];
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Claimed: ${parts.join(', ')}')),
-    );
   }
 }
 
@@ -177,7 +176,12 @@ class _Title extends StatelessWidget {
 class _DayGrid extends StatelessWidget {
   final int week;
   final int today;
-  const _DayGrid({required this.week, required this.today});
+  final int currentWorld;
+  const _DayGrid({
+    required this.week,
+    required this.today,
+    required this.currentWorld,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -197,6 +201,7 @@ class _DayGrid extends StatelessWidget {
           day: day,
           state: _stateForDay(day, today),
           rewardConfig: RemoteConfigService.instance.dailyReward(week, day),
+          currentWorld: currentWorld,
         );
       },
     );
@@ -209,7 +214,12 @@ class _DayGrid extends StatelessWidget {
 class _Day7Tile extends StatelessWidget {
   final int week;
   final int today;
-  const _Day7Tile({required this.week, required this.today});
+  final int currentWorld;
+  const _Day7Tile({
+    required this.week,
+    required this.today,
+    required this.currentWorld,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -217,6 +227,7 @@ class _Day7Tile extends StatelessWidget {
       day: 7,
       state: _stateForDay(7, today),
       rewardConfig: RemoteConfigService.instance.dailyReward(week, 7),
+      currentWorld: currentWorld,
       fullWidth: true,
     );
   }
@@ -229,19 +240,21 @@ class _DayTile extends StatelessWidget {
   final int day;
   final _TileState state;
   final Map<String, dynamic>? rewardConfig;
+  final int currentWorld;
   final bool fullWidth;
 
   const _DayTile({
     required this.day,
     required this.state,
     required this.rewardConfig,
+    required this.currentWorld,
     this.fullWidth = false,
   });
 
   Color get _borderColor {
     switch (state) {
       case _TileState.claimed:
-        return AppColors.greenLight;
+        return AppColors.green.withValues(alpha: 0.5);
       case _TileState.today:
         return AppColors.greenLight;
       case _TileState.future:
@@ -253,7 +266,10 @@ class _DayTile extends StatelessWidget {
     switch (state) {
       case _TileState.today:
         return AppColors.green;
+      // Claimed = noticeably darker than future so the row reads as
+      // "already done" at a glance.
       case _TileState.claimed:
+        return const Color(0xFF020602);
       case _TileState.future:
         return AppColors.surfaceBlack;
     }
@@ -262,7 +278,7 @@ class _DayTile extends StatelessWidget {
   Color get _headerColor {
     switch (state) {
       case _TileState.claimed:
-        return AppColors.greenLight;
+        return AppColors.greenLight.withValues(alpha: 0.5);
       case _TileState.today:
         return Colors.white;
       case _TileState.future:
@@ -272,7 +288,8 @@ class _DayTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final isClaimed = state == _TileState.claimed;
+    final container = Container(
       padding: EdgeInsets.symmetric(
         horizontal: fullWidth ? 14 : 8,
         vertical: fullWidth ? 14 : 10,
@@ -294,7 +311,11 @@ class _DayTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                _RewardRow(reward: rewardConfig, large: true),
+                _RewardRow(
+                  reward: rewardConfig,
+                  currentWorld: currentWorld,
+                  large: true,
+                ),
               ],
             )
           : Column(
@@ -309,9 +330,84 @@ class _DayTile extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                _RewardRow(reward: rewardConfig, large: false),
+                _RewardRow(
+                  reward: rewardConfig,
+                  currentWorld: currentWorld,
+                  large: false,
+                ),
               ],
             ),
+    );
+    if (!isClaimed) return container;
+    // Claimed: dim the tile contents and overlay the CLAIMED stamp.
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Opacity(opacity: 0.45, child: container),
+        IgnorePointer(
+          child: _ClaimedStamp(small: !fullWidth),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CLAIMED stamp overlay — renders an asset PNG when one ships at
+// `assets/ui/stamp_claimed.png`; falls back to a stylised rotated text
+// stamp until the artwork lands.
+// ---------------------------------------------------------------------------
+class _ClaimedStamp extends StatelessWidget {
+  final bool small;
+  const _ClaimedStamp({required this.small});
+
+  static const _asset = 'assets/ui/stamp_claimed.png';
+
+  @override
+  Widget build(BuildContext context) {
+    final size = small ? 80.0 : 120.0;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Image.asset(
+        _asset,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _StampPlaceholder(small: small),
+      ),
+    );
+  }
+}
+
+class _StampPlaceholder extends StatelessWidget {
+  final bool small;
+  const _StampPlaceholder({required this.small});
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: -0.25,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: small ? 6 : 10,
+          vertical: small ? 3 : 5,
+        ),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: const Color(0xFFD23B3B),
+            width: small ? 2 : 3,
+          ),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          'CLAIMED',
+          style: TextStyle(
+            color: const Color(0xFFD23B3B),
+            fontSize: small ? 14 : 22,
+            fontWeight: FontWeight.w900,
+            letterSpacing: small ? 1.5 : 2.5,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -319,54 +415,55 @@ class _DayTile extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Reward row — renders the per-day reward icon(s) + amount text, parsed
 // from the remote-config entry's `coin / gem / chest / jet / jet_fallback`
-// fields. Day 7 can show a multi-item bundle (jet OR fallback).
+// fields. Day 7 resolves a `biome_match` jet against the player's current
+// biome; if the player already owns it (proxy: biome 1 / starter jet) the
+// row renders the `jet_fallback` bundle instead.
 // ---------------------------------------------------------------------------
 class _RewardRow extends StatelessWidget {
   final Map<String, dynamic>? reward;
+  final int currentWorld;
   final bool large;
-  const _RewardRow({required this.reward, required this.large});
+  const _RewardRow({
+    required this.reward,
+    required this.currentWorld,
+    required this.large,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final items = _parseRewards(reward);
-    final iconSize = large ? 28.0 : 22.0;
+    final items = _parseRewards(reward, currentWorld);
+    // Center the row when there's exactly one icon with no amount text
+    // (chest-only and jet-only tiles). Currency tiles stay left-aligned.
+    final hasOnlyIcon = items.length == 1 && items[0].amountLabel == null;
+    // Match Day-7 icon size for solo chest/jet tiles so they don't appear
+    // shrunken relative to the climax reward.
+    final iconSize = (large || hasOnlyIcon) ? 64.0 : 44.0;
     final textStyle = TextStyle(
       color: AppColors.amber,
-      fontSize: large ? 16 : 13,
+      fontSize: large ? 20 : 15,
       fontWeight: FontWeight.w700,
     );
     return Row(
-      mainAxisAlignment:
-          large ? MainAxisAlignment.center : MainAxisAlignment.start,
+      mainAxisAlignment: (large || hasOnlyIcon)
+          ? MainAxisAlignment.center
+          : MainAxisAlignment.start,
       children: [
         for (int i = 0; i < items.length; i++) ...[
           if (i > 0) ...[
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Text(
               '|',
               style: TextStyle(
                 color: AppColors.amber.withValues(alpha: 0.5),
-                fontSize: large ? 16 : 13,
+                fontSize: large ? 22 : 16,
                 fontWeight: FontWeight.w400,
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
           ],
-          SizedBox(
-            width: iconSize,
-            height: iconSize,
-            child: Image.asset(
-              items[i].iconAsset,
-              fit: BoxFit.contain,
-              errorBuilder: AssetPlaceholder.image(
-                color: items[i].iconColor,
-                label: items[i].label,
-                borderRadius: 4,
-              ),
-            ),
-          ),
+          _RewardIcon(item: items[i], size: iconSize),
           if (items[i].amountLabel != null) ...[
-            const SizedBox(width: 4),
+            const SizedBox(width: 5),
             Text(items[i].amountLabel!, style: textStyle),
           ],
         ],
@@ -375,9 +472,70 @@ class _RewardRow extends StatelessWidget {
   }
 }
 
-/// Translates an RC daily-reward entry into renderable items. Day 7 may
-/// produce multiple items (jet + fallback bundle); other days produce 1.
-List<_RewardItem> _parseRewards(Map<String, dynamic>? reward) {
+/// Reward icon. When the item carries a chest id, tapping it opens the
+/// `_ChestProbabilityDialog` showing the chest's contents from RC.
+class _RewardIcon extends StatelessWidget {
+  final _RewardItem item;
+  final double size;
+  const _RewardIcon({required this.item, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final image = SizedBox(
+      width: size,
+      height: size,
+      child: Image.asset(
+        item.iconAsset,
+        fit: BoxFit.contain,
+        errorBuilder: AssetPlaceholder.image(
+          color: item.iconColor,
+          label: item.label,
+          borderRadius: 4,
+        ),
+      ),
+    );
+    if (item.chestId == null) return image;
+    return GestureDetector(
+      onTap: () => _ChestProbabilityDialog.show(context, item.chestId!),
+      child: image,
+    );
+  }
+}
+
+// Biome ordering mirrors WorldMap / Jets — worldIndex (1..6) = biome
+// position. Keep in sync with jets_screen.dart's `_biomeToWorld`.
+const List<String> _worldToBiome = [
+  '', // 1-based padding
+  'jungle',
+  'desert',
+  'sea',
+  'ice',
+  'volcano',
+  'city',
+];
+
+// Biome → jet code-id (same as jets_screen's _codeIdToRcName reverse).
+const Map<String, String> _biomeToJetCodeId = {
+  'jungle': 'jet_player',
+  'desert': 'wraith_x',
+  'sea': 'specter',
+  'ice': 'viper',
+  'volcano': 'inferno',
+  'city': 'phantom',
+};
+
+const Map<String, String> _jetAssets = {
+  'jet_player': 'assets/jets/jet_player.png',
+  'wraith_x': 'assets/jets/jet_wraith_x.png',
+  'specter': 'assets/jets/jet_specter.png',
+  'viper': 'assets/jets/jet_viper.png',
+  'inferno': 'assets/jets/jet_inferno.png',
+  'phantom': 'assets/jets/jet_phantom.png',
+};
+
+/// Translates an RC daily-reward entry into renderable items.
+List<_RewardItem> _parseRewards(
+    Map<String, dynamic>? reward, int currentWorld) {
   if (reward == null) {
     return const [
       _RewardItem(
@@ -392,6 +550,7 @@ List<_RewardItem> _parseRewards(Map<String, dynamic>? reward) {
   final gem = (reward['gem'] as num?)?.toInt() ?? 0;
   final chest = reward['chest'] as String?;
   final jet = reward['jet'] as String?;
+  final jetFallback = reward['jet_fallback'] as String?;
   final items = <_RewardItem>[];
   if (coin > 0) {
     items.add(_RewardItem(
@@ -411,21 +570,16 @@ List<_RewardItem> _parseRewards(Map<String, dynamic>? reward) {
   }
   if (chest != null) {
     items.add(_RewardItem(
-      iconAsset: 'assets/ui/icon_chest_${chest.replaceAll('_chest', '')}.png',
+      iconAsset: 'assets/ui/icon_$chest.png',
       iconColor: AppColors.amber,
       label: chest,
       amountLabel: null,
+      chestId: chest,
     ));
   }
   if (jet != null) {
-    items.add(const _RewardItem(
-      iconAsset: 'assets/ui/icon_jet_reward.png',
-      iconColor: Color(0xFF7BB8FF),
-      label: 'jet',
-      amountLabel: 'x1',
-    ));
+    items.addAll(_resolveJetReward(jet, jetFallback, currentWorld));
   }
-  // If empty (all zero / null), show a placeholder so the tile isn't blank.
   if (items.isEmpty) {
     items.add(const _RewardItem(
       iconAsset: 'assets/ui/icon_coin.png',
@@ -437,16 +591,96 @@ List<_RewardItem> _parseRewards(Map<String, dynamic>? reward) {
   return items;
 }
 
+/// Resolves the Day-7 jet reward. For `biome_match`: look up the player's
+/// current-biome jet; if "owned" (biome 1 = starter jet always owned),
+/// fall back to parsing the [jetFallback] bundle string. For an explicit
+/// jet id string, render that jet.
+List<_RewardItem> _resolveJetReward(
+    String jet, String? jetFallback, int currentWorld) {
+  if (jet == 'biome_match') {
+    final biome = (currentWorld >= 1 && currentWorld < _worldToBiome.length)
+        ? _worldToBiome[currentWorld]
+        : 'jungle';
+    final jetCodeId = _biomeToJetCodeId[biome] ?? 'jet_player';
+    // Ownership proxy: biome 1's starter jet is always owned, so fall back.
+    // Higher biomes — assume the player hasn't farmed the jet yet, show it.
+    final owned = jetCodeId == 'jet_player';
+    if (owned && jetFallback != null && jetFallback.isNotEmpty) {
+      return _parseFallbackBundle(jetFallback);
+    }
+    return [_jetItem(jetCodeId)];
+  }
+  // Explicit jet id (rare — RC currently uses biome_match for D7).
+  return [_jetItem(jet)];
+}
+
+_RewardItem _jetItem(String jetCodeId) => _RewardItem(
+      iconAsset:
+          _jetAssets[jetCodeId] ?? 'assets/jets/jet_player.png',
+      iconColor: const Color(0xFF7BB8FF),
+      label: jetCodeId,
+      amountLabel: null,
+    );
+
+/// Parses fallback bundle strings like `"epic_chest + 50gem"` or
+/// `"special_chest + 100gem"` into reward items. Tolerates extra spaces
+/// and case variation. Unknown tokens are ignored rather than crashing.
+List<_RewardItem> _parseFallbackBundle(String raw) {
+  final out = <_RewardItem>[];
+  for (final part in raw.split('+').map((s) => s.trim())) {
+    if (part.isEmpty) continue;
+    // <num>gem(s) / <num>coin(s)
+    final amount = RegExp(r'^(\d+)\s*(gem|gems|coin|coins)$',
+            caseSensitive: false)
+        .firstMatch(part);
+    if (amount != null) {
+      final n = int.parse(amount.group(1)!);
+      final unit = amount.group(2)!.toLowerCase();
+      if (unit.startsWith('gem')) {
+        out.add(_RewardItem(
+          iconAsset: 'assets/ui/icon_gem.png',
+          iconColor: const Color(0xFF7BB8FF),
+          label: 'gem',
+          amountLabel: 'x$n',
+        ));
+      } else {
+        out.add(_RewardItem(
+          iconAsset: 'assets/ui/icon_coin.png',
+          iconColor: AppColors.amber,
+          label: 'coin',
+          amountLabel: 'x$n',
+        ));
+      }
+      continue;
+    }
+    // chest id (basic_chest / unique_chest / epic_chest / special_chest)
+    if (part.endsWith('_chest')) {
+      out.add(_RewardItem(
+        iconAsset: 'assets/ui/icon_$part.png',
+        iconColor: AppColors.amber,
+        label: part,
+        amountLabel: null,
+        chestId: part,
+      ));
+    }
+  }
+  return out;
+}
+
 class _RewardItem {
   final String iconAsset;
   final Color iconColor;
   final String label;
   final String? amountLabel;
+  /// Non-null when this item is a chest — used to wire the tap-to-preview
+  /// probability dialog. Matches the RC `chests.<id>` key.
+  final String? chestId;
   const _RewardItem({
     required this.iconAsset,
     required this.iconColor,
     required this.label,
     required this.amountLabel,
+    this.chestId,
   });
 }
 
@@ -456,4 +690,237 @@ _TileState _stateForDay(int day, int today) {
   if (day < today) return _TileState.claimed;
   if (day == today) return _TileState.today;
   return _TileState.future;
+}
+
+// ---------------------------------------------------------------------------
+// Chest probability dialog — shown when tapping a chest icon in the
+// reward calendar. Lists possible rewards (coin/gem ranges, jet drop %)
+// from the RC `chests.<id>` entry. No buy buttons — the calendar grants
+// the chest as a streak reward, not as a purchase.
+// ---------------------------------------------------------------------------
+class _ChestProbabilityDialog extends StatelessWidget {
+  final String chestId;
+  const _ChestProbabilityDialog({required this.chestId});
+
+  static Future<void> show(BuildContext context, String chestId) {
+    return showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      builder: (_) => _ChestProbabilityDialog(chestId: chestId),
+    );
+  }
+
+  Map<String, dynamic> get _config {
+    final all = RemoteConfigService.instance.chests;
+    final v = all[chestId];
+    return v is Map<String, dynamic> ? v : <String, dynamic>{};
+  }
+
+  int _readInt(String key) {
+    final v = _config[key];
+    return v is num ? v.toInt() : 0;
+  }
+
+  double _readDouble(String key) {
+    final v = _config[key];
+    return v is num ? v.toDouble() : 0.0;
+  }
+
+  String _formatRange(int lo, int hi) {
+    if (lo == hi) return '$lo';
+    return '$lo – $hi';
+  }
+
+  String get _displayName {
+    // basic_chest → "Basic Chest"
+    return chestId
+        .split('_')
+        .map((p) => p.isEmpty ? p : '${p[0].toUpperCase()}${p.substring(1)}')
+        .join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final coinLo = _readInt('coin_min');
+    final coinHi = _readInt('coin_max');
+    final gemLo = _readInt('gem_min');
+    final gemHi = _readInt('gem_max');
+    final jetChance = _readDouble('jet_drop_chance');
+    final jetId =
+        _config['jet_id'] is String ? _config['jet_id'] as String : null;
+    final bonusCoinsForNoJet = _readInt('bonus_coins_in_place_of_jet');
+
+    return Dialog(
+      backgroundColor: AppColors.surfaceBlack,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(
+          color: AppColors.amber.withValues(alpha: 0.55),
+          width: 0.7,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Image.asset(
+                    'assets/ui/icon_$chestId.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: AssetPlaceholder.image(
+                      color: AppColors.amber,
+                      label: chestId,
+                      borderRadius: 6,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _displayName.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Possible rewards',
+                        style: TextStyle(
+                          color: AppColors.amber.withValues(alpha: 0.8),
+                          fontSize: 11,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (coinHi > 0)
+              _RewardRangeRow(
+                icon: 'assets/ui/icon_coin.png',
+                fallback: 'c',
+                amount: _formatRange(coinLo, coinHi),
+                label: 'Coins',
+                tint: AppColors.amber,
+              ),
+            if (gemHi > 0) ...[
+              const SizedBox(height: 8),
+              _RewardRangeRow(
+                icon: 'assets/ui/icon_gem.png',
+                fallback: 'g',
+                amount: _formatRange(gemLo, gemHi),
+                label: 'Gems',
+                tint: const Color(0xFF7BB8FF),
+              ),
+            ],
+            if (jetId != null && jetChance > 0) ...[
+              const SizedBox(height: 8),
+              _RewardRangeRow(
+                icon: 'assets/jets/jet_player.png',
+                fallback: 'j',
+                amount: '${(jetChance * 100).toStringAsFixed(0)}%',
+                label: 'Chance: $jetId',
+                tint: AppColors.greenLight,
+              ),
+            ],
+            if (bonusCoinsForNoJet > 0) ...[
+              const SizedBox(height: 8),
+              _RewardRangeRow(
+                icon: 'assets/ui/icon_coin.png',
+                fallback: 'c',
+                amount: '+$bonusCoinsForNoJet',
+                label: 'Bonus if no jet',
+                tint: AppColors.amber,
+              ),
+            ],
+            const SizedBox(height: 16),
+            AppButton.primary(
+              label: 'OK',
+              height: 44,
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RewardRangeRow extends StatelessWidget {
+  final String icon;
+  final String fallback;
+  final String amount;
+  final String label;
+  final Color tint;
+  const _RewardRangeRow({
+    required this.icon,
+    required this.fallback,
+    required this.amount,
+    required this.label,
+    required this.tint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0a1a0a),
+        border: Border.all(
+          color: AppColors.green.withValues(alpha: 0.6),
+          width: 0.5,
+        ),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 26,
+            height: 26,
+            child: Image.asset(
+              icon,
+              fit: BoxFit.contain,
+              errorBuilder: AssetPlaceholder.image(
+                color: tint,
+                label: fallback,
+                borderRadius: 4,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            amount,
+            style: TextStyle(
+              color: tint,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFFC0DD97),
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

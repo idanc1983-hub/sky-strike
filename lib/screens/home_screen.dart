@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import '../config/remote_config_service.dart';
 import '../economy/constants/challenge_constants.dart';
+import '../economy/services/challenge_prize_parser.dart';
 import '../economy/state/challenge_state.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/challenge_prizes_popup.dart';
@@ -103,8 +104,6 @@ const _cChallengeBarTrack = Color(0xFF0d1a0d);
 // ---------------------------------------------------------------------------
 const String _kPlaceholderCycleDisplayName = 'Iron Skies';
 const String _kPlaceholderPrizeAsset = 'assets/ui/icon_coin.png';
-const int _kPlaceholderProgress = 216;
-const int _kPlaceholderTarget = 350;
 
 /// Deterministic preview of the 100% milestone reward in coins. Uses the
 /// same `baseCoins × (1 + level × step)` formula as `ChallengeFormulas`
@@ -572,18 +571,24 @@ class _HomeScreenState extends State<HomeScreen>
   // ---------------------------------------------------------------------------
   Widget _buildChallengeAndLaunch(EconomyState economy) {
     final view = economy.challengeView;
-    // Pre-Stage-3 (or any state where no real challenge exists) the card
-    // still renders so the home screen has its hero element. Placeholder
-    // numbers are used so the simulator preview matches the design mock.
-    final progress = view?.progress ?? _kPlaceholderProgress;
-    final target = view?.target ?? _kPlaceholderTarget;
+    // When no real cycle exists yet, the challenge feature is still
+    // locked (player hasn't crossed the unlock gate). The locked
+    // variant reuses the same bar with placeholder progress so the
+    // card frame is visually identical — only the title/timer/reward
+    // swap and the bar's centre text reads "Unlock at stage N".
+    final locked = view == null;
+    final progress = view?.progress ?? 0;
+    final target = view?.target ?? 0;
     final fraction = target > 0
         ? (progress / target).clamp(0.0, 1.0).toDouble()
         : 0.0;
-    // Live countdown. When no real cycle exists yet (pre-FTUE), show a
-    // static "1d 3h" placeholder so the timer row mirrors the mock.
-    final remaining = view?.remainingFrom(DateTime.now()) ??
-        const Duration(days: 1, hours: 3);
+    final remaining = view?.remainingFrom(DateTime.now());
+    // Pull stage 1's prize from the active cycle's RC ladder so the
+    // bar-end reward matches RC instead of the legacy formula preview.
+    final stages = economy.activeChallengeStages;
+    final stage1Prize = stages.isNotEmpty
+        ? parseChallengePrize((stages.first['prize'] ?? '').toString())
+        : ChallengePrize.unknown;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
@@ -591,13 +596,20 @@ class _HomeScreenState extends State<HomeScreen>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _ChallengeCard(
-            displayName: _kPlaceholderCycleDisplayName,
+            displayName: view?.type.displayName ?? _kPlaceholderCycleDisplayName,
             progress: progress,
             target: target,
             fraction: fraction,
-            prizeAsset: _kPlaceholderPrizeAsset,
-            prizeAmount: _previewMilestoneCoins(economy.level),
+            prizeAsset: locked || stage1Prize.amount == 0
+                ? _kPlaceholderPrizeAsset
+                : stage1Prize.asset,
+            prizeAmount: locked
+                ? _previewMilestoneCoins(economy.level)
+                : stage1Prize.amount,
             remaining: remaining,
+            locked: locked,
+            unlockLabel:
+                'Unlock at stage ${EconomyState.challengeUnlockLevel}',
             onTap: () => ChallengePrizesPopup.show(context),
             // Cycle bg + bar colour are dynamic via remote config. Until
             // the cycle plumbing lands, render the styled fallback.
@@ -897,6 +909,11 @@ class _ChallengeCard extends StatelessWidget {
   /// Progress-bar fill colour. Defaults to the existing in-game green.
   final Color barColor;
 
+  /// Pre-unlock variant: hide title + timer + prize, replace the prize
+  /// icon with a lock, and show [unlockLabel] inside the bar.
+  final bool locked;
+  final String unlockLabel;
+
   const _ChallengeCard({
     required this.displayName,
     required this.progress,
@@ -908,13 +925,17 @@ class _ChallengeCard extends StatelessWidget {
     this.remaining,
     this.bgAsset,
     this.barColor = _cGreen,
+    this.locked = false,
+    this.unlockLabel = '',
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: onTap,
+      // Locked variant is non-interactive — the player has nothing to
+      // see yet; tapping the card is a no-op until the unlock gate.
+      onTap: locked ? null : onTap,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: _cChallengeBg.withValues(alpha: 0.94),
@@ -936,14 +957,23 @@ class _ChallengeCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                displayName,
-                style: const TextStyle(
-                  color: _cAmber,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+              // Title row — hidden but space-preserving when locked so
+              // the card keeps the same overall height as the unlocked
+              // variant (and therefore the same tap-target footprint).
+              Visibility(
+                visible: !locked,
+                maintainSize: true,
+                maintainAnimation: true,
+                maintainState: true,
+                child: Text(
+                  displayName,
+                  style: const TextStyle(
+                    color: _cAmber,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 10),
               _ChallengeBar(
@@ -953,11 +983,24 @@ class _ChallengeCard extends StatelessWidget {
                 prizeAsset: prizeAsset,
                 prizeAmount: prizeAmount,
                 barColor: barColor,
+                locked: locked,
+                lockedLabel: unlockLabel,
               ),
-              if (remaining != null) ...[
-                const SizedBox(height: 8),
-                _CountdownRow(remaining: remaining!),
-              ],
+              const SizedBox(height: 8),
+              // Countdown row — same space-preserving treatment as the
+              // title so the locked card matches the unlocked layout.
+              Visibility(
+                visible: !locked && remaining != null,
+                maintainSize: true,
+                maintainAnimation: true,
+                maintainState: true,
+                child: _CountdownRow(
+                  // Any non-zero duration keeps `_CountdownRow` from
+                  // collapsing to SizedBox.shrink, so `maintainSize`
+                  // can actually preserve its height when hidden.
+                  remaining: remaining ?? const Duration(hours: 1),
+                ),
+              ),
             ],
           ),
         ),
@@ -1023,8 +1066,8 @@ class _CountdownRow extends StatelessWidget {
 //   - No amount badge under the icon (removed per mock).
 // ---------------------------------------------------------------------------
 class _ChallengeBar extends StatelessWidget {
-  static const double _barHeight = 18;
-  static const double _prizeIconSize = 32;
+  static const double _barHeight = 28;
+  static const double _prizeIconSize = 36;
   static const double _amountBadgeHeight = 18;
   // Wide-enough envelope to fit 3–4-digit prize numbers centred on the
   // icon centre without horizontal overflow.
@@ -1040,6 +1083,8 @@ class _ChallengeBar extends StatelessWidget {
   final String prizeAsset;
   final int prizeAmount;
   final Color barColor;
+  final bool locked;
+  final String lockedLabel;
 
   const _ChallengeBar({
     required this.fraction,
@@ -1048,6 +1093,8 @@ class _ChallengeBar extends StatelessWidget {
     required this.prizeAsset,
     required this.prizeAmount,
     required this.barColor,
+    this.locked = false,
+    this.lockedLabel = '',
   });
 
   @override
@@ -1071,7 +1118,9 @@ class _ChallengeBar extends StatelessWidget {
             child: _BarTrack(
               fraction: fraction,
               barColor: barColor,
-              progressText: '$progress/$target',
+              // Locked: same green fill as the unlocked state — only
+              // the centre label swaps to "Unlock at stage N".
+              progressText: locked ? lockedLabel : '$progress/$target',
             ),
           ),
           Positioned(
@@ -1079,14 +1128,20 @@ class _ChallengeBar extends StatelessWidget {
             top: 0,
             width: _prizeIconSize,
             height: _prizeIconSize,
-            child: Image.asset(
-              prizeAsset,
-              errorBuilder: AssetPlaceholder.image(
-                color: _cAmber,
-                label: 'prize',
-                borderRadius: 4,
-              ),
-            ),
+            child: locked
+                ? const Icon(
+                    Icons.lock,
+                    color: _cAmber,
+                    size: _prizeIconSize,
+                  )
+                : Image.asset(
+                    prizeAsset,
+                    errorBuilder: AssetPlaceholder.image(
+                      color: _cAmber,
+                      label: 'prize',
+                      borderRadius: 4,
+                    ),
+                  ),
           ),
           // Amount badge centred horizontally on the prize icon's centre.
           // The Positioned area is wider than the icon so a badge with a
@@ -1097,34 +1152,35 @@ class _ChallengeBar extends StatelessWidget {
           // right edge → 16px. To centre a `_badgeBoxWidth`-wide area on
           // that point, the box's `right` value is
           //   centre − boxWidth/2 = 16 − boxWidth/2.
-          Positioned(
-            right: 16 - _badgeBoxWidth / 2,
-            top: badgeTop,
-            width: _badgeBoxWidth,
-            height: _amountBadgeHeight,
-            child: Center(
-              child: Container(
-                height: _amountBadgeHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0A1606),
-                  border: Border.all(color: _cAmber, width: 0.7),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$prizeAmount',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: _cGreenPale,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    height: 1.0,
+          if (!locked)
+            Positioned(
+              right: 16 - _badgeBoxWidth / 2,
+              top: badgeTop,
+              width: _badgeBoxWidth,
+              height: _amountBadgeHeight,
+              child: Center(
+                child: Container(
+                  height: _amountBadgeHeight,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0A1606),
+                    border: Border.all(color: _cAmber, width: 0.7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$prizeAmount',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: _cGreenPale,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      height: 1.0,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -1148,7 +1204,12 @@ class _BarTrack extends StatelessWidget {
       borderRadius: BorderRadius.circular(7),
       child: Stack(
         children: [
-          Container(color: _cChallengeBarTrack),
+          // Track. `Positioned.fill` is required — a bare `Container` in
+          // a Stack collapses to 0x0, so the empty (fraction == 0) bar
+          // would otherwise render invisible against the card bg.
+          Positioned.fill(
+            child: Container(color: _cChallengeBarTrack),
+          ),
           LayoutBuilder(builder: (ctx, constraints) {
             return AnimatedContainer(
               duration: const Duration(milliseconds: 350),
@@ -1164,7 +1225,7 @@ class _BarTrack extends StatelessWidget {
               progressText,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 10,
+                fontSize: 15,
                 fontWeight: FontWeight.w700,
                 height: 1.0,
                 shadows: [

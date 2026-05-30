@@ -12,7 +12,7 @@ class SocialScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: AppColors.greenDeep,
+      backgroundColor: AppColors.surfaceBlack,
       body: SafeArea(
         child: Column(
           children: [

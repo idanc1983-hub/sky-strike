@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import '../../config/remote_config_service.dart';
 import '../constants/ad_placement_catalog.dart';
 import '../constants/economy_constants.dart';
 import '../constants/iap_catalog.dart';
@@ -17,25 +18,12 @@ import '../services/economy_persistence.dart';
 import '../services/ftue_triggers.dart';
 import '../services/iap_service.dart';
 import '../services/pack_pricing.dart';
-import '../services/pickup_handler.dart';
 import '../services/power_up_picker.dart';
 import '../services/revive_pricing.dart';
 import '../services/streak_clock.dart';
 import 'challenge_state.dart';
 import 'loadout.dart';
 import 'reward.dart';
-
-/// Result of an in-mission pickup processed by [EconomyState.onPowerUpPickup].
-class PowerUpPickupReport {
-  final PickupResult result;
-  final int? slotIndex;
-  final List<String> queueAfter;
-  const PowerUpPickupReport({
-    required this.result,
-    required this.queueAfter,
-    this.slotIndex,
-  });
-}
 
 /// Outcome of a stage-clear event. Carries the granted [Reward] plus
 /// the list of newly unlocked power-ups so the host UI can drive the
@@ -117,13 +105,13 @@ class EconomyState extends ChangeNotifier {
   final Set<String> _completedStages = <String>{};
   final Set<String> _threeStarStages = <String>{};
   final Set<String> _defeatedBosses = <String>{};
-  final List<String> _pickupQueue = <String>[];
 
   // ---------------------------------------------------------------------------
   // Monetization
   // ---------------------------------------------------------------------------
   bool _adsRemoved = false;
   final Set<String> _packsPurchased = <String>{};
+  final Set<String> _ownedJets = <String>{'jet_player'};
   DateTime? _installDate;
   int _pendingNextJetDiscountPct = 0;
 
@@ -180,8 +168,7 @@ class EconomyState extends ChangeNotifier {
   int get unlockedLoadoutSlots => _unlockedLoadoutSlots;
   /// Read-only snapshot of all loadouts. The returned list and the inner
   /// objects are defensive copies — mutating them does not feed back into
-  /// state. Use [renameLoadout]/[resolveQueuedPickupToSlot] etc. to make
-  /// changes that should persist.
+  /// state. Use [renameLoadout] etc. to make changes that should persist.
   List<Loadout> get loadouts => List<Loadout>.unmodifiable(
         _loadouts.map((l) => l.clone()).toList(growable: false),
       );
@@ -239,9 +226,10 @@ class EconomyState extends ChangeNotifier {
   int get currentStage => _currentStage;
   int get stageRevivesUsed => _stageRevivesUsed;
   int get accumulatedRunCoins => _accumulatedRunCoins;
-  List<String> get pickupQueue => List<String>.unmodifiable(_pickupQueue);
   bool get adsRemoved => _adsRemoved;
   Set<String> get packsPurchased => Set<String>.unmodifiable(_packsPurchased);
+  Set<String> get ownedJets => Set<String>.unmodifiable(_ownedJets);
+  bool ownsJet(String jetId) => _ownedJets.contains(jetId);
   int get pendingNextJetDiscountPct => _pendingNextJetDiscountPct;
 
   // FTUE surface
@@ -287,6 +275,7 @@ class EconomyState extends ChangeNotifier {
     _xpMax = snap.xpMax;
     _level = snap.level;
     _currentWorld = snap.currentWorld;
+    _currentStage = snap.currentStage;
     _maxWorldReached = snap.maxWorldReached;
     _powerUpInventory
       ..clear()
@@ -325,6 +314,10 @@ class EconomyState extends ChangeNotifier {
     _packsPurchased
       ..clear()
       ..addAll(snap.packsPurchased);
+    _ownedJets
+      ..clear()
+      ..addAll(snap.ownedJets)
+      ..add('jet_player');
     _installDate = snap.installDate ?? _now();
 
     // Challenge / FTUE / Ace fields (added in v1.3)
@@ -352,6 +345,37 @@ class EconomyState extends ChangeNotifier {
   // Challenge System (GDD v1.3 §4)
   // ---------------------------------------------------------------------------
 
+  /// Returns the active cycle's RC stage entries (each: `{stage, goal,
+  /// prize}`) or an empty list when no cycle is active / RC has no
+  /// ladder for it. Order matches RC (stage 1 first).
+  List<Map<String, dynamic>> get activeChallengeStages {
+    final type = _activeChallengeType;
+    if (type == null) return const <Map<String, dynamic>>[];
+    final ladders = RemoteConfigService.instance.challengeStageLadders;
+    final cycle = ladders[type.jsonValue];
+    if (cycle is! Map) return const <Map<String, dynamic>>[];
+    final stages = cycle['stages'];
+    if (stages is! List) return const <Map<String, dynamic>>[];
+    return stages.whereType<Map>().map((e) {
+      return e.map((k, v) => MapEntry(k.toString(), v));
+    }).toList();
+  }
+
+  /// Reads the first stage's `goal` from the RC stage ladder for [type].
+  /// Returns null if RC has no ladder entry for this cycle so the caller
+  /// can fall back to [ChallengeFormulas.targetFor].
+  int? _ladderTargetFor(ChallengeType type) {
+    final ladders = RemoteConfigService.instance.challengeStageLadders;
+    final cycle = ladders[type.jsonValue];
+    if (cycle is! Map) return null;
+    final stages = cycle['stages'];
+    if (stages is! List || stages.isEmpty) return null;
+    final first = stages.first;
+    if (first is! Map) return null;
+    final goal = first['goal'];
+    return goal is int ? goal : (goal is num ? goal.toInt() : null);
+  }
+
   /// Starts a brand-new challenge cycle. The first-ever cycle is locked
   /// to Hunter; subsequent cycles advance through the rotation.
   ///
@@ -366,7 +390,7 @@ class EconomyState extends ChangeNotifier {
     _activeChallengeType = type;
     _challengeStartedAt = _now();
     _challengeProgress = 0;
-    _challengeTarget =
+    _challengeTarget = _ladderTargetFor(type) ??
         ChallengeFormulas.targetFor(type: type, playerLevel: _level);
     _challenge100ClaimedThisCycle = false;
     _scheduleSync();
@@ -524,6 +548,44 @@ class EconomyState extends ChangeNotifier {
     return true;
   }
 
+  /// Buys [jetId] for [priceGems]. Returns true if the jet is owned after
+  /// the call (either newly bought or already owned). Returns false only
+  /// when the player has insufficient gems.
+  ///
+  /// Honours any `_pendingNextJetDiscountPct` left over from a discount-
+  /// bearing IAP pack (Pilot/Squadron Bundle). The discount is consumed
+  /// on a successful purchase regardless of price (so a player who
+  /// receives a free jet from a chest still spends the discount slot —
+  /// flag for design review if that changes).
+  bool buyJet(String jetId, int priceGems) {
+    if (_ownedJets.contains(jetId)) return true;
+    if (priceGems < 0) return false;
+    final discounted = _applyJetDiscount(priceGems);
+    if (discounted > 0 && _gems < discounted) return false;
+    _gems -= discounted;
+    _ownedJets.add(jetId);
+    if (_pendingNextJetDiscountPct > 0) {
+      _pendingNextJetDiscountPct = 0;
+    }
+    _scheduleSync();
+    notifyListeners();
+    return true;
+  }
+
+  /// Returns [priceGems] with any pending next-jet discount applied.
+  /// Discount is a percentage in 0..100; rounded so the player never
+  /// pays a fractional gem.
+  int _applyJetDiscount(int priceGems) {
+    if (_pendingNextJetDiscountPct <= 0 || priceGems <= 0) return priceGems;
+    final pct = _pendingNextJetDiscountPct.clamp(0, 100);
+    final discounted = (priceGems * (100 - pct) / 100).round();
+    return discounted < 0 ? 0 : discounted;
+  }
+
+  /// Read-only computed view of the jet price after any pending discount.
+  /// UI surfaces this so the player sees the discounted price up-front.
+  int discountedJetPrice(int priceGems) => _applyJetDiscount(priceGems);
+
   /// Adds XP and cascades level-ups. Each level raises [xpMax] by 10%
   /// (capped — see [_xpMaxCap]). Players never lose XP (GDD §2.3). Fires
   /// milestone triggers on Lv 10 / 25 / 50 transitions even if multiple
@@ -571,7 +633,6 @@ class EconomyState extends ChangeNotifier {
     _accumulatedRunCoins = 0;
     _stageRevivesUsed = 0;
     _playerDiedThisStage = false;
-    _pickupQueue.clear();
     notifyListeners();
   }
 
@@ -611,7 +672,6 @@ class EconomyState extends ChangeNotifier {
     _accumulatedRunCoins = 0;
     _stageRevivesUsed = 0;
     _playerDiedThisStage = true;
-    _pickupQueue.clear();
     _scheduleSync();
     notifyListeners();
   }
@@ -683,7 +743,6 @@ class EconomyState extends ChangeNotifier {
     _accumulatedRunCoins = 0;
     _stageRevivesUsed = 0;
     _playerDiedThisStage = false;
-    _pickupQueue.clear();
 
     _scheduleSync();
     notifyListeners();
@@ -704,6 +763,7 @@ class EconomyState extends ChangeNotifier {
     required bool diedDuringRun,
     int simulatedRunCoins = 0,
   }) {
+    assert(kDebugMode, 'debugSimulateStageClear is debug-only');
     setCurrentWorld(world);
     _currentStage = stage;
     _accumulatedRunCoins = simulatedRunCoins;
@@ -729,12 +789,6 @@ class EconomyState extends ChangeNotifier {
   /// one of the stage-cap slots.
   bool canTakeAdRevive() => RevivePricing.canTakeAdRevive(_stageRevivesUsed);
 
-  /// Authorizes a free ad-revive without consuming a cap slot. Kept for
-  /// backwards compatibility — new callers should prefer the
-  /// [canTakeAdRevive] / [commitAdRevive] pair so a failed/skipped ad
-  /// doesn't burn one of the player's three per-stage revives.
-  bool tryAdRevive() => canTakeAdRevive();
-
   /// Commits one ad-revive against the stage cap. Call this *after* the
   /// ad SDK confirms `rewardEarned` (not on dismiss). Returns true if
   /// the cap allowed the commit; false if it would overflow (caller
@@ -750,25 +804,15 @@ class EconomyState extends ChangeNotifier {
   // Power-up pickups & purchases
   // ---------------------------------------------------------------------------
 
-  /// Routes an in-mission power-up pickup through [PickupHandler]. Also
-  /// increments the player's inventory counter — pickups always grant a
-  /// copy regardless of where the visual lands.
-  PowerUpPickupReport onPowerUpPickup(String powerUpId) {
+  /// Records an in-mission power-up pickup. POWERUP-v2.1 unified the
+  /// pickup flow: every type just bumps the inventory counter. The
+  /// dynamic tray rebuilds off [powerUpInventory], so there is no slot
+  /// assignment or overflow queue to track.
+  void onPowerUpPickup(String powerUpId) {
     _powerUpInventory[powerUpId] =
         (_powerUpInventory[powerUpId] ?? 0) + 1;
-    final outcome = PickupHandler.process(
-      powerUpId: powerUpId,
-      loadout: activeLoadout,
-      unlockedLoadoutSlots: _unlockedLoadoutSlots,
-      pickupQueue: _pickupQueue,
-    );
     _scheduleSync();
     notifyListeners();
-    return PowerUpPickupReport(
-      result: outcome.result,
-      slotIndex: outcome.slotIndex,
-      queueAfter: outcome.queueAfter,
-    );
   }
 
   /// Buys [packSize] of [powerUpId] in the shop. Returns true on success.
@@ -812,28 +856,6 @@ class EconomyState extends ChangeNotifier {
     return true;
   }
 
-  /// Resolves the queued pickup at [queueIndex]: sends it into [slotIndex]
-  /// of the active tray. The queued entry is consumed.
-  void resolveQueuedPickupToSlot({
-    required int queueIndex,
-    required int slotIndex,
-  }) {
-    if (queueIndex < 0 || queueIndex >= _pickupQueue.length) return;
-    if (slotIndex < 0 || slotIndex >= _unlockedLoadoutSlots) return;
-    final id = _pickupQueue.removeAt(queueIndex);
-    activeLoadout.setSlot(slotIndex, id);
-    _scheduleSync();
-    notifyListeners();
-  }
-
-  /// Discards the queued pickup at [queueIndex] without using it. Player
-  /// keeps the inventory copy that the pickup already granted.
-  void discardQueuedPickup(int queueIndex) {
-    if (queueIndex < 0 || queueIndex >= _pickupQueue.length) return;
-    _pickupQueue.removeAt(queueIndex);
-    notifyListeners();
-  }
-
   // ---------------------------------------------------------------------------
   // Loadout slots
   // ---------------------------------------------------------------------------
@@ -852,14 +874,6 @@ class EconomyState extends ChangeNotifier {
     return _maxWorldReached >= biomeReq && _coins >= cost;
   }
 
-  /// Whether the contextual gem-shortcut to slot 4 is offerable right
-  /// now. Only used inside the pickup overflow popup (GDD §2.7.1).
-  bool canBuySlot4WithGems() {
-    return _maxWorldReached >= EconomyConstants.loadoutSlot4BiomeReq &&
-        _unlockedLoadoutSlots == 3 &&
-        _gems >= EconomyConstants.loadoutSlot4GemShortcutCost;
-  }
-
   /// Buys loadout slot 4 or 5 with coins. Returns true on success.
   bool buyLoadoutSlot(int slot) {
     if (!canBuyLoadoutSlot(slot)) return false;
@@ -868,25 +882,6 @@ class EconomyState extends ChangeNotifier {
         : EconomyConstants.loadoutSlot5CoinCost;
     if (!spendCoins(cost)) return false;
     _unlockedLoadoutSlots = slot;
-    _scheduleSync();
-    notifyListeners();
-    return true;
-  }
-
-  /// Buys loadout slot 4 with gems and seats [pickupId] in it directly.
-  /// Used by the pickup overflow popup's "BUY SLOT 4" button. The
-  /// pickup id must be currently in the queue — this method does NOT
-  /// grant an inventory copy on its own; it relies on
-  /// [onPowerUpPickup] having already done so when the pickup was
-  /// queued. Returns false if the pickup id isn't queued (caller
-  /// passed bogus data).
-  bool buySlot4WithGemsAndSeat(String pickupId) {
-    if (!canBuySlot4WithGems()) return false;
-    if (!_pickupQueue.contains(pickupId)) return false;
-    if (!spendGems(EconomyConstants.loadoutSlot4GemShortcutCost)) return false;
-    _unlockedLoadoutSlots = 4;
-    activeLoadout.setSlot(3, pickupId);
-    _pickupQueue.remove(pickupId);
     _scheduleSync();
     notifyListeners();
     return true;
@@ -1066,7 +1061,17 @@ class EconomyState extends ChangeNotifier {
   void setCurrentStage(int stage) {
     if (stage <= 0) return;
     if (_currentStage == stage) return;
+    final priorGlobalLevel = (_currentWorld - 1) * 10 + _currentStage;
     _currentStage = stage;
+    final newGlobalLevel = (_currentWorld - 1) * 10 + _currentStage;
+    // Challenge unlock gate. The player progresses one stage = one level
+    // (with 10 stages per biome), so crossing global level
+    // [challengeUnlockLevel] is what triggers the first-ever cycle.
+    // markChallengeRevealed is a no-op if already revealed.
+    if (priorGlobalLevel < challengeUnlockLevel &&
+        newGlobalLevel >= challengeUnlockLevel) {
+      markChallengeRevealed();
+    }
     _scheduleSync();
     notifyListeners();
   }
@@ -1103,6 +1108,13 @@ class EconomyState extends ChangeNotifier {
   /// Shows a rewarded ad for [placement] via [AdsService]. On success
   /// applies the placement's reward and updates daily counters.
   Future<AdShowOutcome> showRewardedAd(AdPlacement placement) async {
+    // Roll the daily window before the cap check — otherwise a player
+    // who hit the cap yesterday stays capped forever, since the reset
+    // used to live inside [_applyAdReward] (which we never reach when
+    // we early-return as `capReached`).
+    if (placement == AdPlacement.extraGemsDaily) {
+      _resetDailyAdWatchIfNewDay();
+    }
     if (placement == AdPlacement.extraGemsDaily &&
         _dailyAdWatchCount >= EconomyConstants.dailyAdWatchCap) {
       return AdShowOutcome(
@@ -1181,7 +1193,15 @@ class EconomyState extends ChangeNotifier {
                 1);
         _gems += (gems * mult).floor();
         _dailyAdWatchCount += 1;
-        _dailyAdWatchDate = _now();
+        // Monotonic stamp — never let the watch date move backward.
+        // Combined with [_resetDailyAdWatchIfNewDay] below, this defeats
+        // the "roll the clock back to today" cap-reset exploit: once
+        // the stamp is in the future relative to the device clock, the
+        // cap holds until real time catches up.
+        final now = _now();
+        final last = _dailyAdWatchDate;
+        _dailyAdWatchDate =
+            (last == null || now.isAfter(last)) ? now : last;
         break;
       case AdPlacement.chestBoost:
         // The +25% bonus is applied at chest-claim time via the
@@ -1192,10 +1212,28 @@ class EconomyState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Resets the daily-ad watch counter when the wall-clock day has
+  /// advanced past the last recorded watch.
+  ///
+  /// Clock-rollback defense: when `_now()` is earlier than the last
+  /// stored watch date, the device clock was moved backward — we do
+  /// NOT reset. The cap stays in force until real time catches up to
+  /// the stored timestamp. The watch-date itself is stamped
+  /// monotonically by [_applyAdReward], so a single rollback cannot
+  /// re-claim today's slots.
+  ///
+  /// Note: this is best-effort client mitigation. A determined cheater
+  /// can still roll the clock *forward* across separate app sessions
+  /// (one cap reset per real-time interval needed for the stamp to
+  /// catch up). Full defense requires server-side reconciliation —
+  /// flagged for the backend pass that will replace
+  /// [EconomyApi._flushToBackend].
   void _resetDailyAdWatchIfNewDay() {
     final last = _dailyAdWatchDate;
     if (last == null) return;
-    if (StreakClock.dayDelta(last, _now()) >= 1) {
+    final now = _now();
+    if (now.isBefore(last)) return;
+    if (StreakClock.dayDelta(last, now) >= 1) {
       _dailyAdWatchCount = 0;
       _dailyAdWatchDate = null;
     }
@@ -1220,6 +1258,7 @@ class EconomyState extends ChangeNotifier {
       xpMax: _xpMax,
       level: _level,
       currentWorld: _currentWorld,
+      currentStage: _currentStage,
       maxWorldReached: _maxWorldReached,
       powerUpInventory: Map<String, int>.from(_powerUpInventory),
       unlockedLoadoutSlots: _unlockedLoadoutSlots,
@@ -1236,6 +1275,7 @@ class EconomyState extends ChangeNotifier {
       defeatedBosses: Set<String>.from(_defeatedBosses),
       adsRemoved: _adsRemoved,
       packsPurchased: Set<String>.from(_packsPurchased),
+      ownedJets: Set<String>.from(_ownedJets),
       installDate: _installDate,
       pendingNextJetDiscountPct: _pendingNextJetDiscountPct,
       activeChallengeType: _activeChallengeType,
@@ -1300,6 +1340,7 @@ class EconomyState extends ChangeNotifier {
   /// first clear and the Stage 3 reveal can replay. Does NOT touch
   /// wallets or progression.
   void debugReplayFtue() {
+    assert(kDebugMode, 'debugReplayFtue is debug-only');
     _firedFtueTriggers.clear();
     _challengeRevealed = false;
     _activeChallengeType = null;
@@ -1316,6 +1357,7 @@ class EconomyState extends ChangeNotifier {
   /// Stage 1 reward + the FTUE "Hell yes!" Ace line + home-screen
   /// coin chip visibility flip without having to play through.
   StageClearOutcome debugSimulateStage1Clear() {
+    assert(kDebugMode, 'debugSimulateStage1Clear is debug-only');
     return debugSimulateStageClear(
       world: 1,
       stage: 1,
@@ -1330,6 +1372,7 @@ class EconomyState extends ChangeNotifier {
   /// Bypasses [addCoins]/[spendCoins] so QA can jump straight to a
   /// target balance without ladder-walking through deltas.
   void debugSetCoins(int value) {
+    assert(kDebugMode, 'debugSetCoins is debug-only');
     final clamped = value < 0 ? 0 : value;
     if (_coins == clamped) return;
     _coins = clamped;
@@ -1339,6 +1382,7 @@ class EconomyState extends ChangeNotifier {
 
   /// Debug-only: overwrites the gem balance to an absolute value.
   void debugSetGems(int value) {
+    assert(kDebugMode, 'debugSetGems is debug-only');
     final clamped = value < 0 ? 0 : value;
     if (_gems == clamped) return;
     _gems = clamped;
@@ -1351,6 +1395,7 @@ class EconomyState extends ChangeNotifier {
   /// path early-returns on `challengeRevealed`, so this resets that flag
   /// too.
   void debugResetChallengeCycle() {
+    assert(kDebugMode, 'debugResetChallengeCycle is debug-only');
     _challengeRevealed = false;
     _activeChallengeType = null;
     _challengeStartedAt = null;
@@ -1366,6 +1411,7 @@ class EconomyState extends ChangeNotifier {
   /// install date). Equivalent to deleting + reinstalling the app
   /// without actually reinstalling.
   Future<void> debugHardReset() async {
+    assert(kDebugMode, 'debugHardReset is debug-only');
     _coins = 0;
     _gems = 0;
     _xp = 0;
@@ -1393,9 +1439,11 @@ class EconomyState extends ChangeNotifier {
     _stageRevivesUsed = 0;
     _currentStage = 1;
     _playerDiedThisStage = false;
-    _pickupQueue.clear();
     _adsRemoved = false;
     _packsPurchased.clear();
+    _ownedJets
+      ..clear()
+      ..add('jet_player');
     _pendingNextJetDiscountPct = 0;
     _installDate = _now();
     _activeChallengeType = null;
@@ -1421,8 +1469,4 @@ class EconomyState extends ChangeNotifier {
     _ads.dispose();
     super.dispose();
   }
-
-  /// Resolves a queued pickup at the head of the queue. Returns null if
-  /// the queue is empty. Used in [buySlot4WithGemsAndSeat] sanity checks.
-  String? peekQueueHead() => _pickupQueue.isEmpty ? null : _pickupQueue.first;
 }

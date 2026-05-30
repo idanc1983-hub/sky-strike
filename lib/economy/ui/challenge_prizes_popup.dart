@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/asset_placeholder.dart';
+import '../services/challenge_prize_parser.dart';
 import '../state/challenge_state.dart';
 import '../state/economy_state.dart';
+import 'chest_contents_popup.dart';
 
 /// Popup launched by tapping the home-screen challenge card.
 ///
@@ -121,13 +123,13 @@ class _ChallengePrizesPopupState extends State<ChallengePrizesPopup> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _HeaderRow(
-                title: _placeholderCycleName,
+                title: view?.type.displayName ?? _placeholderCycleName,
                 onClose: () => Navigator.of(context).pop(),
               ),
               const SizedBox(height: 12),
-              const _GrandPrizeBanner(prize: _placeholderGrandPrize),
+              _GrandPrizeBanner(prize: _grandPrizeFor(economy)),
               const SizedBox(height: 14),
-              ..._buildStageList(),
+              ..._buildStageList(economy),
               const SizedBox(height: 12),
               _FooterRow(
                 remaining: remaining,
@@ -140,29 +142,99 @@ class _ChallengePrizesPopupState extends State<ChallengePrizesPopup> {
     );
   }
 
-  List<Widget> _buildStageList() {
-    // Render furthest-from-current at the top and current at the bottom,
-    // so the ladder visually rises from the player toward the grand
-    // prize banner. Data order is still 0=current..N=furthest; only the
-    // iteration direction flips.
+  /// Builds the visible stage rows from the active cycle's RC ladder.
+  /// Falls back to the hardcoded placeholders when no cycle is active or
+  /// RC has no ladder entry for it.
+  ///
+  /// Only renders a *window* of the ladder (current + next N) so cycles
+  /// with many stages (new_players has 15) don't bury the early prizes
+  /// at the bottom of a long scroll list. Furthest-from-current stages
+  /// render at the top so the ladder visually rises toward the grand-
+  /// prize banner.
+  List<Widget> _buildStageList(EconomyState economy) {
+    final stages = economy.activeChallengeStages;
+    final entries = stages.isEmpty
+        ? _placeholderStages
+        : stages
+            .map((s) => _prizeEntryFrom(
+                  parseChallengePrize((s['prize'] ?? '').toString()),
+                ))
+            .toList();
+
+    // Window: current + next 4. Current is the lowest unclaimed stage,
+    // approximated here as stage 1 (index 0) until per-stage claim
+    // state is wired through EconomyState.
+    const windowSize = 5;
+    final windowEnd = entries.length < windowSize
+        ? entries.length
+        : windowSize;
+
     return <Widget>[
-      for (int i = _placeholderStages.length - 1; i >= 0; i--)
+      for (int i = windowEnd - 1; i >= 0; i--)
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: _StageRow(
-            stage: _placeholderStages[i],
+            stage: entries[i],
             isCurrent: i == _currentStageIndex,
             isLocked: i > _currentStageIndex,
           ),
         ),
     ];
   }
+
+  /// Picks the last stage's prize as the "grand" banner so the popup
+  /// always shows the cycle's pinnacle reward at the top. Falls back to
+  /// the placeholder banner if RC has no ladder.
+  _PrizeEntry _grandPrizeFor(EconomyState economy) {
+    final stages = economy.activeChallengeStages;
+    if (stages.isEmpty) return _placeholderGrandPrize;
+    final parsed =
+        parseChallengePrize((stages.last['prize'] ?? '').toString());
+    return _prizeEntryFrom(parsed);
+  }
 }
+
+/// Adapter that lets a [ChallengePrize] satisfy the popup's existing
+/// `_PrizeEntry` shape without duplicating fields.
+_PrizeEntry _prizeEntryFrom(ChallengePrize p) =>
+    _PrizeEntry(asset: p.asset, amount: p.amount, chestId: p.chestId, label: p.label);
 
 class _PrizeEntry {
   final String asset;
   final int amount;
-  const _PrizeEntry({required this.asset, required this.amount});
+  final String? chestId;
+  final String label;
+  const _PrizeEntry({
+    required this.asset,
+    required this.amount,
+    this.chestId,
+    this.label = '',
+  });
+}
+
+/// Wraps a child in a tappable that opens [ChestContentsPopup] when the
+/// prize has a [chestId]. Pass-through (no GestureDetector overhead) for
+/// non-chest prizes so coin/gem icons stay non-interactive.
+class _ChestTappable extends StatelessWidget {
+  final _PrizeEntry prize;
+  final Widget child;
+  const _ChestTappable({required this.prize, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final id = prize.chestId;
+    if (id == null) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => ChestContentsPopup.show(
+        context,
+        chestId: id,
+        chestAsset: prize.asset,
+        chestLabel: prize.label,
+      ),
+      child: child,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -243,15 +315,18 @@ class _GrandPrizeBanner extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SizedBox(
-                width: 48,
-                height: 48,
-                child: Image.asset(
-                  prize.asset,
-                  errorBuilder: AssetPlaceholder.image(
-                    color: AppColors.amber,
-                    label: 'grand',
-                    borderRadius: 6,
+              _ChestTappable(
+                prize: prize,
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Image.asset(
+                    prize.asset,
+                    errorBuilder: AssetPlaceholder.image(
+                      color: AppColors.amber,
+                      label: 'grand',
+                      borderRadius: 6,
+                    ),
                   ),
                 ),
               ),
@@ -322,15 +397,18 @@ class _StageRow extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: 30,
-                  height: 30,
-                  child: Image.asset(
-                    stage.asset,
-                    errorBuilder: AssetPlaceholder.image(
-                      color: AppColors.amber,
-                      label: 'prize',
-                      borderRadius: 4,
+                _ChestTappable(
+                  prize: stage,
+                  child: SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: Image.asset(
+                      stage.asset,
+                      errorBuilder: AssetPlaceholder.image(
+                        color: AppColors.amber,
+                        label: 'prize',
+                        borderRadius: 4,
+                      ),
                     ),
                   ),
                 ),

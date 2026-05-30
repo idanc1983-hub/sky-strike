@@ -141,26 +141,10 @@ class _Body extends StatelessWidget {
           reached: view.reached100,
           claimed: view.milestone100Claimed,
           onClaim: () {
-            final reward = context
-                .read<EconomyState>()
-                .claimChallengeMilestone100();
-            _showRewardSnack(context, reward);
+            context.read<EconomyState>().claimChallengeMilestone100();
           },
         ),
       ],
-    );
-  }
-
-  void _showRewardSnack(BuildContext context, dynamic reward) {
-    if (reward == null) return;
-    final coins = reward.coins as int;
-    final gems = reward.gems as int;
-    if (coins == 0 && gems == 0) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Got $coins coins, $gems gems'),
-        duration: const Duration(seconds: 2),
-      ),
     );
   }
 }

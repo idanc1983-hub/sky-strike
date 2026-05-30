@@ -112,28 +112,17 @@ class EconomyConstants {
   /// Maximum loadout slots a player can ever own.
   static const int maxLoadoutSlots = 5;
 
-  /// Number of power-up cells in a single loadout's tray.
-  static const int trayPowerUpCount = 5;
-
   /// Coin price to unlock loadout slot 4.
   static const int loadoutSlot4CoinCost = 35000;
 
   /// Coin price to unlock loadout slot 5.
   static const int loadoutSlot5CoinCost = 80000;
 
-  /// Gem cost for the contextual Slot-4 unlock shortcut (pickup overflow only).
-  static const int loadoutSlot4GemShortcutCost = 25;
-
   /// Biome required to unlock loadout slot 4 (W5 = Volcano).
   static const int loadoutSlot4BiomeReq = 5;
 
   /// Biome required to unlock loadout slot 5 (W6 = City).
   static const int loadoutSlot5BiomeReq = 6;
-
-  // ---------------------------------------------------------------------------
-  // Pickup overflow — GDD §2.7.1
-  // ---------------------------------------------------------------------------
-  static const int maxPickupQueue = 2;
 
   // ---------------------------------------------------------------------------
   // Random power-up reward weighting — GDD §2.6

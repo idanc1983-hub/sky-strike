@@ -1,18 +1,28 @@
+import 'dart:async' show unawaited;
+
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'config/remote_config_service.dart';
+import 'economy/services/ads_service.dart' show AdsService;
 import 'economy/services/economy_api.dart';
+import 'economy/services/economy_config.dart';
 import 'economy/services/economy_persistence.dart';
+import 'economy/services/google_mobile_ads_economy_service.dart';
+import 'economy/services/iap_service.dart' show IapService;
 import 'economy/services/mock_ads_service.dart';
 import 'economy/services/mock_iap_service.dart';
+import 'economy/services/remote_economy_config_source.dart';
+import 'economy/services/store_iap_service.dart';
 import 'economy/state/economy_state.dart';
 import 'economy/ui/daily_reward_screen.dart';
 import 'screens/game_screen.dart';
 import 'screens/loading_screen.dart';
 import 'screens/main_shell.dart';
 import 'screens/splash_screen.dart';
+import 'services/ads/ads_service.dart' as platform_ads;
 import 'shop/services/bundle_cache.dart';
 import 'shop/services/bundle_service.dart';
 import 'shop/services/bundle_validator.dart';
@@ -38,13 +48,46 @@ Future<void> main() async {
     debugPrint('[FIREBASE_INIT_FAIL] $e\n$st');
   }
 
+  // Hook the live economy config so calculators see RC tuning. If
+  // Firebase init above failed, the source still returns null for
+  // every key and the calculators fall back to EconomyConstants — so
+  // a broken Firebase project never silently zeros out the economy.
+  EconomyConfig.setSource(RemoteEconomyConfigSource());
+
+  // Real billing + ads only in release builds. Debug / profile builds
+  // keep the mocks so QA can grant/test without hitting stores or
+  // burning AdMob fill. The selection happens here at construction —
+  // no runtime flag, no `if (kDebugMode) { … }` sprinkled in callers.
+  final IapService iap;
+  final AdsService ads;
+  if (kReleaseMode) {
+    final storeIap = StoreIapService();
+    // Best-effort init — if the platform store is unavailable, the
+    // service returns `productUnknown` for every purchase rather than
+    // crash. Surface the failure in logs so QA notices.
+    unawaited(storeIap.initialize().catchError((Object e, StackTrace st) {
+      debugPrint('[IAP_INIT_FAIL] $e\n$st');
+    }));
+    iap = storeIap;
+    try {
+      // ignore: discarded_futures
+      platform_ads.AdsService.instance.initialize();
+    } catch (e, st) {
+      debugPrint('[ADS_INIT_FAIL] $e\n$st');
+    }
+    ads = GoogleMobileAdsEconomyService();
+  } else {
+    iap = MockIapService();
+    ads = MockAdsService();
+  }
+
   // Build a single EconomyState at app startup. ChangeNotifierProvider.value
   // hands the same instance to every screen that needs it.
   final economy = EconomyState(
     persistence: EconomyPersistence(),
     api: EconomyApi(),
-    iap: MockIapService(),
-    ads: MockAdsService(),
+    iap: iap,
+    ads: ads,
   );
   // initialize() can fail on a corrupted prefs store. Defaults still
   // give us a usable app — log and proceed rather than crash before

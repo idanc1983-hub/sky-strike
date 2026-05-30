@@ -1,5 +1,7 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kReleaseMode;
+
 enum RewardedPlacement {
   revive,
   waveComplete,
@@ -9,7 +11,11 @@ enum RewardedPlacement {
 class AdUnits {
   AdUnits._();
 
-  static const bool useTestIds = true;
+  /// Test ad units are used in every non-release build. Release builds
+  /// always hit the real AdMob units below — there is no flag to flip
+  /// before shipping, so a forgotten `useTestIds = true` cannot make it
+  /// to production.
+  static const bool useTestIds = !kReleaseMode;
 
   static const String _testRewarded =
       'ca-app-pub-3940256099942544/5224354917';

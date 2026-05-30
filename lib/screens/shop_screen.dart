@@ -1,7 +1,10 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../config/remote_config_service.dart';
+import '../economy/services/chest_reward_resolver.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/not_enough_coins_popup.dart';
 import '../shared/theme/app_colors.dart';
@@ -180,7 +183,6 @@ class _GemPacksSection extends StatelessWidget {
       children: [
         const _DealsSectionHeader(
           title: 'Gems',
-          iconAsset: 'assets/ui/icon_gem.png',
           iconColor: Color(0xFF7BB8FF),
           subtitle: 'Revives, exclusive jets & chests',
         ),
@@ -240,7 +242,6 @@ class _ChestsSection extends StatelessWidget {
       children: [
         const _DealsSectionHeader(
           title: 'Chests',
-          iconAsset: 'assets/ui/icon_chest_basic.png',
           iconColor: AppColors.amber,
         ),
         const SizedBox(height: 10),
@@ -300,7 +301,6 @@ class _CoinPacksSection extends StatelessWidget {
       children: [
         const _DealsSectionHeader(
           title: 'Coins',
-          iconAsset: 'assets/ui/icon_coin.png',
           iconColor: AppColors.amber,
           subtitle: 'Earn in gameplay or buy pack below',
         ),
@@ -515,9 +515,6 @@ class _PowerUpRow extends StatelessWidget {
       return;
     }
     economy.grantPowerUp(entry.id);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('+1 ${entry.displayName}')),
-    );
   }
 
   void _showLockedInfo(BuildContext context) {
@@ -860,14 +857,14 @@ class _AmountBadge extends StatelessWidget {
             _formatNumber(amount),
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 12,
+              fontSize: 14.4,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(width: 4),
           SizedBox(
-            width: 12,
-            height: 12,
+            width: 14.4,
+            height: 14.4,
             child: Image.asset(
               iconAsset,
               fit: BoxFit.contain,
@@ -906,7 +903,8 @@ class _ChestCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
         child: Column(
           children: [
-            Expanded(
+            SizedBox(
+              height: 78,
               child: Image.asset(
                 'assets/ui/icon_${chest.id}.png',
                 fit: BoxFit.contain,
@@ -1200,10 +1198,15 @@ class _RewardRow extends StatelessWidget {
 }
 
 /// Shared chest purchase actions — used by both [_ChestRow] (inline pills)
-/// and [_ChestPreviewSheet] (preview buttons). Keeping the spend logic in
-/// one place so the snackbar copy stays consistent.
+/// and [_ChestPreviewSheet] (preview buttons). The spend and the reward
+/// grant live in one place so the two halves stay atomic.
 class _ChestRowActions {
   _ChestRowActions._();
+
+  /// Single RNG so every chest open in a session shares the same source.
+  /// Not seeded — payouts must look random to the player; tests pin
+  /// outcomes by calling [ChestRewardResolver.resolve] directly.
+  static final Random _rng = Random();
 
   static void buyWithCoins(
       BuildContext context, _ChestEntry chest, String label) {
@@ -1212,9 +1215,7 @@ class _ChestRowActions {
       NotEnoughCoinsPopup.show(context);
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label chest opened (sim)')),
-    );
+    _grantAndAnnounce(context, economy, chest, label);
   }
 
   static void buyWithGems(
@@ -1226,9 +1227,35 @@ class _ChestRowActions {
       );
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label chest opened (sim)')),
+    _grantAndAnnounce(context, economy, chest, label);
+  }
+
+  /// Resolves the chest payout from Remote Config and applies it to the
+  /// wallet (and jet inventory for biome chests). Silently no-ops if RC
+  /// has no definition for [chest.id].
+  static void _grantAndAnnounce(
+    BuildContext context,
+    EconomyState economy,
+    _ChestEntry chest,
+    String label,
+  ) {
+    final definition = RemoteConfigService.instance.chests[chest.id];
+    if (definition is! Map<String, dynamic>) return;
+    final result = ChestRewardResolver.resolve(
+      definition: definition,
+      rng: _rng,
     );
+    if (result.reward.coins > 0) {
+      economy.addCoins(result.reward.coins, source: 'chest_$chest.id');
+    }
+    if (result.reward.gems > 0) {
+      economy.addGems(result.reward.gems, source: 'chest_$chest.id');
+    }
+    if (result.hasJet) {
+      // buyJet at price 0 records ownership without spending; the
+      // pendingNextJetDiscount slot is not consumed for chest grants.
+      economy.buyJet(result.jetId!, 0);
+    }
   }
 }
 

@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:skystrike/economy/services/economy_api.dart';
 import 'package:skystrike/economy/services/economy_persistence.dart';
 import 'package:skystrike/economy/services/mock_ads_service.dart';
+import 'package:skystrike/economy/constants/ad_placement_catalog.dart';
+import 'package:skystrike/economy/constants/economy_constants.dart';
 import 'package:skystrike/economy/services/mock_iap_service.dart';
 import 'package:skystrike/economy/state/challenge_state.dart';
 import 'package:skystrike/economy/state/economy_state.dart';
@@ -72,16 +74,6 @@ void main() {
       expect(s.maxWorldReached, 2);
       // Calling again with the same world is a no-op.
       expect(s.advanceToWorld(2), isEmpty);
-      s.dispose();
-    });
-
-    test('canBuySlot4WithGems requires 25 gems and W5 reach', () async {
-      final s = _buildState();
-      await s.initialize();
-      expect(s.canBuySlot4WithGems(), isFalse);
-      s.advanceToWorld(5);
-      s.addGems(30);
-      expect(s.canBuySlot4WithGems(), isTrue);
       s.dispose();
     });
 
@@ -169,6 +161,51 @@ void main() {
       s.onEnemyKilled();
       s.onEnemyKilled();
       expect(s.challengeProgress, initialProgress + 3);
+      s.dispose();
+    });
+
+    test('daily ad-watch cap survives clock rollback', () async {
+      var clock = DateTime.utc(2026, 5, 10, 12);
+      final s = _buildState(now: () => clock);
+      await s.initialize();
+
+      // Watch up to the daily cap on real day 10.
+      for (var i = 0; i < EconomyConstants.dailyAdWatchCap; i++) {
+        await s.showRewardedAd(AdPlacement.extraGemsDaily);
+      }
+      expect(s.dailyAdWatchCount, EconomyConstants.dailyAdWatchCap);
+      final gemsAfterCap = s.gems;
+
+      // Cap is reached — next watch returns capReached, no gems added.
+      final blocked =
+          await s.showRewardedAd(AdPlacement.extraGemsDaily);
+      expect(blocked.result.name, 'capReached');
+      expect(s.gems, gemsAfterCap);
+
+      // Roll the wall clock BACKWARD one day. Naive code would treat
+      // this as "still today" or worse, allow a cap reset on the next
+      // forward step. With the monotonic stamp + isBefore guard, the
+      // cap must remain in force.
+      clock = DateTime.utc(2026, 5, 9, 12);
+      final stillBlocked =
+          await s.showRewardedAd(AdPlacement.extraGemsDaily);
+      expect(stillBlocked.result.name, 'capReached');
+      expect(s.gems, gemsAfterCap);
+
+      // Forward to original day 10 again — still capped, no exploit.
+      clock = DateTime.utc(2026, 5, 10, 14);
+      final stillBlockedAgain =
+          await s.showRewardedAd(AdPlacement.extraGemsDaily);
+      expect(stillBlockedAgain.result.name, 'capReached');
+      expect(s.gems, gemsAfterCap);
+
+      // A real new day (forward past the stored stamp) DOES reset the cap.
+      clock = DateTime.utc(2026, 5, 11, 9);
+      final fresh = await s.showRewardedAd(AdPlacement.extraGemsDaily);
+      expect(fresh.result.name, 'rewardEarned');
+      expect(s.dailyAdWatchCount, 1);
+      expect(s.gems, greaterThan(gemsAfterCap));
+
       s.dispose();
     });
 

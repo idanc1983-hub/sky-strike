@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import '../models/jet_model.dart';
+import '../shared/theme/app_colors.dart';
 import '../shared/widgets/asset_placeholder.dart';
 
 const _cGreen = Color(0xFF3B6D11);
 const _cGreenSolid = Color(0xFF4F8A1A);
-const _cGreenDim = Color(0xFF2a4a10);
+const _cGreenDim = Color(0xFF152708);
 const _cBarTrack = Color(0xFF0d1a0d);
 const _cBorderDefault = Color(0xFF1a3a1a);
 const _cBorderOwned = Color(0xFF3B6D11);
-const _cLockedBorder = Color(0xFF2a2a2a);
-const _cLockedBg = Color(0xFF1a1a1a);
-const _cLockedText = Color(0xFF666666);
 const _cUnlockText = Color(0xFF854F0B);
 const _cStatLabel = Color(0xFFC0DD97);
 const _cStatValue = Color(0xFFEF9F27);
@@ -20,12 +18,14 @@ class JetCard extends StatelessWidget {
   final JetModel jet;
   final VoidCallback? onEquip;
   final VoidCallback? onBuy;
+  final VoidCallback? onLockedTap;
 
   const JetCard({
     super.key,
     required this.jet,
     this.onEquip,
     this.onBuy,
+    this.onLockedTap,
   });
 
   @override
@@ -157,6 +157,7 @@ class JetCard extends StatelessWidget {
   Widget _buildCtaButton() {
     final bool isLocked = jet.status == JetStatus.locked;
     final bool isEquipped = jet.status == JetStatus.equipped;
+    final bool isOwned = jet.status == JetStatus.owned;
     final Color bg;
     final VoidCallback? onTap;
 
@@ -171,8 +172,19 @@ class JetCard extends StatelessWidget {
         bg = _cGreenSolid;
         onTap = onBuy;
       case JetStatus.locked:
-        bg = _cLockedBg;
-        onTap = null;
+        bg = AppColors.green;
+        onTap = onLockedTap;
+    }
+
+    final Widget label;
+    if (isLocked) {
+      label = _buildLockedLabel();
+    } else if (isEquipped) {
+      label = _buildEquippedLabel();
+    } else if (isOwned) {
+      label = _buildOwnedLabel();
+    } else {
+      label = _buildPriceLabel(false);
     }
 
     return GestureDetector(
@@ -183,25 +195,53 @@ class JetCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           border: Border.all(
-            color: isLocked ? _cLockedBorder : _cGreen,
+            color: isLocked ? AppColors.greenLight : _cGreen,
             width: 0.7,
           ),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: isLocked ? _buildLockedLabel() : _buildPriceLabel(isEquipped),
+        child: label,
       ),
     );
   }
 
   Widget _buildLockedLabel() {
-    return const Text(
-      'Locked',
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        fontSize: 14,
-        color: _cLockedText,
-        fontWeight: FontWeight.w600,
-      ),
+    return const Icon(
+      Icons.lock,
+      color: Colors.white,
+      size: 18,
+    );
+  }
+
+  Widget _buildEquippedLabel() {
+    return const Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          'Equipped',
+          style: TextStyle(
+            fontSize: 15,
+            color: Color(0xFFA5C97A),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOwnedLabel() {
+    return const Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          'Own',
+          style: TextStyle(
+            fontSize: 15,
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 

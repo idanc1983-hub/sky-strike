@@ -1,0 +1,687 @@
+{
+  "iron_skies": [
+    {
+      "stage": 1,
+      "goal": 50,
+      "prize": "70coin"
+    },
+    {
+      "stage": 2,
+      "goal": 59,
+      "prize": "70coin"
+    },
+    {
+      "stage": 3,
+      "goal": 68,
+      "prize": "100coin"
+    },
+    {
+      "stage": 4,
+      "goal": 131,
+      "prize": "epic_chest"
+    },
+    {
+      "stage": 5,
+      "goal": 86,
+      "prize": "100coin"
+    },
+    {
+      "stage": 6,
+      "goal": 95,
+      "prize": "120coin"
+    },
+    {
+      "stage": 7,
+      "goal": 104,
+      "prize": "150coin"
+    },
+    {
+      "stage": 8,
+      "goal": 192,
+      "prize": "epic_chest"
+    },
+    {
+      "stage": 9,
+      "goal": 122,
+      "prize": "150coin"
+    },
+    {
+      "stage": 10,
+      "goal": 131,
+      "prize": "220coin"
+    },
+    {
+      "stage": 11,
+      "goal": 140,
+      "prize": "220coin"
+    },
+    {
+      "stage": 12,
+      "goal": 253,
+      "prize": "200coin + epic_chest"
+    },
+    {
+      "stage": 13,
+      "goal": 158,
+      "prize": "220coin"
+    },
+    {
+      "stage": 14,
+      "goal": 167,
+      "prize": "280coin"
+    },
+    {
+      "stage": 15,
+      "goal": 176,
+      "prize": "280coin"
+    },
+    {
+      "stage": 16,
+      "goal": 314,
+      "prize": "400coin + biome_chest_match"
+    },
+    {
+      "stage": 17,
+      "goal": 194,
+      "prize": "280coin"
+    },
+    {
+      "stage": 18,
+      "goal": 203,
+      "prize": "320coin"
+    },
+    {
+      "stage": 19,
+      "goal": 212,
+      "prize": "320coin"
+    },
+    {
+      "stage": 20,
+      "goal": 376,
+      "prize": "600coin + epic_chest"
+    },
+    {
+      "stage": 21,
+      "goal": 230,
+      "prize": "320coin"
+    },
+    {
+      "stage": 22,
+      "goal": 239,
+      "prize": "400coin"
+    },
+    {
+      "stage": 23,
+      "goal": 248,
+      "prize": "400coin"
+    },
+    {
+      "stage": 24,
+      "goal": 437,
+      "prize": "800coin + biome_chest_match"
+    },
+    {
+      "stage": 25,
+      "goal": 266,
+      "prize": "400coin"
+    },
+    {
+      "stage": 26,
+      "goal": 275,
+      "prize": "400coin"
+    },
+    {
+      "stage": 27,
+      "goal": 284,
+      "prize": "450coin"
+    },
+    {
+      "stage": 28,
+      "goal": 498,
+      "prize": "1000coin + epic_chest"
+    },
+    {
+      "stage": 29,
+      "goal": 302,
+      "prize": "450coin"
+    },
+    {
+      "stage": 30,
+      "goal": 608,
+      "prize": "biome_chest_match + 50gem + 500coin"
+    }
+  ],
+  "new_players": [
+    {
+      "stage": 1,
+      "goal": 5,
+      "prize": "20coin"
+    },
+    {
+      "stage": 2,
+      "goal": 7,
+      "prize": "25coin"
+    },
+    {
+      "stage": 3,
+      "goal": 8,
+      "prize": "30coin"
+    },
+    {
+      "stage": 4,
+      "goal": 13,
+      "prize": "unique_chest"
+    },
+    {
+      "stage": 5,
+      "goal": 12,
+      "prize": "35coin"
+    },
+    {
+      "stage": 6,
+      "goal": 14,
+      "prize": "40coin"
+    },
+    {
+      "stage": 7,
+      "goal": 15,
+      "prize": "50coin"
+    },
+    {
+      "stage": 8,
+      "goal": 22,
+      "prize": "100coin+ unique_chest"
+    },
+    {
+      "stage": 9,
+      "goal": 19,
+      "prize": "60coin"
+    },
+    {
+      "stage": 10,
+      "goal": 21,
+      "prize": "70coin"
+    },
+    {
+      "stage": 11,
+      "goal": 22,
+      "prize": "70coin"
+    },
+    {
+      "stage": 12,
+      "goal": 32,
+      "prize": "200coin + unique_chest"
+    },
+    {
+      "stage": 13,
+      "goal": 26,
+      "prize": "70coin"
+    },
+    {
+      "stage": 14,
+      "goal": 28,
+      "prize": "100coin"
+    },
+    {
+      "stage": 15,
+      "goal": 44,
+      "prize": "epic_chest + 30gem + 200coin"
+    }
+  ],
+  "last_stand": [
+    {
+      "stage": 1,
+      "goal": 1,
+      "prize": "70coin"
+    },
+    {
+      "stage": 2,
+      "goal": 1,
+      "prize": "70coin"
+    },
+    {
+      "stage": 3,
+      "goal": 1,
+      "prize": "100coin"
+    },
+    {
+      "stage": 4,
+      "goal": 2,
+      "prize": "epic_chest"
+    },
+    {
+      "stage": 5,
+      "goal": 1,
+      "prize": "100coin"
+    },
+    {
+      "stage": 6,
+      "goal": 2,
+      "prize": "120coin"
+    },
+    {
+      "stage": 7,
+      "goal": 2,
+      "prize": "150coin"
+    },
+    {
+      "stage": 8,
+      "goal": 3,
+      "prize": "epic_chest"
+    },
+    {
+      "stage": 9,
+      "goal": 2,
+      "prize": "150coin"
+    },
+    {
+      "stage": 10,
+      "goal": 2,
+      "prize": "220coin"
+    },
+    {
+      "stage": 11,
+      "goal": 2,
+      "prize": "220coin"
+    },
+    {
+      "stage": 12,
+      "goal": 4,
+      "prize": "200coin + epic_chest"
+    },
+    {
+      "stage": 13,
+      "goal": 2,
+      "prize": "220coin"
+    },
+    {
+      "stage": 14,
+      "goal": 2,
+      "prize": "280coin"
+    },
+    {
+      "stage": 15,
+      "goal": 2,
+      "prize": "280coin"
+    },
+    {
+      "stage": 16,
+      "goal": 4,
+      "prize": "400coin + biome_chest_match"
+    },
+    {
+      "stage": 17,
+      "goal": 3,
+      "prize": "280coin"
+    },
+    {
+      "stage": 18,
+      "goal": 3,
+      "prize": "320coin"
+    },
+    {
+      "stage": 19,
+      "goal": 3,
+      "prize": "320coin"
+    },
+    {
+      "stage": 20,
+      "goal": 5,
+      "prize": "600coin + epic_chest"
+    },
+    {
+      "stage": 21,
+      "goal": 3,
+      "prize": "320coin"
+    },
+    {
+      "stage": 22,
+      "goal": 3,
+      "prize": "400coin"
+    },
+    {
+      "stage": 23,
+      "goal": 3,
+      "prize": "400coin"
+    },
+    {
+      "stage": 24,
+      "goal": 6,
+      "prize": "800coin + biome_chest_match"
+    },
+    {
+      "stage": 25,
+      "goal": 3,
+      "prize": "400coin"
+    },
+    {
+      "stage": 26,
+      "goal": 4,
+      "prize": "400coin"
+    },
+    {
+      "stage": 27,
+      "goal": 4,
+      "prize": "450coin"
+    },
+    {
+      "stage": 28,
+      "goal": 6,
+      "prize": "1000coin + epic_chest"
+    },
+    {
+      "stage": 29,
+      "goal": 4,
+      "prize": "450coin"
+    },
+    {
+      "stage": 30,
+      "goal": 8,
+      "prize": "biome_chest_match + 50gem + 500coin"
+    }
+  ],
+  "golden_sky": [
+    {
+      "stage": 1,
+      "goal": 500,
+      "prize": "70coin"
+    },
+    {
+      "stage": 2,
+      "goal": 600,
+      "prize": "70coin"
+    },
+    {
+      "stage": 3,
+      "goal": 700,
+      "prize": "100coin"
+    },
+    {
+      "stage": 4,
+      "goal": 1360,
+      "prize": "epic_chest"
+    },
+    {
+      "stage": 5,
+      "goal": 900,
+      "prize": "100coin"
+    },
+    {
+      "stage": 6,
+      "goal": 1000,
+      "prize": "120coin"
+    },
+    {
+      "stage": 7,
+      "goal": 1100,
+      "prize": "150coin"
+    },
+    {
+      "stage": 8,
+      "goal": 2040,
+      "prize": "epic_chest"
+    },
+    {
+      "stage": 9,
+      "goal": 1300,
+      "prize": "150coin"
+    },
+    {
+      "stage": 10,
+      "goal": 1400,
+      "prize": "220coin"
+    },
+    {
+      "stage": 11,
+      "goal": 1500,
+      "prize": "220coin"
+    },
+    {
+      "stage": 12,
+      "goal": 2720,
+      "prize": "200coin + epic_chest"
+    },
+    {
+      "stage": 13,
+      "goal": 1700,
+      "prize": "220coin"
+    },
+    {
+      "stage": 14,
+      "goal": 1800,
+      "prize": "280coin"
+    },
+    {
+      "stage": 15,
+      "goal": 1900,
+      "prize": "280coin"
+    },
+    {
+      "stage": 16,
+      "goal": 3400,
+      "prize": "400coin + biome_chest_match"
+    },
+    {
+      "stage": 17,
+      "goal": 2100,
+      "prize": "280coin"
+    },
+    {
+      "stage": 18,
+      "goal": 2200,
+      "prize": "320coin"
+    },
+    {
+      "stage": 19,
+      "goal": 2300,
+      "prize": "320coin"
+    },
+    {
+      "stage": 20,
+      "goal": 4080,
+      "prize": "600coin + epic_chest"
+    },
+    {
+      "stage": 21,
+      "goal": 2500,
+      "prize": "320coin"
+    },
+    {
+      "stage": 22,
+      "goal": 2600,
+      "prize": "400coin"
+    },
+    {
+      "stage": 23,
+      "goal": 2700,
+      "prize": "400coin"
+    },
+    {
+      "stage": 24,
+      "goal": 4760,
+      "prize": "800coin + biome_chest_match"
+    },
+    {
+      "stage": 25,
+      "goal": 2900,
+      "prize": "400coin"
+    },
+    {
+      "stage": 26,
+      "goal": 3000,
+      "prize": "400coin"
+    },
+    {
+      "stage": 27,
+      "goal": 3100,
+      "prize": "450coin"
+    },
+    {
+      "stage": 28,
+      "goal": 5440,
+      "prize": "1000coin + epic_chest"
+    },
+    {
+      "stage": 29,
+      "goal": 3300,
+      "prize": "450coin"
+    },
+    {
+      "stage": 30,
+      "goal": 6647,
+      "prize": "biome_chest_match + 50gem + 500coin"
+    }
+  ],
+  "star_ascent": [
+    {
+      "stage": 1,
+      "goal": 2,
+      "prize": "70coin"
+    },
+    {
+      "stage": 2,
+      "goal": 2,
+      "prize": "70coin"
+    },
+    {
+      "stage": 3,
+      "goal": 2,
+      "prize": "100coin"
+    },
+    {
+      "stage": 4,
+      "goal": 5,
+      "prize": "epic_chest"
+    },
+    {
+      "stage": 5,
+      "goal": 3,
+      "prize": "100coin"
+    },
+    {
+      "stage": 6,
+      "goal": 3,
+      "prize": "120coin"
+    },
+    {
+      "stage": 7,
+      "goal": 3,
+      "prize": "150coin"
+    },
+    {
+      "stage": 8,
+      "goal": 6,
+      "prize": "epic_chest"
+    },
+    {
+      "stage": 9,
+      "goal": 4,
+      "prize": "150coin"
+    },
+    {
+      "stage": 10,
+      "goal": 4,
+      "prize": "220coin"
+    },
+    {
+      "stage": 11,
+      "goal": 4,
+      "prize": "220coin"
+    },
+    {
+      "stage": 12,
+      "goal": 8,
+      "prize": "200coin + epic_chest"
+    },
+    {
+      "stage": 13,
+      "goal": 5,
+      "prize": "220coin"
+    },
+    {
+      "stage": 14,
+      "goal": 5,
+      "prize": "280coin"
+    },
+    {
+      "stage": 15,
+      "goal": 5,
+      "prize": "280coin"
+    },
+    {
+      "stage": 16,
+      "goal": 10,
+      "prize": "400coin + biome_chest_match"
+    },
+    {
+      "stage": 17,
+      "goal": 6,
+      "prize": "280coin"
+    },
+    {
+      "stage": 18,
+      "goal": 6,
+      "prize": "320coin"
+    },
+    {
+      "stage": 19,
+      "goal": 6,
+      "prize": "320coin"
+    },
+    {
+      "stage": 20,
+      "goal": 11,
+      "prize": "600coin + epic_chest"
+    },
+    {
+      "stage": 21,
+      "goal": 7,
+      "prize": "320coin"
+    },
+    {
+      "stage": 22,
+      "goal": 7,
+      "prize": "400coin"
+    },
+    {
+      "stage": 23,
+      "goal": 7,
+      "prize": "400coin"
+    },
+    {
+      "stage": 24,
+      "goal": 13,
+      "prize": "800coin + biome_chest_match"
+    },
+    {
+      "stage": 25,
+      "goal": 8,
+      "prize": "400coin"
+    },
+    {
+      "stage": 26,
+      "goal": 8,
+      "prize": "400coin"
+    },
+    {
+      "stage": 27,
+      "goal": 8,
+      "prize": "450coin"
+    },
+    {
+      "stage": 28,
+      "goal": 14,
+      "prize": "1000coin + epic_chest"
+    },
+    {
+      "stage": 29,
+      "goal": 9,
+      "prize": "450coin"
+    },
+    {
+      "stage": 30,
+      "goal": 18,
+      "prize": "biome_chest_match + 50gem + 500coin"
+    }
+  ]
+}

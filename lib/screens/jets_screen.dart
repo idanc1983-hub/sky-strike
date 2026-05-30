@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/remote_config_service.dart';
 import '../economy/state/economy_state.dart';
 import '../models/jet_model.dart';
+import '../shared/theme/app_colors.dart';
+import '../shared/widgets/app_buttons.dart';
 import '../shared/widgets/app_top_bar.dart';
 import '../widgets/jet_card.dart';
 
@@ -21,12 +23,10 @@ const _cAmber = Color(0xFFEF9F27);
 // save-format compatibility, but its RC entry is keyed `basic` (display
 // name + base_power come from there).
 //
-// Per the v2 economy plan, jets are NOT purchasable with gems. They unlock
-// via biome progression (player reaches the jet's biome → eligible) and
-// drop from biome chests at 10% per chest. The Jets screen models this
-// as: if player has reached the jet's biome, treat as owned; otherwise
-// locked. Full chest-drop ownership accounting comes later — for now this
-// gives a working visualization of "unlock as you progress."
+// Ownership model: the starter `jet_player` is granted at install. As the
+// player unlocks new biomes, the matching jet becomes purchasable for
+// `unlock_price_gems` (from RC). Buying a jet auto-equips it; previously
+// equipped jets fall back to "owned" status.
 // ---------------------------------------------------------------------------
 
 /// Code ID → RC jet key. Code IDs are stable for save compatibility; RC
@@ -134,8 +134,8 @@ class _JetsScreenState extends State<JetsScreen> {
   }
 
   /// Builds the ordered jet list with status computed from RC + player
-  /// progression. Returns empty when RC has no jet data (defensive).
-  List<JetModel> _buildJets(int currentWorld) {
+  /// progression + ownership. Returns empty when RC has no jet data.
+  List<JetModel> _buildJets(int currentWorld, EconomyState economy) {
     final rcJets = RemoteConfigService.instance.jetBasePowers;
     if (rcJets.isEmpty) return const [];
     final out = <JetModel>[];
@@ -149,15 +149,19 @@ class _JetsScreenState extends State<JetsScreen> {
       final unlockBiome = (entry['unlock_biome'] as String?) ?? 'jungle';
       final unlockWorld = _biomeToWorld[unlockBiome] ?? 1;
       final unlocked = currentWorld >= unlockWorld;
+      final priceGems = (entry['unlock_price_gems'] as num?)?.toInt() ?? 0;
+      final owns = economy.ownsJet(codeId);
 
-      // Status: equipped > owned (if unlocked) > locked
+      // Status: locked > equipped > owned > purchasable
       final JetStatus status;
-      if (!unlocked) {
+      if (!unlocked && !owns) {
         status = JetStatus.locked;
       } else if (codeId == _equippedId) {
         status = JetStatus.equipped;
-      } else {
+      } else if (owns) {
         status = JetStatus.owned;
+      } else {
+        status = JetStatus.purchasable;
       }
 
       // Normalized stat fill (0..100). v2 only ships base_power, so the
@@ -177,8 +181,12 @@ class _JetsScreenState extends State<JetsScreen> {
         accentColor: palette.accent,
         bgColor: palette.bg,
         status: status,
-        price: 0, // jets are not gem-bought in v2
-        unlockCondition: unlocked ? null : 'Unlocks at ${unlockBiome.toUpperCase()} biome',
+        price: priceGems,
+        unlockCondition: status == JetStatus.locked
+            ? 'Unlocks at ${unlockBiome.toUpperCase()} biome'
+            : null,
+        unlockBiome: status == JetStatus.locked ? unlockBiome : null,
+        unlockWorld: unlockWorld,
         assetPath: _jetAssets[codeId] ?? 'assets/jets/jet_player.png',
       ));
     }
@@ -191,7 +199,7 @@ class _JetsScreenState extends State<JetsScreen> {
   @override
   Widget build(BuildContext context) {
     final economy = context.watch<EconomyState>();
-    final jets = _buildJets(economy.currentWorld);
+    final jets = _buildJets(economy.currentWorld, economy);
     return Scaffold(
       body: Stack(
         children: [
@@ -242,12 +250,138 @@ class _JetsScreenState extends State<JetsScreen> {
         return JetCard(
           jet: jet,
           onEquip: jet.status == JetStatus.owned ? () => _equipJet(jet.id) : null,
-          // Jets are not gem-bought in v2 — onBuy is intentionally null so
-          // the JetCard renders no buy button. Ownership comes from biome
-          // progression + biome chests (10% drop) + monetization bundles.
-          onBuy: null,
+          onBuy: jet.status == JetStatus.purchasable
+              ? () => _showBuyConfirm(context, jet)
+              : null,
+          onLockedTap: jet.status == JetStatus.locked
+              ? () => _showLockedInfo(context, jet)
+              : null,
         );
       },
+    );
+  }
+
+  void _showLockedInfo(BuildContext context, JetModel jet) {
+    final biome = jet.unlockBiome ?? 'jungle';
+    final world = jet.unlockWorld;
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.surfaceBlack,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(
+            color: AppColors.amber.withValues(alpha: 0.55),
+            width: 0.7,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                jet.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Unlock at biome ${_capitalize(biome)}'
+                ' — World $world',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFFBDC9A8),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 18),
+              AppButton.primary(
+                label: 'OK',
+                height: 44,
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _capitalize(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+  void _showBuyConfirm(BuildContext context, JetModel jet) {
+    final economy = context.read<EconomyState>();
+    final canAfford = economy.gems >= jet.price;
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.surfaceBlack,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(
+            color: AppColors.amber.withValues(alpha: 0.55),
+            width: 0.7,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                jet.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                canAfford
+                    ? 'Buy this jet for ${jet.price} gems?'
+                    : 'Not enough gems. You need ${jet.price}, '
+                        'you have ${economy.gems}.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFFBDC9A8),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 18),
+              if (canAfford) ...[
+                AppButton.gem(
+                  label: 'Buy ${jet.price} 💎',
+                  height: 44,
+                  onPressed: () {
+                    final ok = economy.buyJet(jet.id, jet.price);
+                    Navigator.pop(ctx);
+                    if (ok) _equipJet(jet.id);
+                  },
+                ),
+                const SizedBox(height: 8),
+                AppButton.secondary(
+                  label: 'Cancel',
+                  height: 44,
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ] else
+                AppButton.primary(
+                  label: 'OK',
+                  height: 44,
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

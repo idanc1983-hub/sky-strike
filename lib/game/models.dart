@@ -129,10 +129,13 @@ int waveEnemyCount(int world, int wave) {
 double waveEnemySpeed(int wave) => 0.4 + (wave * 0.05);
 
 // Higher number = slower fire. World 1 W1-3 returns 9999 (no fire).
+// Result is scaled by 1/0.9 → 10% lower fire rate across the game.
 int waveEnemyFireRate(int world, int wave) {
   if (world == 1 && wave <= 3) return 9999;
-  if (world == 1) return max(75 - wave * 2, 40);
-  return max(60 - wave * 2, 28);
+  final base = world == 1
+      ? max(75 - wave * 2, 40)
+      : max(60 - wave * 2, 28);
+  return (base / 0.9).round();
 }
 
 double eliteRatio(int world, int wave) {
@@ -178,11 +181,11 @@ int bossHpForWorld(int world) {
   return hps[(world - 1).clamp(0, 5)];
 }
 
-// Frames between boss fire volleys — earlier biomes fire slowly so players can dodge
+// Frames between boss fire volleys — earlier biomes fire slowly so players can dodge.
+// Result is scaled by 1/0.9 → 10% lower fire rate across the game.
 int bossFireRate(int world) {
-  if (world == 1) return 75;
-  if (world == 2) return 60;
-  return 45;
+  final base = world == 1 ? 75 : world == 2 ? 60 : 45;
+  return (base / 0.9).round();
 }
 
 // Boss bullet speed (downward) — slower in World 1 for dodgeability

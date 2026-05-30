@@ -1,0 +1,72 @@
+[
+  {
+    "id": "speed_boost",
+    "name": "Speed Boost",
+    "unlock_biome": "jungle",
+    "category": "stack",
+    "duration_sec": 7
+  },
+  {
+    "id": "rapid_fire",
+    "name": "Rapid Fire",
+    "unlock_biome": "jungle",
+    "category": "stack",
+    "duration_sec": 7
+  },
+  {
+    "id": "bomb",
+    "name": "Bomb",
+    "unlock_biome": "jungle",
+    "category": "stack",
+    "duration_sec": null
+  },
+  {
+    "id": "split_shot",
+    "name": "Split Shot",
+    "unlock_biome": "desert",
+    "category": "stack",
+    "duration_sec": 7
+  },
+  {
+    "id": "shield",
+    "name": "Shield",
+    "unlock_biome": "desert",
+    "category": "stack",
+    "duration_sec": 7
+  },
+  {
+    "id": "magnet",
+    "name": "Magnet",
+    "unlock_biome": "sea",
+    "category": "stack",
+    "duration_sec": 7
+  },
+  {
+    "id": "laser",
+    "name": "Laser",
+    "unlock_biome": "sea",
+    "category": "stack",
+    "duration_sec": 7
+  },
+  {
+    "id": "freeze_time",
+    "name": "Freeze Time",
+    "unlock_biome": "ice",
+    "category": "stack",
+    "duration_sec": 7
+  },
+  {
+    "id": "drone_wingman",
+    "name": "Drone Wingman",
+    "unlock_biome": "city",
+    "category": "stack",
+    "duration_sec": 7
+  },
+  {
+    "id": "ghost_mode",
+    "name": "Ghost Mode",
+    "unlock_biome": "volcano",
+    "category": "stack",
+    "duration_sec": 10
+  }
+]

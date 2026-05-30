@@ -64,22 +64,24 @@ class AppTopBar extends StatelessWidget {
   Widget _buildTitleOnly(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      child: Stack(
-        alignment: Alignment.center,
+      child: Row(
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _CloseButton(onTap: _onClose!),
-          ),
-          Text(
-            _title!,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 6,
+          _CloseButton(onTap: _onClose!),
+          Expanded(
+            child: Text(
+              _title!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 6,
+              ),
             ),
           ),
+          // Mirror the close-button footprint on the right so the title
+          // ends up visually centred in the full bar width.
+          const SizedBox(width: 36),
         ],
       ),
     );
@@ -97,7 +99,9 @@ class AppTopBar extends StatelessWidget {
           else
             _CloseButton(onTap: _onClose!),
           const SizedBox(width: 8),
-          _LvChip(level: economy.level),
+          // Lv. is a global linear stage count across biomes
+          // (10 stages per biome → World 2 Stage 1 = Lv. 11).
+          _LvChip(level: (economy.currentWorld - 1) * 10 + economy.currentStage),
           const Spacer(),
           // Right cluster: currencies
           if (showCoin) ...[

@@ -1,48 +1,52 @@
 {
-  "schema_version": 1,
-  "chests": {
-    "basic_chest": {
+  "definitions": [
+    {
+      "chest_id": "basic_chest",
       "coin_min": 50,
       "coin_max": 200,
       "gem_min": 0,
       "gem_max": 0,
-      "jet_drop_chance": 0.0,
+      "jet_drop_chance": 0,
       "jet_id": null
     },
-    "unique_chest": {
+    {
+      "chest_id": "unique_chest",
       "coin_min": 200,
       "coin_max": 400,
       "gem_min": 3,
       "gem_max": 6,
-      "jet_drop_chance": 0.0,
+      "jet_drop_chance": 0,
       "jet_id": null
     },
-    "epic_chest": {
+    {
+      "chest_id": "epic_chest",
       "coin_min": 700,
       "coin_max": 1200,
       "gem_min": 8,
       "gem_max": 15,
-      "jet_drop_chance": 0.0,
+      "jet_drop_chance": 0,
       "jet_id": null
     },
-    "special_chest": {
+    {
+      "chest_id": "special_chest",
       "coin_min": 2000,
       "coin_max": 3500,
       "gem_min": 30,
       "gem_max": 50,
-      "jet_drop_chance": 0.0,
+      "jet_drop_chance": 0,
       "jet_id": null
     },
-    "jungle_chest": {
+    {
+      "chest_id": "jungle_chest",
       "coin_min": 250,
       "coin_max": 500,
       "gem_min": 5,
       "gem_max": 10,
-      "jet_drop_chance": 0.0,
-      "jet_id": null,
-      "bonus_coins_in_place_of_jet": 200
+      "jet_drop_chance": 0,
+      "jet_id": null
     },
-    "desert_chest": {
+    {
+      "chest_id": "desert_chest",
       "coin_min": 400,
       "coin_max": 800,
       "gem_min": 8,
@@ -50,7 +54,8 @@
       "jet_drop_chance": 0.1,
       "jet_id": "Wraith X"
     },
-    "sea_chest": {
+    {
+      "chest_id": "sea_chest",
       "coin_min": 600,
       "coin_max": 1000,
       "gem_min": 10,
@@ -58,7 +63,8 @@
       "jet_drop_chance": 0.1,
       "jet_id": "Specter"
     },
-    "ice_chest": {
+    {
+      "chest_id": "ice_chest",
       "coin_min": 800,
       "coin_max": 1400,
       "gem_min": 15,
@@ -66,7 +72,8 @@
       "jet_drop_chance": 0.1,
       "jet_id": "Viper"
     },
-    "volcano_chest": {
+    {
+      "chest_id": "volcano_chest",
       "coin_min": 1200,
       "coin_max": 2000,
       "gem_min": 20,
@@ -74,7 +81,8 @@
       "jet_drop_chance": 0.1,
       "jet_id": "Inferno"
     },
-    "city_chest": {
+    {
+      "chest_id": "city_chest",
       "coin_min": 1600,
       "coin_max": 2500,
       "gem_min": 25,
@@ -82,5 +90,6 @@
       "jet_drop_chance": 0.1,
       "jet_id": "Phantom"
     }
-  }
+  ],
+  "note": "jungle_chest grants +200 coin bonus instead of jet roll (basic jet is starter)"
 }

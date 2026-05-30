@@ -1,48 +1,41 @@
 import 'package:flutter/material.dart';
 
-enum PowerUpCategory { instant, collectible }
-
+/// POWERUP-v2.1: every shop power-up is `stack` (held in inventory,
+/// tapped to activate). [PowerUpType.hp] and [PowerUpType.coins] are not
+/// power-ups in the catalog sense — they're auto-applied pickups handled
+/// separately by the game loop and never enter the tray.
 enum PowerUpType {
-  // INSTANT — auto-apply on pickup, never enter tray
+  // Stackable shop power-ups (10) — held in inventory, tap to activate.
   rapidFire,
   speedBoost,
-  shield,
-  magnet,
-  ghostMode,
-  // COLLECTIBLE — stored in tray, tap to activate
   bomb,
   splitShot,
+  shield,
+  magnet,
   laser,
   freezeTime,
+  ghostMode,
   droneWingman,
-  // Legacy instant
+  // Auto-apply pickups — not in tray, not in shop.
   hp,
-  // Currency drop — adds coins to wallet on pickup
   coins,
 }
 
 extension PowerUpTypeX on PowerUpType {
-  PowerUpCategory get category {
+  /// True for the 10 shop power-ups (stackable, tray-held, tap-activated).
+  /// False for HP / coins, which auto-apply on pickup.
+  bool get isStackable {
     switch (this) {
-      case PowerUpType.rapidFire:
-      case PowerUpType.speedBoost:
-      case PowerUpType.shield:
-      case PowerUpType.magnet:
-      case PowerUpType.ghostMode:
       case PowerUpType.hp:
       case PowerUpType.coins:
-        return PowerUpCategory.instant;
-      case PowerUpType.bomb:
-      case PowerUpType.splitShot:
-      case PowerUpType.laser:
-      case PowerUpType.freezeTime:
-      case PowerUpType.droneWingman:
-        return PowerUpCategory.collectible;
+        return false;
+      default:
+        return true;
     }
   }
 
-  // Asset path for the falling orb on canvas (null = use placeholder)
-  String? get dropAsset {
+  /// Asset path for the falling orb on canvas.
+  String get dropAsset {
     switch (this) {
       case PowerUpType.bomb:         return 'assets/ui/pu_bomb_drop.png';
       case PowerUpType.laser:        return 'assets/ui/pu_laser_drop.png';
@@ -59,14 +52,21 @@ extension PowerUpTypeX on PowerUpType {
     }
   }
 
-  // Asset path for the tray slot icon (null = instant types, no slot)
+  /// Tray slot icon. All stackable types render in the dynamic tray, so
+  /// each needs a slot sprite. HP / coins don't enter the tray.
   String? get slotAsset {
+    if (!isStackable) return null;
     switch (this) {
       case PowerUpType.bomb:         return 'assets/ui/pu_bomb_slot.png';
       case PowerUpType.splitShot:    return 'assets/ui/pu_split_shot_slot.png';
       case PowerUpType.laser:        return 'assets/ui/pu_laser_slot.png';
       case PowerUpType.freezeTime:   return 'assets/ui/pu_freeze_time_slot.png';
       case PowerUpType.droneWingman: return 'assets/ui/pu_drone_wingman_slot.png';
+      case PowerUpType.rapidFire:    return 'assets/ui/pu_rapid_fire_slot.png';
+      case PowerUpType.speedBoost:   return 'assets/ui/pu_speed_boost_slot.png';
+      case PowerUpType.shield:       return 'assets/ui/pu_shield_slot.png';
+      case PowerUpType.magnet:       return 'assets/ui/pu_magnet_slot.png';
+      case PowerUpType.ghostMode:    return 'assets/ui/pu_ghost_mode_slot.png';
       default:                       return null;
     }
   }
@@ -88,31 +88,22 @@ extension PowerUpTypeX on PowerUpType {
     }
   }
 
-  // Fixed tray slot index for collectibles (-1 for instants)
-  int get slotIndex {
-    switch (this) {
-      case PowerUpType.bomb:         return 0;
-      case PowerUpType.splitShot:    return 1;
-      case PowerUpType.laser:        return 2;
-      case PowerUpType.freezeTime:   return 3;
-      case PowerUpType.droneWingman: return 4;
-      default:                       return -1;
-    }
-  }
-
-  // Effect duration in frames at 60 fps (-1 = non-timed)
+  /// Active-effect duration in frames at 60fps. POWERUP-v2.1 Section 2:
+  /// 7s for all timed effects, Ghost Mode 10s, Bomb instant. Shield is
+  /// timed now (7s of damage absorption) per v2.1 — no longer untimed.
+  /// HP / coins are instant-apply on pickup (1 frame marker).
   int get durationFrames {
     switch (this) {
-      case PowerUpType.rapidFire:    return 300;
-      case PowerUpType.shield:       return -1;
-      case PowerUpType.splitShot:    return 300;
-      case PowerUpType.speedBoost:   return 300;
-      case PowerUpType.droneWingman: return 300;
-      case PowerUpType.bomb:         return 1;
-      case PowerUpType.laser:        return 180;
-      case PowerUpType.magnet:       return 480;
-      case PowerUpType.ghostMode:    return 180;
-      case PowerUpType.freezeTime:   return 240;
+      case PowerUpType.rapidFire:    return 420; // 7s
+      case PowerUpType.speedBoost:   return 420; // 7s
+      case PowerUpType.shield:       return 420; // 7s
+      case PowerUpType.splitShot:    return 420; // 7s
+      case PowerUpType.magnet:       return 420; // 7s
+      case PowerUpType.laser:        return 420; // 7s
+      case PowerUpType.freezeTime:   return 420; // 7s
+      case PowerUpType.ghostMode:    return 600; // 10s
+      case PowerUpType.droneWingman: return 420; // 7s
+      case PowerUpType.bomb:         return 1;   // instant on tap
       case PowerUpType.hp:           return 1;
       case PowerUpType.coins:        return 1;
     }
@@ -135,9 +126,8 @@ extension PowerUpTypeX on PowerUpType {
     }
   }
 
-  /// Stable id used by [PowerUpCatalog.unlockBiome] (and the rest of the
-  /// economy/shop layer). Returns `null` for types that are not in the
-  /// shop catalog (hp, coins) — those drop in every biome.
+  /// Stable id used by the catalog / economy layer. Null for HP and
+  /// coins (not shop SKUs; not in the unlock table).
   String? get catalogId {
     switch (this) {
       case PowerUpType.rapidFire:    return 'rapid_fire';
@@ -156,14 +146,12 @@ extension PowerUpTypeX on PowerUpType {
   }
 }
 
-// Fixed order of collectible slots in the tray (unlock order, W1→W5)
-const List<PowerUpType> kCollectibleSlots = [
-  PowerUpType.bomb,
-  PowerUpType.splitShot,
-  PowerUpType.laser,
-  PowerUpType.freezeTime,
-  PowerUpType.droneWingman,
-];
+/// Catalog-id → PowerUpType lookup. Used by the dynamic tray to map
+/// inventory keys back to render data.
+final Map<String, PowerUpType> kPowerUpByCatalogId = {
+  for (final t in PowerUpType.values)
+    if (t.catalogId != null) t.catalogId!: t,
+};
 
 // ---------------------------------------------------------------------------
 // Drop rates (independent roll per enemy kill)

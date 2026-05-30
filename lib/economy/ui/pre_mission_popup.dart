@@ -4,14 +4,14 @@ import 'package:provider/provider.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_typography.dart';
 import '../../shared/widgets/asset_placeholder.dart';
-import '../constants/economy_constants.dart';
 import '../constants/power_up_catalog.dart';
 import '../services/pack_pricing.dart';
 import '../state/economy_state.dart';
 import 'coins_offer_popup.dart';
 
 /// Last-chance loadout review before launch. Shows the active loadout's
-/// jet + tray plus a quick-add row of frequently-bought power-ups.
+/// jet + the player's stackable power-up inventory, plus a quick-add row
+/// of frequently-bought power-ups.
 class PreMissionPopup extends StatefulWidget {
   final int world;
   final int stage;
@@ -184,15 +184,7 @@ class _LoadoutSummary extends StatelessWidget {
                     style: AppTypography.bodyPale
                         .copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
                 const SizedBox(height: 6),
-                Row(
-                  children: List<Widget>.generate(
-                    EconomyConstants.trayPowerUpCount,
-                    (i) => _TrayCell(
-                      occupant: loadout.trayPowerUps[i],
-                      owned: i < economy.unlockedLoadoutSlots,
-                    ),
-                  ),
-                ),
+                _InventoryPreview(inventory: economy.powerUpInventory),
               ],
             ),
           ),
@@ -202,46 +194,92 @@ class _LoadoutSummary extends StatelessWidget {
   }
 }
 
-class _TrayCell extends StatelessWidget {
-  final String? occupant;
-  final bool owned;
-  const _TrayCell({required this.occupant, required this.owned});
+/// POWERUP-v2.1 inventory preview: a wrapping row of the player's owned
+/// stackable power-ups with stack counts. Mirrors what the in-game
+/// dynamic tray will render. Empty state shows a hint to visit the shop.
+class _InventoryPreview extends StatelessWidget {
+  final Map<String, int> inventory;
+  const _InventoryPreview({required this.inventory});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 4),
-      child: Opacity(
-        opacity: owned ? 1.0 : 0.3,
-        child: Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: AppColors.greenDeep,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: AppColors.greenTrack, width: 0.8),
+    final entries = PowerUpCatalog.stackableIds
+        .where((id) => (inventory[id] ?? 0) > 0)
+        .toList(growable: false);
+    if (entries.isEmpty) {
+      return Text(
+        'No power-ups — visit the shop',
+        style: AppTypography.bodyPale.copyWith(
+          color: AppColors.greenLabel,
+          fontSize: 11,
+        ),
+      );
+    }
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: entries
+          .map((id) => _InventoryCell(id: id, count: inventory[id] ?? 0))
+          .toList(),
+    );
+  }
+}
+
+class _InventoryCell extends StatelessWidget {
+  final String id;
+  final int count;
+  const _InventoryCell({required this.id, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count >= 10 ? '9+' : '$count';
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: AppColors.greenDeep,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.greenTrack, width: 0.8),
+      ),
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(3),
+            child: Image.asset(
+              PowerUpCatalog.slotIcon(id),
+              fit: BoxFit.contain,
+              errorBuilder: AssetPlaceholder.image(
+                color: AppColors.green,
+                label: id,
+                borderRadius: 3,
+              ),
+            ),
           ),
-          child: occupant == null
-              ? const Center(
-                  child: Text('—',
-                      style: TextStyle(
-                        color: AppColors.greenLabel,
-                        fontSize: 12,
-                      )),
-                )
-              : Padding(
-                  padding: const EdgeInsets.all(3),
-                  child: Image.asset(
-                    PowerUpCatalog.slotIcon(occupant!),
-                    fit: BoxFit.contain,
-                    errorBuilder: AssetPlaceholder.image(
-                      color: AppColors.green,
-                      label: occupant!,
-                      borderRadius: 3,
-                    ),
+          if (count >= 2)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF9F27),
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: const Color(0xFF0a1a0a), width: 1),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF412402),
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                    height: 1.0,
                   ),
                 ),
-        ),
+              ),
+            ),
+        ],
       ),
     );
   }

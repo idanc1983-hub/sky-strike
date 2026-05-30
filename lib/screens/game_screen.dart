@@ -7,11 +7,12 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../economy/constants/ad_placement_catalog.dart';
-import '../economy/constants/economy_constants.dart';
 import '../economy/constants/power_up_catalog.dart';
 import '../economy/services/ads_service.dart';
+import '../economy/services/economy_config.dart';
 import '../economy/services/ftue_triggers.dart';
 import '../economy/state/economy_state.dart';
+import '../economy/ui/power_up_unlock_popup.dart';
 import '../economy/ui/pre_mission_popup.dart';
 import '../game/models.dart';
 import '../shared/theme/app_colors.dart';
@@ -75,9 +76,19 @@ class _GameEnemy {
 class _Pickup {
   double x, y;
   final PowerUpType type;
+  /// Coin value for [PowerUpType.coins] pickups. Set at spawn time so the
+  /// elite / boss-phase multiplier from the originating enemy is preserved
+  /// even though pickups can sit on screen for several frames before
+  /// collection. Null for non-coin pickup types.
+  final int? coinValue;
   bool flashing = false;
   int flashFrames = 0;
-  _Pickup({required this.x, required this.y, required this.type});
+  _Pickup({
+    required this.x,
+    required this.y,
+    required this.type,
+    this.coinValue,
+  });
 }
 
 class _FloatText {
@@ -272,6 +283,8 @@ class _GameScreenState extends State<GameScreen>
   static const int _kBossEntryDuration = 72; // 1.2 s at 60 fps
   static const double _kBossEntryStartY = -150.0;
   static const double _kBossTargetYFrac = 0.15;
+  // Per-bullet-hit chance to spawn a power-up drop during boss fights.
+  static const double _kBossHitDropChance = 0.07;
 
   // ── Game over / revive ───────────────────────────────────────────────────
   bool _reviveUsed = false;
@@ -367,10 +380,9 @@ class _GameScreenState extends State<GameScreen>
     _enemyBulletImage = await _loadUiImage(enemyBulletAsset(_world));
 
     for (final type in PowerUpType.values) {
-      final asset = type.dropAsset;
-      if (asset != null) _puDropImages[type] = await _loadUiImage(asset);
+      _puDropImages[type] = await _loadUiImage(type.dropAsset);
     }
-    for (final type in kCollectibleSlots) {
+    for (final type in PowerUpType.values) {
       final asset = type.slotAsset;
       if (asset != null) _puSlotImages[type] = await _loadUiImage(asset);
     }
@@ -650,7 +662,9 @@ class _GameScreenState extends State<GameScreen>
       if (p.y > _screenH + 20) return true;
       if ((p.x - _playerX).abs() < 28 && (p.y - _playerY).abs() < 28) {
         _collectPickup(p);
-        if (p.type.category == PowerUpCategory.instant) {
+        // HP / coins auto-apply on pickup → flash briefly before vanishing.
+        // Stackable power-ups vanish immediately (they enter the tray).
+        if (!p.type.isStackable) {
           p.flashing = true;
           p.flashFrames = 12;
           return false;
@@ -875,10 +889,19 @@ class _GameScreenState extends State<GameScreen>
       ));
     }
 
-    _rollPowerUpDrop(e.x, e.y);
+    _rollPowerUpDrop(e.x, e.y, isElite: e.isElite);
   }
 
-  void _rollPowerUpDrop(double x, double y) {
+  /// [isElite] is true when an elite enemy dropped the pickup. Boss-phase
+  /// pickups (from boss bullet kills) pass [isBossPhase] = true. Both
+  /// flags influence the per-pickup coin value when the rolled type is
+  /// [PowerUpType.coins].
+  void _rollPowerUpDrop(
+    double x,
+    double y, {
+    bool isElite = false,
+    bool isBossPhase = false,
+  }) {
     final economy = context.read<EconomyState>();
     if (FtueRules.shouldForceHpDrop(
       currentWorld: _world,
@@ -903,33 +926,37 @@ class _GameScreenState extends State<GameScreen>
         if (unlock != null && unlock > _world) continue;
       }
       if (_rng.nextDouble() < entry.value) {
-        _pickups.add(_Pickup(x: x, y: y, type: entry.key));
+        final coinValue = entry.key == PowerUpType.coins
+            ? (isBossPhase
+                ? EconomyConfig.coinPickupBossPhase()
+                : isElite
+                    ? EconomyConfig.coinPickupElite()
+                    : EconomyConfig.coinPickupRegular())
+            : null;
+        _pickups.add(_Pickup(
+          x: x,
+          y: y,
+          type: entry.key,
+          coinValue: coinValue,
+        ));
         break;
       }
     }
   }
 
   void _collectPickup(_Pickup p) {
-    if (p.type.category == PowerUpCategory.collectible) {
+    // Stackable power-ups (POWERUP-v2.1): pickup grants a tray charge and
+    // increments the persistent inventory. Player taps the tray to activate.
+    if (p.type.isStackable) {
       _trayKey.currentState?.addCharge(p.type);
+      final id = p.type.catalogId;
+      if (id != null) {
+        context.read<EconomyState>().onPowerUpPickup(id);
+      }
       return;
     }
+    // Non-stackable pickups auto-apply on collect.
     switch (p.type) {
-      case PowerUpType.rapidFire:
-        _rapidFireActive = true;
-        _rapidFireFrames = PowerUpType.rapidFire.durationFrames;
-      case PowerUpType.shield:
-        _shieldActive = true;
-        _shieldHitsRemaining = 3;
-      case PowerUpType.speedBoost:
-        _speedBoostActive = true;
-        _speedBoostFrames = PowerUpType.speedBoost.durationFrames;
-      case PowerUpType.magnet:
-        _magnetActive = true;
-        _magnetFrames = PowerUpType.magnet.durationFrames;
-      case PowerUpType.ghostMode:
-        _ghostActive = true;
-        _ghostFrames = PowerUpType.ghostMode.durationFrames;
       case PowerUpType.hp:
         final restore = (_maxHp * 0.25).round();
         final before  = _hp;
@@ -942,9 +969,21 @@ class _GameScreenState extends State<GameScreen>
             color: const Color(0xFF97C459),
             life: 48,
           ));
+        } else {
+          // Player at full HP — convert pickup to coins per GDD §2.9.
+          final amount = EconomyConfig.hpDropAtMaxHpCoinValue();
+          context
+              .read<EconomyState>()
+              .addCoins(amount, source: 'in_game_hp_at_max');
+          _floatTexts.add(_FloatText(
+            x: _playerX, y: _playerY - 20,
+            text: '+$amount',
+            color: const Color(0xFFFFC83D),
+            life: 48,
+          ));
         }
       case PowerUpType.coins:
-        const amount = EconomyConstants.coinPickupValueRegular;
+        final amount = p.coinValue ?? EconomyConfig.coinPickupRegular();
         context.read<EconomyState>().addCoins(amount, source: 'in_game_pickup');
         _floatTexts.add(_FloatText(
           x: _playerX, y: _playerY - 20,
@@ -957,7 +996,9 @@ class _GameScreenState extends State<GameScreen>
     }
   }
 
-  void _onCollectibleActivated(PowerUpType type) {
+  /// Applies the active effect for a tray-tapped power-up. Called by
+  /// [_PowerUpTray._onTapSlot] once the stack has been decremented.
+  void _onPowerUpActivated(PowerUpType type) {
     switch (type) {
       case PowerUpType.bomb:
         _detonateBomb();
@@ -973,6 +1014,21 @@ class _GameScreenState extends State<GameScreen>
       case PowerUpType.droneWingman:
         _droneActive = true;
         _droneFrames = PowerUpType.droneWingman.durationFrames;
+      case PowerUpType.rapidFire:
+        _rapidFireActive = true;
+        _rapidFireFrames = PowerUpType.rapidFire.durationFrames;
+      case PowerUpType.speedBoost:
+        _speedBoostActive = true;
+        _speedBoostFrames = PowerUpType.speedBoost.durationFrames;
+      case PowerUpType.shield:
+        _shieldActive = true;
+        _shieldHitsRemaining = 3;
+      case PowerUpType.magnet:
+        _magnetActive = true;
+        _magnetFrames = PowerUpType.magnet.durationFrames;
+      case PowerUpType.ghostMode:
+        _ghostActive = true;
+        _ghostFrames = PowerUpType.ghostMode.durationFrames;
       default:
         break;
     }
@@ -1162,7 +1218,11 @@ class _GameScreenState extends State<GameScreen>
         _bossHp--;
         _bossFlashing = true;
         _bossFlashFrames = 3;
-        if (_bossHp <= 0) { _bossExploding = true; _bossExplosionFrame = 0; }
+        if (_bossHp <= 0) {
+          _bossExploding = true; _bossExplosionFrame = 0;
+        } else if (_rng.nextDouble() < _kBossHitDropChance) {
+          _rollPowerUpDrop(b.x, b.y, isBossPhase: true);
+        }
         return true;
       }
       return false;
@@ -1486,7 +1546,7 @@ class _GameScreenState extends State<GameScreen>
                     child: _PowerUpTray(
                       key: _trayKey,
                       slotImages: Map.unmodifiable(_puSlotImages),
-                      onActivate: _onCollectibleActivated,
+                      onActivate: _onPowerUpActivated,
                     ),
                   ),
                 ),
@@ -1746,9 +1806,10 @@ class _GameScreenState extends State<GameScreen>
     final coinsEarned = baseReward + starBonus;
     final hpPct = (hpFrac * 100).round();
 
-    // Biome complete = boss stage cleared. Title + primary CTA change
-    // accordingly; unlock row replaces reward row.
-    final isBiomeClear = _isBossStage;
+    // Biome complete = LAST stage of the biome cleared (stage 10).
+    // v2 has multiple boss stages per biome (e.g. levels 3, 6, 9, 10),
+    // so `_isBossStage` alone over-fires the biome-complete overlay.
+    final isBiomeClear = _stage == 10;
 
     return ResultOverlay(
       wash: ResultWash.green,
@@ -1768,7 +1829,7 @@ class _GameScreenState extends State<GameScreen>
           ),
         AppButton.secondary(
           label: 'Home',
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => _onHomeAfterClear(isBiomeClear: isBiomeClear),
         ),
         AppButton.primary(
           label: isBiomeClear ? 'Next Biome' : 'Next Stage',
@@ -1783,8 +1844,10 @@ class _GameScreenState extends State<GameScreen>
   /// "Launch Mission" CTA uses, so loadout selection is consistent.
   ///
   /// Flow:
-  ///   1. (biome clear) play 1.2s fade-zoom transition
-  ///   2. bump `economy.currentStage`
+  ///   1. (biome clear) play 1.2s fade-zoom transition, then
+  ///      [EconomyState.advanceToWorld] to bump `maxWorldReached` and
+  ///      collect any newly unlocked power-ups — shown one popup per id.
+  ///   2. bump `economy.currentStage` (or reset to 1 on biome clear)
   ///   3. show pre-mission popup for the new stage
   ///   4. LAUNCH → `pushReplacementNamed('/loading')` so the current /game
   ///      route is swapped for the new run (no Home flash)
@@ -1799,8 +1862,22 @@ class _GameScreenState extends State<GameScreen>
     if (isBiomeClear) {
       await _playBiomeTransition();
       if (!mounted) return;
+      // Advance the unlocked-biome marker and shift the active world.
+      // `advanceToWorld` returns the list of power-ups newly unlocked at
+      // the higher biome — surface a popup for each so the player sees
+      // the reward before the pre-mission popup steals focus.
+      final nextWorld = (_world + 1).clamp(1, 6);
+      final newlyUnlocked = economy.advanceToWorld(nextWorld);
+      economy.setCurrentWorld(nextWorld);
+      economy.setCurrentStage(1);
+      for (final powerUpId in newlyUnlocked) {
+        if (!mounted) return;
+        await PowerUpUnlockPopup.show(context, powerUpId);
+      }
+      if (!mounted) return;
+    } else {
+      economy.setCurrentStage(economy.currentStage + 1);
     }
-    economy.setCurrentStage(economy.currentStage + 1);
     if (!mounted) return;
     final ok = await PreMissionPopup.show(
       context,
@@ -1822,6 +1899,23 @@ class _GameScreenState extends State<GameScreen>
         'stage': economy.currentStage,
       },
     );
+  }
+
+  /// Advances stage/world the same way [_onNextStage] does, then pops
+  /// back to Home. Mirrors the Next Stage path so a player who exits
+  /// via "Home" still has their progression bumped — both CTAs leave
+  /// the player one level further along.
+  void _onHomeAfterClear({required bool isBiomeClear}) {
+    final economy = context.read<EconomyState>();
+    if (isBiomeClear) {
+      final nextWorld = (_world + 1).clamp(1, 6);
+      economy.advanceToWorld(nextWorld);
+      economy.setCurrentWorld(nextWorld);
+      economy.setCurrentStage(1);
+    } else {
+      economy.setCurrentStage(economy.currentStage + 1);
+    }
+    Navigator.pop(context);
   }
 
   /// 1.2s fade-zoom transition shown after Biome Complete. Lightweight
@@ -2674,19 +2768,23 @@ class _PowerUpTray extends StatefulWidget {
 class _PowerUpTrayState extends State<_PowerUpTray>
     with TickerProviderStateMixin {
 
+  /// POWERUP-v2.1 dynamic tray: every stackable power-up gets a slot
+  /// entry, but only types with `count > 0 || isActive` are rendered.
+  static final List<PowerUpType> _kStackableTypes = PowerUpType.values
+      .where((t) => t.isStackable)
+      .toList(growable: false);
+
   late final Map<PowerUpType, _TraySlot> _slots;
   final Map<PowerUpType, AnimationController> _controllers = {};
 
-  // Slot cap — tray displays at most this many charges per power-up.
-  // Extra stock stays in [EconomyState.powerUpInventory] and refills the
-  // tray on stage retry as charges are consumed.
-  static const int _kSlotCap = 3;
+  // No hard cap on slot charges — the slot mirrors the player's full
+  // inventory, and [_buildBadge] collapses any count ≥ 10 into "9+".
 
   @override
   void initState() {
     super.initState();
     _slots = {
-      for (final type in kCollectibleSlots) type: _TraySlot(count: 0),
+      for (final type in _kStackableTypes) type: _TraySlot(count: 0),
     };
     _hydrateFromInventory();
   }
@@ -2702,18 +2800,16 @@ class _PowerUpTrayState extends State<_PowerUpTray>
   /// land in the tray before the run starts.
   void _hydrateFromInventory() {
     final inventory = context.read<EconomyState>().powerUpInventory;
-    for (final type in kCollectibleSlots) {
+    for (final type in _kStackableTypes) {
       final id = type.catalogId;
       if (id == null) continue;
-      final owned = inventory[id] ?? 0;
-      _slots[type]!.count = owned > _kSlotCap ? _kSlotCap : owned;
+      _slots[type]!.count = inventory[id] ?? 0;
     }
   }
 
-  // Called by parent when a collectible orb is picked up
+  // Called by parent when a stackable orb is picked up
   void addCharge(PowerUpType type) {
     if (!mounted) return;
-    if (_slots[type]!.count >= _kSlotCap) return;
     setState(() => _slots[type]!.count++);
   }
 
@@ -2723,7 +2819,7 @@ class _PowerUpTrayState extends State<_PowerUpTray>
     for (final c in _controllers.values) { c.dispose(); }
     _controllers.clear();
     setState(() {
-      for (final type in kCollectibleSlots) {
+      for (final type in _kStackableTypes) {
         _slots[type]!.count = 0;
         _slots[type]!.isActive = false;
       }
@@ -2760,6 +2856,11 @@ class _PowerUpTrayState extends State<_PowerUpTray>
     widget.onActivate(type);
     _controllers[type]?.dispose();
     _controllers.remove(type);
+    // Bomb resolves instantly on tap — no timer, immediately clear isActive.
+    if (type == PowerUpType.bomb) {
+      setState(() => slot.isActive = false);
+      return;
+    }
     _startController(type, 0.0);
   }
 
@@ -2772,9 +2873,20 @@ class _PowerUpTrayState extends State<_PowerUpTray>
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: kCollectibleSlots.map(_buildSlot).toList(),
+    // POWERUP-v2.1 dynamic tray: render only the types the player
+    // currently holds (count > 0) or that are mid-activation. Empty
+    // tray collapses to zero-height. Overflow scrolls horizontally.
+    final visible = _kStackableTypes.where((t) {
+      final s = _slots[t]!;
+      return s.count > 0 || s.isActive;
+    }).toList(growable: false);
+    if (visible.isEmpty) return const SizedBox.shrink();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: visible.map(_buildSlot).toList(),
+      ),
     );
   }
 

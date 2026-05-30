@@ -1,0 +1,500 @@
+{
+  "configs": [
+    {
+      "asset_name": "fto",
+      "display_name": "Welcome Pilot!",
+      "duration_hours": "session",
+      "cooldown_hours": 0,
+      "popup_bg": "bg_welcome_jungle",
+      "active": true,
+      "is_intro": true,
+      "trigger_challenge_id": "new_players",
+      "unlock_level": 1,
+      "dismiss_trigger": "session_end_or_purchase"
+    },
+    {
+      "asset_name": "first_purchase",
+      "display_name": "Pilot's Pack",
+      "duration_hours": -1,
+      "cooldown_hours": 0,
+      "popup_bg": "bg_first_purchase",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "none",
+      "unlock_level": 2,
+      "dismiss_trigger": "any_iap_purchase"
+    },
+    {
+      "asset_name": "1+2_ironsky",
+      "display_name": "Iron Skies Bundle",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_ironsky_metal",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "iron_skies",
+      "unlock_level": 5,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    },
+    {
+      "asset_name": "snake_ironsky",
+      "display_name": "Iron Skies Ascent",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_ironsky_metal",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "iron_skies",
+      "unlock_level": 8,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    },
+    {
+      "asset_name": "generic_ironsky",
+      "display_name": "Iron Skies Stockpile",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_ironsky_metal",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "iron_skies",
+      "unlock_level": 3,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    },
+    {
+      "asset_name": "1+2_laststand",
+      "display_name": "Last Stand Bundle",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_laststand_storm",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "last_stand",
+      "unlock_level": 5,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    },
+    {
+      "asset_name": "snake_laststand",
+      "display_name": "Last Stand Ascent",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_laststand_storm",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "last_stand",
+      "unlock_level": 8,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    },
+    {
+      "asset_name": "generic_laststand",
+      "display_name": "Last Stand Stockpile",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_laststand_storm",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "last_stand",
+      "unlock_level": 3,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    },
+    {
+      "asset_name": "1+2_goldensky",
+      "display_name": "Golden Sky Bundle",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_goldensky_sunset",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "golden_sky",
+      "unlock_level": 5,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    },
+    {
+      "asset_name": "snake_goldensky",
+      "display_name": "Golden Sky Ascent",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_goldensky_sunset",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "golden_sky",
+      "unlock_level": 8,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    },
+    {
+      "asset_name": "generic_goldensky",
+      "display_name": "Golden Sky Stockpile",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_goldensky_sunset",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "golden_sky",
+      "unlock_level": 3,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    },
+    {
+      "asset_name": "1+2_starascent",
+      "display_name": "Star Ascent Bundle",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_starascent_cosmos",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "star_ascent",
+      "unlock_level": 5,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    },
+    {
+      "asset_name": "snake_starascent",
+      "display_name": "Star Ascent Vault",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_starascent_cosmos",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "star_ascent",
+      "unlock_level": 8,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    },
+    {
+      "asset_name": "generic_starascent",
+      "display_name": "Star Ascent Stockpile",
+      "duration_hours": 48,
+      "cooldown_hours": 24,
+      "popup_bg": "bg_starascent_cosmos",
+      "active": true,
+      "is_intro": false,
+      "trigger_challenge_id": "star_ascent",
+      "unlock_level": 3,
+      "dismiss_trigger": "duration_expire_or_purchase"
+    }
+  ],
+  "rules": {
+    "duration_hours = -1": "persistent until dismiss_trigger fires",
+    "duration_hours = session": "active only during the player's first session (intro flow)",
+    "cooldown_hours = 24": "no monetization popup for 24h after offer expiry (challenge cycle = 72h: 48h active + 24h rest)",
+    "biome_chest_match": "runtime token: resolved to the chest matching the player's current biome at offer-show time"
+  },
+  "templates": {
+    "one_plus_two": [
+      {
+        "asset_id": "fto",
+        "slots": [
+          {
+            "reward": "1000coin",
+            "price": 0.99
+          },
+          {
+            "reward": "unique_chest",
+            "price": "free"
+          },
+          {
+            "reward": "30gem",
+            "price": "free"
+          }
+        ]
+      },
+      {
+        "asset_id": "first_purchase",
+        "slots": [
+          {
+            "reward": "1500coin",
+            "price": 0.99
+          },
+          {
+            "reward": "unique_chest",
+            "price": "free"
+          },
+          {
+            "reward": "20gem",
+            "price": "free"
+          }
+        ]
+      },
+      {
+        "asset_id": "1+2_ironsky",
+        "slots": [
+          {
+            "reward": "12000coin + 100gem",
+            "price": 9.99
+          },
+          {
+            "reward": "epic_chest",
+            "price": "free"
+          },
+          {
+            "reward": "biome_chest_match",
+            "price": "free"
+          }
+        ]
+      },
+      {
+        "asset_id": "1+2_laststand",
+        "slots": [
+          {
+            "reward": "12000coin + 100gem",
+            "price": 9.99
+          },
+          {
+            "reward": "epic_chest",
+            "price": "free"
+          },
+          {
+            "reward": "biome_chest_match",
+            "price": "free"
+          }
+        ]
+      },
+      {
+        "asset_id": "1+2_goldensky",
+        "slots": [
+          {
+            "reward": "12000coin + 100gem",
+            "price": 9.99
+          },
+          {
+            "reward": "epic_chest",
+            "price": "free"
+          },
+          {
+            "reward": "biome_chest_match",
+            "price": "free"
+          }
+        ]
+      },
+      {
+        "asset_id": "1+2_starascent",
+        "slots": [
+          {
+            "reward": "12000coin + 100gem",
+            "price": 9.99
+          },
+          {
+            "reward": "epic_chest",
+            "price": "free"
+          },
+          {
+            "reward": "biome_chest_match",
+            "price": "free"
+          }
+        ]
+      }
+    ],
+    "snake": [
+      {
+        "asset_id": "snake_ironsky",
+        "slots": [
+          {
+            "rewards": [
+              "200coin"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "15gem"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "epic_chest",
+              "1500coin"
+            ],
+            "price": 4.99
+          },
+          {
+            "rewards": [
+              "unique_chest"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "100gem",
+              "biome_chest_match"
+            ],
+            "price": 4.99
+          },
+          {
+            "rewards": [
+              "50gem"
+            ],
+            "price": "free"
+          }
+        ]
+      },
+      {
+        "asset_id": "snake_laststand",
+        "slots": [
+          {
+            "rewards": [
+              "200coin"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "15gem"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "epic_chest",
+              "1500coin"
+            ],
+            "price": 4.99
+          },
+          {
+            "rewards": [
+              "unique_chest"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "100gem",
+              "biome_chest_match"
+            ],
+            "price": 4.99
+          },
+          {
+            "rewards": [
+              "50gem"
+            ],
+            "price": "free"
+          }
+        ]
+      },
+      {
+        "asset_id": "snake_goldensky",
+        "slots": [
+          {
+            "rewards": [
+              "200coin"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "15gem"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "epic_chest",
+              "1500coin"
+            ],
+            "price": 4.99
+          },
+          {
+            "rewards": [
+              "unique_chest"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "100gem",
+              "biome_chest_match"
+            ],
+            "price": 4.99
+          },
+          {
+            "rewards": [
+              "50gem"
+            ],
+            "price": "free"
+          }
+        ]
+      },
+      {
+        "asset_id": "snake_starascent",
+        "slots": [
+          {
+            "rewards": [
+              "200coin"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "15gem"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "epic_chest",
+              "1500coin"
+            ],
+            "price": 4.99
+          },
+          {
+            "rewards": [
+              "unique_chest"
+            ],
+            "price": "free"
+          },
+          {
+            "rewards": [
+              "100gem",
+              "biome_chest_match"
+            ],
+            "price": 4.99
+          },
+          {
+            "rewards": [
+              "50gem"
+            ],
+            "price": "free"
+          }
+        ]
+      }
+    ],
+    "generic": [
+      {
+        "asset_id": "generic_ironsky",
+        "rewards": [
+          "3500coin",
+          "50gem",
+          "unique_chest",
+          "5x_powerup_T1_T3"
+        ],
+        "price": 4.99
+      },
+      {
+        "asset_id": "generic_laststand",
+        "rewards": [
+          "3500coin",
+          "50gem",
+          "unique_chest",
+          "5x_powerup_T1_T3"
+        ],
+        "price": 4.99
+      },
+      {
+        "asset_id": "generic_goldensky",
+        "rewards": [
+          "3500coin",
+          "50gem",
+          "unique_chest",
+          "5x_powerup_T1_T3"
+        ],
+        "price": 4.99
+      },
+      {
+        "asset_id": "generic_starascent",
+        "rewards": [
+          "3500coin",
+          "50gem",
+          "unique_chest",
+          "5x_powerup_T1_T3"
+        ],
+        "price": 4.99
+      }
+    ]
+  }
+}

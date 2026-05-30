@@ -1,0 +1,341 @@
+{
+  "days": [
+    {
+      "day_id": "w1_d1",
+      "week": 1,
+      "coin_prize": 50,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w1_d2",
+      "week": 1,
+      "coin_prize": 150,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w1_d3",
+      "week": 1,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": "basic_chest",
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w1_d4",
+      "week": 1,
+      "coin_prize": 0,
+      "gem_prize": 10,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w1_d5",
+      "week": 1,
+      "coin_prize": 400,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w1_d6",
+      "week": 1,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": "unique_chest",
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w1_d7",
+      "week": 1,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": "biome_match",
+      "jet_fallback": "epic_chest + 50gem"
+    },
+    {
+      "day_id": "w2_d1",
+      "week": 2,
+      "coin_prize": 100,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w2_d2",
+      "week": 2,
+      "coin_prize": 250,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w2_d3",
+      "week": 2,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": "unique_chest",
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w2_d4",
+      "week": 2,
+      "coin_prize": 0,
+      "gem_prize": 20,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w2_d5",
+      "week": 2,
+      "coin_prize": 700,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w2_d6",
+      "week": 2,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": "epic_chest",
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w2_d7",
+      "week": 2,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": "biome_match",
+      "jet_fallback": "epic_chest + 80gem"
+    },
+    {
+      "day_id": "w3_d1",
+      "week": 3,
+      "coin_prize": 150,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w3_d2",
+      "week": 3,
+      "coin_prize": 400,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w3_d3",
+      "week": 3,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": "unique_chest",
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w3_d4",
+      "week": 3,
+      "coin_prize": 0,
+      "gem_prize": 30,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w3_d5",
+      "week": 3,
+      "coin_prize": 1000,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w3_d6",
+      "week": 3,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": "epic_chest",
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w3_d7",
+      "week": 3,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": "biome_match",
+      "jet_fallback": "special_chest + 30gem"
+    },
+    {
+      "day_id": "w4_d1",
+      "week": 4,
+      "coin_prize": 200,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w4_d2",
+      "week": 4,
+      "coin_prize": 600,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w4_d3",
+      "week": 4,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": "epic_chest",
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w4_d4",
+      "week": 4,
+      "coin_prize": 0,
+      "gem_prize": 50,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w4_d5",
+      "week": 4,
+      "coin_prize": 1500,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w4_d6",
+      "week": 4,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": "epic_chest",
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w4_d7",
+      "week": 4,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": "biome_match",
+      "jet_fallback": "special_chest + 50gem"
+    },
+    {
+      "day_id": "w5_d1",
+      "week": 5,
+      "coin_prize": 250,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w5_d2",
+      "week": 5,
+      "coin_prize": 800,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w5_d3",
+      "week": 5,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": "epic_chest",
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w5_d4",
+      "week": 5,
+      "coin_prize": 0,
+      "gem_prize": 70,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w5_d5",
+      "week": 5,
+      "coin_prize": 2000,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w5_d6",
+      "week": 5,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": "special_chest",
+      "jet_type": null,
+      "jet_fallback": null
+    },
+    {
+      "day_id": "w5_d7",
+      "week": 5,
+      "coin_prize": 0,
+      "gem_prize": 0,
+      "chest_type": null,
+      "jet_type": "biome_match",
+      "jet_fallback": "special_chest + 100gem"
+    }
+  ],
+  "rules": {
+    "streak_miss_policy": {
+      "value": "freeze_then_reset",
+      "note": "1 free freeze per week; 2 consecutive misses = reset to W1"
+    },
+    "streak_rescue_cost_gems": {
+      "value": 50,
+      "note": "Player can spend 50 gems to restore a missed day; available once per week"
+    },
+    "week_cap": {
+      "value": 5,
+      "note": "W5 values persist for all weeks 5+"
+    },
+    "d7_biome_resolution": {
+      "value": "session_start",
+      "note": "D7 jet determined by player's highest unlocked biome at session start; if jet already owned, grants jet_fallback"
+    },
+    "biome_to_jet_map": {
+      "value": "jungle=basic, desert=Wraith X, sea=Specter, ice=Viper, volcano=Inferno, city=Phantom",
+      "note": null
+    }
+  }
+}

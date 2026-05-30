@@ -14,6 +14,8 @@ class JetModel {
   final JetStatus status;
   final int price;
   final String? unlockCondition;
+  final String? unlockBiome;
+  final int unlockWorld;
   final String assetPath;
 
   const JetModel({
@@ -28,6 +30,8 @@ class JetModel {
     required this.status,
     this.price = 0,
     this.unlockCondition,
+    this.unlockBiome,
+    this.unlockWorld = 1,
     required this.assetPath,
   });
 
@@ -44,6 +48,8 @@ class JetModel {
       status: status ?? this.status,
       price: price,
       unlockCondition: unlockCondition,
+      unlockBiome: unlockBiome,
+      unlockWorld: unlockWorld,
       assetPath: assetPath,
     );
   }

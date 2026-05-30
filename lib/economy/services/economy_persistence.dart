@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants/economy_constants.dart';
@@ -9,7 +10,7 @@ import '../state/loadout.dart';
 
 /// Snapshot of all persisted economy fields. Returned by [load] and
 /// consumed by [EconomyState.restore]. Per-session-only fields
-/// (`pickupQueue`, `stageRevivesUsed`) are not part of this record.
+/// (`stageRevivesUsed`) are not part of this record.
 class EconomySnapshot {
   final int coins;
   final int gems;
@@ -17,6 +18,7 @@ class EconomySnapshot {
   final int xpMax;
   final int level;
   final int currentWorld;
+  final int currentStage;
   final int maxWorldReached;
   final Map<String, int> powerUpInventory;
   final int unlockedLoadoutSlots;
@@ -33,6 +35,7 @@ class EconomySnapshot {
   final Set<String> defeatedBosses;
   final bool adsRemoved;
   final Set<String> packsPurchased;
+  final Set<String> ownedJets;
   final DateTime? installDate;
   final int pendingNextJetDiscountPct;
 
@@ -55,6 +58,7 @@ class EconomySnapshot {
     required this.xpMax,
     required this.level,
     required this.currentWorld,
+    this.currentStage = 1,
     required this.maxWorldReached,
     required this.powerUpInventory,
     required this.unlockedLoadoutSlots,
@@ -71,6 +75,7 @@ class EconomySnapshot {
     required this.defeatedBosses,
     required this.adsRemoved,
     required this.packsPurchased,
+    required this.ownedJets,
     required this.installDate,
     required this.pendingNextJetDiscountPct,
     required this.activeChallengeType,
@@ -84,10 +89,19 @@ class EconomySnapshot {
 
   /// Brand-new player defaults — used when SharedPreferences has no
   /// existing economy keys.
+  ///
+  /// Starter grant per Game Economy GDD v1.1 §3:
+  ///   - 100 coins: 5× below the 500-coin operation chest floor, so the
+  ///     first reward reads as 5–30× the starting wallet.
+  ///   - 10 gems:  ~2 World-1 revives (5 gems each); the rest of the
+  ///     cushion is earned, not handed out.
+  /// Applied ONLY when no save exists; existing wallets are never
+  /// overwritten because returning players load from the persisted blob
+  /// instead of this factory.
   factory EconomySnapshot.defaults() {
     return EconomySnapshot(
-      coins: 0,
-      gems: 0,
+      coins: 100,
+      gems: 10,
       xp: 0,
       xpMax: 1000,
       level: 1,
@@ -111,6 +125,7 @@ class EconomySnapshot {
       defeatedBosses: <String>{},
       adsRemoved: false,
       packsPurchased: <String>{},
+      ownedJets: <String>{'jet_player'},
       installDate: null,
       pendingNextJetDiscountPct: 0,
       activeChallengeType: null,
@@ -166,8 +181,25 @@ int _clampInt(int? raw, int min, int max, int fallback) {
 /// time a v1.2-era client upgrades, then removed after the JSON blob is
 /// written successfully.
 class EconomyPersistence {
-  // Single-blob key (current).
+  // Single-blob key (current). The blob is HMAC-signed using a
+  // per-install secret (see [_loadOrCreateSecret]); modifications to
+  // either the blob OR the signature cause [load] to fall back to
+  // defaults rather than honour the tampered values.
   static const _kBlob = 'ss_state_v1';
+
+  // HMAC-SHA-256 hex digest of `_kBlob`'s value, written alongside the
+  // blob on every save. A mismatch (or missing sig) on load means the
+  // file was hand-edited, copied from another install, or downgraded;
+  // we reject silently rather than enrich a cheater's wallet.
+  static const _kBlobSig = 'ss_state_v1_sig';
+
+  // Per-install random secret used to derive the HMAC key. Generated
+  // on first launch and never rotated. Lives in the same
+  // SharedPreferences store as the data — this is *not* hardware-backed
+  // crypto; the goal is to defeat casual blob editing, not a determined
+  // reverse-engineer with a debugger. Pair with server-side
+  // reconciliation when the backend lands.
+  static const _kInstallSecret = 'ss_install_secret_v1';
 
   // Legacy per-field keys (read-only — left in place so an upgrade from
   // a pre-blob install reads the old fields once, after which the blob
@@ -178,6 +210,7 @@ class EconomyPersistence {
   static const _kXpMax = 'ss_xpMax';
   static const _kLevel = 'ss_level';
   static const _kCurrentWorld = 'ss_currentWorld';
+  static const _kCurrentStage = 'ss_currentStage';
   static const _kMaxWorldReached = 'ss_maxWorldReached';
   static const _kPowerUpInventory = 'ss_powerUpInventory';
   static const _kUnlockedLoadoutSlots = 'ss_unlockedLoadoutSlots';
@@ -209,20 +242,55 @@ class EconomyPersistence {
   static const _kShownAceLines = 'ss_shownAceLines';
 
   /// Loads the persisted snapshot from disk. Returns
-  /// [EconomySnapshot.defaults] when no economy keys are present.
+  /// [EconomySnapshot.defaults] when no economy keys are present, or
+  /// when the blob's HMAC signature fails (tampered / copied / missing).
   Future<EconomySnapshot> load() async {
     final prefs = await SharedPreferences.getInstance();
     final blob = prefs.getString(_kBlob);
     if (blob != null) {
-      final parsed = _parseBlob(blob);
-      if (parsed != null) return parsed;
-      // Corrupted blob — fall through to defaults rather than crash.
-      return EconomySnapshot.defaults();
+      final secret = await _loadOrCreateSecret(prefs);
+      final sig = prefs.getString(_kBlobSig);
+      final expected = _signature(blob, secret);
+      if (sig == null || sig != expected) {
+        // Signature missing or mismatched — refuse the blob entirely.
+        // Removing both keys forces the next save to write a fresh,
+        // correctly-signed pair so we don't loop on rejection. We do
+        // NOT touch the legacy keys here; if a real legacy install ever
+        // hits this branch, it falls through to [_loadLegacy].
+        await prefs.remove(_kBlob);
+        await prefs.remove(_kBlobSig);
+      } else {
+        final parsed = _parseBlob(blob);
+        if (parsed != null) return parsed;
+        // Signature was valid but JSON shape changed — fall through to
+        // defaults rather than crash.
+        return EconomySnapshot.defaults();
+      }
     }
     if (!prefs.containsKey(_kCoins) && !prefs.containsKey(_kInstallDate)) {
       return EconomySnapshot.defaults();
     }
     return _loadLegacy(prefs);
+  }
+
+  /// HMAC-SHA-256 of [payload] keyed by [secret]. Returned as lowercase
+  /// hex so it round-trips through SharedPreferences cleanly.
+  String _signature(String payload, String secret) {
+    final hmac = Hmac(sha256, utf8.encode(secret));
+    return hmac.convert(utf8.encode(payload)).toString();
+  }
+
+  /// Returns the per-install secret, generating + persisting one on
+  /// first call. The secret is 32 bytes of `Random.secure()` entropy,
+  /// base64-encoded.
+  Future<String> _loadOrCreateSecret(SharedPreferences prefs) async {
+    final existing = prefs.getString(_kInstallSecret);
+    if (existing != null && existing.isNotEmpty) return existing;
+    final rng = Random.secure();
+    final bytes = List<int>.generate(32, (_) => rng.nextInt(256));
+    final secret = base64Url.encode(bytes);
+    await prefs.setString(_kInstallSecret, secret);
+    return secret;
   }
 
   EconomySnapshot? _parseBlob(String raw) {
@@ -236,6 +304,7 @@ class EconomyPersistence {
         xpMax: _readInt(decoded['xpMax']) ?? 1000,
         level: _readInt(decoded['level']) ?? 1,
         currentWorld: _readInt(decoded['currentWorld']) ?? 1,
+        currentStage: _readInt(decoded['currentStage']) ?? 1,
         maxWorldReached: _readInt(decoded['maxWorldReached']) ?? 1,
         powerUpInventory: _decodeIntMapDynamic(decoded['powerUpInventory']),
         unlockedLoadoutSlots: _readInt(decoded['unlockedLoadoutSlots']) ??
@@ -255,6 +324,8 @@ class EconomyPersistence {
         defeatedBosses: _decodeStringSetDynamic(decoded['defeatedBosses']),
         adsRemoved: decoded['adsRemoved'] == true,
         packsPurchased: _decodeStringSetDynamic(decoded['packsPurchased']),
+        ownedJets: _decodeStringSetDynamic(decoded['ownedJets'])
+          ..add('jet_player'),
         installDate: _readDate(decoded['installDate']),
         pendingNextJetDiscountPct:
             _readInt(decoded['pendingNextJetDiscountPct']) ?? 0,
@@ -282,6 +353,7 @@ class EconomyPersistence {
       xpMax: prefs.getInt(_kXpMax) ?? 1000,
       level: prefs.getInt(_kLevel) ?? 1,
       currentWorld: prefs.getInt(_kCurrentWorld) ?? 1,
+      currentStage: prefs.getInt(_kCurrentStage) ?? 1,
       maxWorldReached: prefs.getInt(_kMaxWorldReached) ?? 1,
       powerUpInventory: _decodeIntMap(prefs.getString(_kPowerUpInventory)),
       unlockedLoadoutSlots: prefs.getInt(_kUnlockedLoadoutSlots) ??
@@ -300,6 +372,7 @@ class EconomyPersistence {
       defeatedBosses: _decodeStringSet(prefs.getString(_kDefeatedBosses)),
       adsRemoved: prefs.getBool(_kAdsRemoved) ?? false,
       packsPurchased: _decodeStringSet(prefs.getString(_kPacksPurchased)),
+      ownedJets: <String>{'jet_player'},
       installDate: _decodeDate(prefs.getString(_kInstallDate)),
       pendingNextJetDiscountPct: 0,
       activeChallengeType: ChallengeTypeJson.fromJsonValue(
@@ -314,11 +387,20 @@ class EconomyPersistence {
     ));
   }
 
-  /// Atomically writes [snapshot] to disk as a single JSON blob.
+  /// Atomically writes [snapshot] to disk as a single JSON blob plus a
+  /// matching HMAC signature. Both are required on the next [load].
   Future<void> save(EconomySnapshot snapshot) async {
     final clamped = _validate(snapshot);
     final prefs = await SharedPreferences.getInstance();
     final payload = json.encode(_encode(clamped));
+    final secret = await _loadOrCreateSecret(prefs);
+    final sig = _signature(payload, secret);
+    // Write the signature first so a torn write (app killed between
+    // calls) leaves a stale sig pointing at an old blob — load() will
+    // reject it and fall back to defaults. The opposite order would
+    // leave the new blob with the *previous* signature, also rejected,
+    // but a sig pointing nowhere is the safer default.
+    await prefs.setString(_kBlobSig, sig);
     await prefs.setString(_kBlob, payload);
 
     // Best-effort cleanup of legacy keys (only on the first save after
@@ -339,6 +421,7 @@ class EconomyPersistence {
       'xpMax': s.xpMax,
       'level': s.level,
       'currentWorld': s.currentWorld,
+      'currentStage': s.currentStage,
       'maxWorldReached': s.maxWorldReached,
       'powerUpInventory': s.powerUpInventory,
       'unlockedLoadoutSlots': s.unlockedLoadoutSlots,
@@ -355,6 +438,7 @@ class EconomyPersistence {
       'defeatedBosses': s.defeatedBosses.toList(),
       'adsRemoved': s.adsRemoved,
       'packsPurchased': s.packsPurchased.toList(),
+      'ownedJets': s.ownedJets.toList(),
       'installDate': s.installDate?.toIso8601String(),
       'pendingNextJetDiscountPct': s.pendingNextJetDiscountPct,
       'activeChallengeType': s.activeChallengeType?.jsonValue,
@@ -392,6 +476,7 @@ class EconomyPersistence {
       ),
       level: _clampInt(s.level, 1, _Caps.levelMax, 1),
       currentWorld: _clampInt(s.currentWorld, _Caps.worldMin, _Caps.worldMax, 1),
+      currentStage: _clampInt(s.currentStage, 1, 999, 1),
       maxWorldReached:
           _clampInt(s.maxWorldReached, _Caps.worldMin, _Caps.worldMax, 1),
       powerUpInventory: cleanedInv,
@@ -416,6 +501,9 @@ class EconomyPersistence {
       defeatedBosses: s.defeatedBosses,
       adsRemoved: s.adsRemoved,
       packsPurchased: s.packsPurchased,
+      ownedJets: s.ownedJets.isEmpty
+          ? <String>{'jet_player'}
+          : (Set<String>.from(s.ownedJets)..add('jet_player')),
       installDate: s.installDate,
       pendingNextJetDiscountPct: _clampInt(
         s.pendingNextJetDiscountPct,
@@ -528,7 +616,7 @@ class EconomyPersistence {
 
   static const List<String> _legacyKeys = <String>[
     _kCoins, _kGems, _kXp, _kXpMax, _kLevel,
-    _kCurrentWorld, _kMaxWorldReached, _kPowerUpInventory,
+    _kCurrentWorld, _kCurrentStage, _kMaxWorldReached, _kPowerUpInventory,
     _kUnlockedLoadoutSlots, _kLoadouts, _kActiveLoadoutIndex,
     _kStreakDay, _kStreakWeeksCompleted, _kLongestStreak,
     _kLastClaimDate, _kDailyAdWatchCount, _kDailyAdWatchDate,
@@ -541,9 +629,14 @@ class EconomyPersistence {
   ];
 
   /// Wipes every economy key. Used in tests; not exposed to players.
+  /// Also clears the HMAC signature and the per-install secret so the
+  /// next save regenerates both — important for tests that want a
+  /// pristine state across runs.
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kBlob);
+    await prefs.remove(_kBlobSig);
+    await prefs.remove(_kInstallSecret);
     for (final k in _legacyKeys) {
       await prefs.remove(k);
     }

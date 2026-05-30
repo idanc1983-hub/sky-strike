@@ -25,13 +25,7 @@ void main() {
         powerUpInventory: const {'bomb': 5, 'magnet': 2},
         unlockedLoadoutSlots: 4,
         loadouts: [
-          Loadout(name: 'Speed Run', jetId: 'phantom', trayPowerUps: const [
-            'rapid_fire',
-            'speed_boost',
-            null,
-            null,
-            null,
-          ]),
+          Loadout(name: 'Speed Run', jetId: 'phantom'),
           Loadout.defaultFor(1),
           Loadout.defaultFor(2),
           Loadout.defaultFor(3),
@@ -49,6 +43,7 @@ void main() {
         defeatedBosses: const {'w1'},
         adsRemoved: true,
         packsPurchased: const {'starter_pack'},
+        ownedJets: const {'jet_player', 'wraith_x'},
         installDate: DateTime.utc(2026, 5, 1),
         pendingNextJetDiscountPct: 25,
         activeChallengeType: ChallengeType.hunter,
@@ -75,7 +70,6 @@ void main() {
       expect(restored.loadouts.length, original.loadouts.length);
       expect(restored.loadouts.first.name, 'Speed Run');
       expect(restored.loadouts.first.jetId, 'phantom');
-      expect(restored.loadouts.first.trayPowerUps[0], 'rapid_fire');
       expect(restored.streakDay, 4);
       expect(restored.streakWeeksCompleted, 2);
       expect(restored.longestStreak, 18);
@@ -85,6 +79,7 @@ void main() {
       expect(restored.defeatedBosses, original.defeatedBosses);
       expect(restored.adsRemoved, isTrue);
       expect(restored.packsPurchased, original.packsPurchased);
+      expect(restored.ownedJets, original.ownedJets);
       expect(restored.installDate, original.installDate);
       expect(restored.activeChallengeType, ChallengeType.hunter);
       expect(restored.challengeStartedAt, original.challengeStartedAt);
@@ -107,6 +102,111 @@ void main() {
       expect(snap.challengeRevealed, isFalse);
       expect(snap.activeChallengeType, isNull);
       expect(snap.firedFtueTriggers, isEmpty);
+      expect(snap.ownedJets, {'jet_player'});
+    });
+
+    test('tampered blob falls back to defaults', () async {
+      final p = EconomyPersistence();
+      // Seed legitimate data via a real save so the signature pair is
+      // written alongside the blob.
+      final saved = EconomySnapshot(
+        coins: 1000,
+        gems: 50,
+        xp: 0,
+        xpMax: 1000,
+        level: 5,
+        currentWorld: 1,
+        maxWorldReached: 2,
+        powerUpInventory: const {},
+        unlockedLoadoutSlots: 3,
+        loadouts: List.generate(5, Loadout.defaultFor),
+        activeLoadoutIndex: 0,
+        streakDay: 1,
+        streakWeeksCompleted: 0,
+        longestStreak: 0,
+        lastClaimDate: null,
+        dailyAdWatchCount: 0,
+        dailyAdWatchDate: null,
+        completedStages: const {},
+        threeStarStages: const {},
+        defeatedBosses: const {},
+        adsRemoved: false,
+        packsPurchased: const {},
+        ownedJets: const {'jet_player'},
+        installDate: DateTime.utc(2026, 5, 1),
+        pendingNextJetDiscountPct: 0,
+        activeChallengeType: null,
+        challengeStartedAt: null,
+        challengeProgress: 0,
+        challengeTarget: 0,
+        challenge100Claimed: false,
+        challengeRevealed: false,
+        firedFtueTriggers: const {},
+      );
+      await p.save(saved);
+
+      // Now overwrite the blob value directly (simulating a hand-edit
+      // via `adb shell` / a backup-extract tool). The signature still
+      // matches the original blob, not the new one.
+      final prefs = await SharedPreferences.getInstance();
+      final original = prefs.getString('ss_state_v1')!;
+      final tampered = original.replaceFirst('"coins":1000', '"coins":99999999');
+      expect(tampered, isNot(original));
+      await prefs.setString('ss_state_v1', tampered);
+
+      final reloaded = await p.load();
+      // Defaults — not 99,999,999 coins.
+      expect(reloaded.coins, equals(0));
+      expect(reloaded.gems, equals(0));
+      expect(reloaded.level, equals(1));
+    });
+
+    test('missing signature key falls back to defaults', () async {
+      final p = EconomyPersistence();
+      await p.save(EconomySnapshot.defaults().rebuiltWithCoins(500));
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('ss_state_v1_sig');
+
+      final reloaded = await p.load();
+      expect(reloaded.coins, equals(0));
     });
   });
+}
+
+extension on EconomySnapshot {
+  EconomySnapshot rebuiltWithCoins(int newCoins) => EconomySnapshot(
+        coins: newCoins,
+        gems: gems,
+        xp: xp,
+        xpMax: xpMax,
+        level: level,
+        currentWorld: currentWorld,
+        maxWorldReached: maxWorldReached,
+        powerUpInventory: powerUpInventory,
+        unlockedLoadoutSlots: unlockedLoadoutSlots,
+        loadouts: loadouts,
+        activeLoadoutIndex: activeLoadoutIndex,
+        streakDay: streakDay,
+        streakWeeksCompleted: streakWeeksCompleted,
+        longestStreak: longestStreak,
+        lastClaimDate: lastClaimDate,
+        dailyAdWatchCount: dailyAdWatchCount,
+        dailyAdWatchDate: dailyAdWatchDate,
+        completedStages: completedStages,
+        threeStarStages: threeStarStages,
+        defeatedBosses: defeatedBosses,
+        adsRemoved: adsRemoved,
+        packsPurchased: packsPurchased,
+        ownedJets: ownedJets,
+        installDate: installDate,
+        pendingNextJetDiscountPct: pendingNextJetDiscountPct,
+        activeChallengeType: activeChallengeType,
+        challengeStartedAt: challengeStartedAt,
+        challengeProgress: challengeProgress,
+        challengeTarget: challengeTarget,
+        challenge100Claimed: challenge100Claimed,
+        challengeRevealed: challengeRevealed,
+        firedFtueTriggers: firedFtueTriggers,
+      );
 }

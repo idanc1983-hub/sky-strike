@@ -111,13 +111,36 @@ class LevelConfig {
       final enemiesRaw = raw['enemies'];
       final enemies = <LevelEnemy>[];
       if (enemiesRaw is List) {
-        for (final e in enemiesRaw) {
+        for (var i = 0; i < enemiesRaw.length; i++) {
+          final e = enemiesRaw[i];
           if (e is! Map) continue;
-          final tag = e['tag'];
-          if (tag is! String) continue;
+          // The RC JSON stores enemies as positional entries (no `tag`
+          // field). Map index 0→enemy_1, 1→enemy_2, etc. so callers can
+          // still look up by [kTagToTier] keys. An explicit `tag` field
+          // takes precedence if a future schema adds it.
+          final explicit = e['tag'];
+          final tag =
+              explicit is String && explicit.isNotEmpty
+                  ? explicit
+                  : 'enemy_${i + 1}';
           final count = (e['count'] as num?)?.toInt() ?? 0;
           final power = (e['power'] as num?)?.toDouble() ?? 0.0;
           enemies.add(LevelEnemy(tag: tag, count: count, power: power));
+        }
+      }
+      // Boss is stored as a sibling field (not inside `enemies`). Lift
+      // it into the enemies list under the `boss` tag so `isBossLevel`
+      // / `powerFor('boss')` see it.
+      final bossRaw = raw['boss'];
+      if (bossRaw is Map) {
+        final bossCount = (bossRaw['count'] as num?)?.toInt() ?? 0;
+        final bossPower = (bossRaw['power'] as num?)?.toDouble() ?? 0.0;
+        if (bossCount > 0) {
+          enemies.add(LevelEnemy(
+            tag: 'boss',
+            count: bossCount,
+            power: bossPower,
+          ));
         }
       }
       return LevelConfig(

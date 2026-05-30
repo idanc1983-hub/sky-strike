@@ -1,25 +1,25 @@
 import '../constants/economy_constants.dart';
+import 'economy_config.dart';
 
-/// Pure functions for the per-stage coin economy. No state, no side
-/// effects — every value the GDD specifies in §2.1, §2.2, §2.3 is
-/// computed from the constants in [EconomyConstants].
+/// Pure functions for the per-stage coin economy. Reads live values
+/// from [EconomyConfig] (RC-backed in production) and falls back to
+/// [EconomyConstants] when RC has no tuning for a given key. No state,
+/// no side effects.
 class CoinRewardCalculator {
   CoinRewardCalculator._();
 
-  /// `1 + step × (world - 1)`. Clamps `world` to `>= 1` so callers passing
-  /// 0 don't underflow.
+  /// World multiplier. Reads RC `levels_economy[biome_1].world_coin_mult`
+  /// when present; otherwise `1 + step × (world - 1)` from constants.
+  /// Clamps `world` to `>= 1` so callers passing 0 don't underflow.
   static double worldMultiplier(int world) {
-    final w = world < 1 ? 1 : world;
-    return 1.0 + EconomyConstants.worldCoinMultiplierStep * (w - 1);
+    return EconomyConfig.worldCoinMultiplier(world);
   }
 
   /// Coins awarded for clearing wave [wave1to10] in [world].
   /// Returns 0 when [wave1to10] is outside `1..10`.
   static int coinsForWave({required int wave1to10, required int world}) {
-    if (wave1to10 < 1 || wave1to10 > EconomyConstants.waveCoinCurveW1.length) {
-      return 0;
-    }
-    final base = EconomyConstants.waveCoinCurveW1[wave1to10 - 1];
+    if (wave1to10 < 1 || wave1to10 > 10) return 0;
+    final base = EconomyConfig.coinsForWave(wave1to10);
     return (base * worldMultiplier(world)).floor();
   }
 
@@ -27,7 +27,7 @@ class CoinRewardCalculator {
   /// Excludes the stage clear bonus and star bonus.
   static int waveSubtotal(int world) {
     var sum = 0;
-    for (var i = 1; i <= EconomyConstants.waveCoinCurveW1.length; i++) {
+    for (var i = 1; i <= 10; i++) {
       sum += coinsForWave(wave1to10: i, world: world);
     }
     return sum;
@@ -35,18 +35,19 @@ class CoinRewardCalculator {
 
   /// First-time stage clear bonus, scaled by world.
   static int stageClearBonus(int world) {
-    return (EconomyConstants.stageClearBonus * worldMultiplier(world)).floor();
+    return (EconomyConfig.stageClearBonus() * worldMultiplier(world)).floor();
   }
 
   /// Star bonus for [stars] (0..3), scaled by world.
   static int starBonus({required int stars, required int world}) {
-    if (stars < 0 || stars >= EconomyConstants.starBonus.length) return 0;
-    final base = EconomyConstants.starBonus[stars];
+    final base = EconomyConfig.starBonus(stars);
+    if (base <= 0) return 0;
     return (base * worldMultiplier(world)).floor();
   }
 
   /// Coins kept on death — `floor(accumulated × 0.40)`. See GDD §2.3.
-  /// Gems and bonuses are forfeited (not handled here).
+  /// Gems and bonuses are forfeited (not handled here). Salvage fraction
+  /// stays in constants — it's a mechanical rule, not a LiveOps lever.
   static int salvageOnDeath(int accumulatedRunCoins) {
     if (accumulatedRunCoins <= 0) return 0;
     return (accumulatedRunCoins * EconomyConstants.salvageCoinFraction)

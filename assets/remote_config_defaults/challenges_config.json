@@ -1,0 +1,47 @@
+[
+  {
+    "challenge_id": "iron_skies",
+    "display_name": "Iron skies",
+    "metric": "kills",
+    "target_enemy": "follow_biome",
+    "duration_hours": 72,
+    "popup_bg": null,
+    "active": true
+  },
+  {
+    "challenge_id": "new_players",
+    "display_name": null,
+    "metric": "kills",
+    "target_enemy": "follow_biome",
+    "duration_hours": 72,
+    "popup_bg": null,
+    "active": true
+  },
+  {
+    "challenge_id": "last_stand",
+    "display_name": "Last Stand",
+    "metric": "survival",
+    "target_enemy": "follow_biome",
+    "duration_hours": 72,
+    "popup_bg": null,
+    "active": true
+  },
+  {
+    "challenge_id": "golden_sky",
+    "display_name": "Golden Sky",
+    "metric": "score",
+    "target_enemy": "follow_biome",
+    "duration_hours": 72,
+    "popup_bg": null,
+    "active": true
+  },
+  {
+    "challenge_id": "star_ascent",
+    "display_name": "Star Ascent",
+    "metric": "stars",
+    "target_enemy": "follow_biome",
+    "duration_hours": 72,
+    "popup_bg": null,
+    "active": true
+  }
+]

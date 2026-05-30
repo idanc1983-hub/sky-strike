@@ -29,13 +29,9 @@ class PowerUpCatalog {
   /// All power-up ids in canonical (unlock-order) listing order.
   static final List<String> allIds = unlockBiome.keys.toList();
 
-  /// Stackable / collectible-only ids — the subset that appears in the
-  /// shop and in pre-mission quick-add rows. Instant power-ups are
-  /// activated via gameplay paths only and are not shop-purchasable.
-  /// Derived from [isCollectible] so the catalog stays the single
-  /// source of truth.
-  static final List<String> stackableIds =
-      allIds.where((id) => isCollectible[id] == true).toList();
+  /// All power-up ids are stackable (POWERUP-v2.1). Kept as an alias of
+  /// [allIds] so existing call sites continue to compile.
+  static final List<String> stackableIds = List<String>.unmodifiable(allIds);
 
   /// Display name for the given id (used by popups + shop).
   static const Map<String, String> displayName = <String, String>{
@@ -63,22 +59,6 @@ class PowerUpCatalog {
     'ghost_mode': 'Brief invulnerability',
     'freeze_time': 'Slows all enemies for a few seconds',
     'drone_wingman': 'Auto-firing companion drone',
-  };
-
-  /// Indicates whether a power-up exists in the world as a *collectible*
-  /// pickup (Bomb, Split Shot, Laser, Freeze Time, Drone Wingman) versus
-  /// an *instant* effect auto-applied on pickup.
-  static const Map<String, bool> isCollectible = <String, bool>{
-    'rapid_fire': false,
-    'speed_boost': false,
-    'bomb': true,
-    'magnet': false,
-    'shield': false,
-    'split_shot': true,
-    'laser': true,
-    'ghost_mode': false,
-    'freeze_time': true,
-    'drone_wingman': true,
   };
 
   /// Coin price to buy one copy in the shop. See [packDiscounts] for bulk

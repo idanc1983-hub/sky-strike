@@ -1,0 +1,38 @@
+[
+  {
+    "jet_id": "basic",
+    "base_power": 100,
+    "unlock_biome": "jungle",
+    "unlock_price_gems": 0
+  },
+  {
+    "jet_id": "Wraith X",
+    "base_power": 150,
+    "unlock_biome": "desert",
+    "unlock_price_gems": 200
+  },
+  {
+    "jet_id": "Specter",
+    "base_power": 220,
+    "unlock_biome": "sea",
+    "unlock_price_gems": 500
+  },
+  {
+    "jet_id": "Viper",
+    "base_power": 320,
+    "unlock_biome": "ice",
+    "unlock_price_gems": 1000
+  },
+  {
+    "jet_id": "Inferno",
+    "base_power": 460,
+    "unlock_biome": "volcano",
+    "unlock_price_gems": 2500
+  },
+  {
+    "jet_id": "Phantom",
+    "base_power": 650,
+    "unlock_biome": "city",
+    "unlock_price_gems": 5000
+  }
+]
