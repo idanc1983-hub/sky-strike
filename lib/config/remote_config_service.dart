@@ -380,6 +380,20 @@ class RemoteConfigService {
   Map<String, dynamic> get challengeCyclePlan =>
       _indexById(_readList(RcKeys.challengesConfig), 'challenge_id');
 
+  /// Resolves the prize-popup background for [cycleId] from the
+  /// `challenges_config` RC entry. The field accepts either a bundled
+  /// asset path (`assets/ui/challenges/bg_<cycle>.png`) or an absolute
+  /// `http(s)` URL pushed via LiveOps. Returns null when RC has no entry
+  /// — caller should pick a sensible fallback.
+  String? challengeCyclePopupBg(String cycleId) {
+    final entry = challengeCyclePlan[cycleId];
+    if (entry is! Map) return null;
+    final raw = entry['popup_bg'];
+    if (raw is! String) return null;
+    final trimmed = raw.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
   /// `{ cycle_id: { stages: [{stage, goal, prize}, ...] } }`. The
   /// canonical JSON stores each cycle as a bare list of stages; we wrap
   /// each into a `{stages: [...]}` map so callers reading `.stages`

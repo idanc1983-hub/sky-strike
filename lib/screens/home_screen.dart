@@ -4,15 +4,12 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
-import '../config/remote_config_service.dart';
 import '../economy/constants/challenge_constants.dart';
 import '../economy/services/challenge_prize_parser.dart';
 import '../economy/state/challenge_state.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/challenge_prizes_popup.dart';
 import '../economy/ui/pre_mission_popup.dart';
-import '../economy/ui/snake_offer_popup.dart';
-import '../economy/ui/three_plus_one_offer_popup.dart';
 import '../game/models.dart';
 import '../shared/widgets/app_top_bar.dart';
 import '../shared/widgets/asset_placeholder.dart';
@@ -104,6 +101,40 @@ const _cChallengeBarTrack = Color(0xFF0d1a0d);
 // ---------------------------------------------------------------------------
 const String _kPlaceholderCycleDisplayName = 'Iron Skies';
 const String _kPlaceholderPrizeAsset = 'assets/ui/icon_coin.png';
+
+// Lobby icon catalog — keyed by Remote Config `monetization.configs[i].asset_name`.
+// All 13 shipped lobby icons are registered here so RC can flip any of them
+// on without a code change. _buildOffersRow() reads from this map when
+// composing the visible offers row.
+// ignore: unused_element
+const Map<String, String> _kLobbyIconAssets = {
+  'fto':
+      'assets/ui/home/monetization/fto_lobby.png',
+  '1+2_ironsky':
+      'assets/ui/home/monetization/1+2_ironsky_lobby.png',
+  'generic_ironsky':
+      'assets/ui/home/monetization/generic_ironsky_lobby.png',
+  'snake_ironsky':
+      'assets/ui/home/monetization/snake_ironsky_lobby.png',
+  '1+2_goldensky':
+      'assets/ui/home/monetization/1+2_goldensky_lobby.png',
+  'generic_goldensky':
+      'assets/ui/home/monetization/generic_goldensky_lobby.png',
+  'snake_goldensky':
+      'assets/ui/home/monetization/snake_goldensky_lobby.png',
+  '1+2_laststand':
+      'assets/ui/home/monetization/1+2_laststand_lobby.png',
+  'generic_laststand':
+      'assets/ui/home/monetization/generic_laststand_lobby.png',
+  'snake_laststand':
+      'assets/ui/home/monetization/snake_laststand_lobby.png',
+  '1+2_starascent':
+      'assets/ui/home/monetization/1+2_starascent_lobby.png',
+  'generic_starascent':
+      'assets/ui/home/monetization/generic_starascent_lobby.png',
+  'snake_starascent':
+      'assets/ui/home/monetization/snake_starascent_lobby.png',
+};
 
 /// Deterministic preview of the 100% milestone reward in coins. Uses the
 /// same `baseCoins × (1 + level × step)` formula as `ChallengeFormulas`
@@ -488,35 +519,20 @@ class _HomeScreenState extends State<HomeScreen>
   // here determines the left-to-right display order.
   // ---------------------------------------------------------------------------
   Widget _buildOffersRow() {
-    final rc = RemoteConfigService.instance;
-    final specs = <_OfferSpec>[
-      _OfferSpec(
-        assetId: '1+2_ironsky',
-        iconAsset: 'assets/ui/home/1plus3_lobby_iron_skies.png',
-        placeholderLabel: '1+3',
-        onTap: () => ThreePlusOneOfferPopup.show(
-          context,
-          assetId: '1+2_ironsky',
-        ),
-      ),
-      _OfferSpec(
-        assetId: 'snake_ironsky',
-        iconAsset: 'assets/ui/home/snake_lobby_iron_skies.png',
-        placeholderLabel: 'SNAKE',
-        onTap: () => SnakeOfferPopup.show(
-          context,
-          assetId: 'snake_ironsky',
-        ),
-      ),
-    ];
-    final active =
-        specs.where((s) => rc.isOfferActive(s.assetId)).take(4).toList();
+    // Empty until RC drives the lobby slots. The 13 lobby icons shipped
+    // with the app live in [_kLobbyIconAssets] keyed by RC `asset_name`;
+    // when an asset is wired in, build an [_OfferSpec] for it here and
+    // route onTap to the matching popup based on its prefix
+    // (`1+2_*` → ThreePlusOneOfferPopup, `snake_*` → SnakeOfferPopup,
+    // `generic_*` → GenericOfferPopup, `fto` → ThreePlusOneOfferPopup).
+    final specs = <_OfferSpec>[];
+    final active = specs.take(4).toList();
     if (active.isEmpty) {
       return const SizedBox(height: 8);
     }
-    // 4 evenly-spaced slots, each 64×64. Active offers fill from the left;
-    // remaining slots are invisible spacers that hold the layout so the 2
-    // real icons sit in the same positions as slots 1 and 2 of the mock.
+    // 4 evenly-spaced slots, each 72×72. Active offers fill from the left;
+    // remaining slots are invisible spacers that hold the layout so the
+    // real icons sit in the same positions as slots 1..N of the mock.
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
       child: Row(
@@ -530,7 +546,7 @@ class _HomeScreenState extends State<HomeScreen>
                 onTap: active[i].onTap,
               )
             else
-              const SizedBox(width: 64, height: 64),
+              const SizedBox(width: 72, height: 72),
         ],
       ),
     );
@@ -1129,10 +1145,16 @@ class _ChallengeBar extends StatelessWidget {
             width: _prizeIconSize,
             height: _prizeIconSize,
             child: locked
-                ? const Icon(
-                    Icons.lock,
-                    color: _cAmber,
-                    size: _prizeIconSize,
+                ? Transform.scale(
+                    scale: 1.5,
+                    child: Image.asset(
+                      'assets/ui/challenges/challenge_lock.png',
+                      errorBuilder: AssetPlaceholder.image(
+                        color: _cAmber,
+                        label: 'lock',
+                        borderRadius: 4,
+                      ),
+                    ),
                   )
                 : Image.asset(
                     prizeAsset,
@@ -1283,8 +1305,8 @@ class _OfferIcon extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
-        width: 64,
-        height: 64,
+        width: 72,
+        height: 72,
         child: Image.asset(
           asset,
           errorBuilder: AssetPlaceholder.image(

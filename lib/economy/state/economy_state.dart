@@ -11,8 +11,10 @@ import '../constants/power_up_catalog.dart';
 import '../services/ads_service.dart';
 import '../services/challenge_formulas.dart';
 import '../services/challenge_lifecycle.dart';
+import '../services/chest_reward_resolver.dart';
 import '../services/coin_reward_calculator.dart';
 import '../services/day7_chest_formula.dart';
+import '../services/day7_reward_resolver.dart';
 import '../services/economy_api.dart';
 import '../services/economy_persistence.dart';
 import '../services/ftue_triggers.dart';
@@ -925,6 +927,83 @@ class EconomyState extends ChangeNotifier {
     return result;
   }
 
+  /// Builds the base D1–D6 streak reward from the Remote-Config
+  /// `daily_reward` entry the calendar UI renders, so the grant always
+  /// matches the displayed amount. Returns the constants-based ladder
+  /// when RC has no entry for the (week, day) pair (test environments,
+  /// missing RC payload). A `chest` entry on the day is rolled here via
+  /// [ChestRewardResolver] so the player receives the chest contents at
+  /// claim time.
+  Reward _ladderRewardFromRc({required int week, required int day}) {
+    // RC accessors throw when Firebase isn't initialized (test envs, very
+    // early boot). Fall back to the constants ladder in that case so a
+    // claim never crashes the app — the displayed amount may differ from
+    // the granted one in that degraded path, but the claim still succeeds.
+    Map<String, dynamic>? rc;
+    Map<String, dynamic>? chestDefinition;
+    String? chestId;
+    try {
+      rc = RemoteConfigService.instance.dailyReward(week, day);
+      chestId = rc?['chest'] is String ? rc!['chest'] as String : null;
+      if (chestId != null && chestId.isNotEmpty) {
+        final raw = RemoteConfigService.instance.chests[chestId];
+        if (raw is Map<String, dynamic>) chestDefinition = raw;
+      }
+    } catch (_) {
+      return StreakClock.baseLadderReward(day);
+    }
+    if (rc == null) return StreakClock.baseLadderReward(day);
+    final coin = (rc['coin'] as num?)?.toInt() ?? 0;
+    final gem = (rc['gem'] as num?)?.toInt() ?? 0;
+    var reward = Reward(coins: coin, gems: gem);
+    if (chestDefinition != null) {
+      final roll = ChestRewardResolver.resolve(
+        definition: chestDefinition,
+        rng: _rng,
+      );
+      reward = reward.plus(roll.reward);
+    }
+    return reward;
+  }
+
+  /// Resolves the Day-7 reward from the same `dailyReward(week, 7)` RC
+  /// entry the calendar tile renders. Falls back to [Day7ChestFormula]
+  /// when RC isn't available (test envs, very early boot) so the claim
+  /// path never crashes.
+  Reward _resolveDay7Reward() {
+    try {
+      final rcEntry = RemoteConfigService.instance
+          .dailyReward(_streakWeeksCompleted + 1, 7);
+      if (rcEntry == null) {
+        return Day7ChestFormula.compute(
+          playerLevel: _level,
+          maxWorldReached: _maxWorldReached,
+          rng: _rng,
+        );
+      }
+      final chestsById = RemoteConfigService.instance.chests;
+      final resolved = Day7RewardResolver.resolve(
+        rcEntry: rcEntry,
+        currentWorld: _currentWorld,
+        ownsJet: (codeId) => _ownedJets.contains(codeId),
+        chestDefinitionLookup: (chestId) {
+          final raw = chestsById[chestId];
+          return raw is Map<String, dynamic> ? raw : null;
+        },
+        rng: _rng,
+      );
+      return resolved.reward;
+    } catch (_) {
+      // RC accessors throw when Firebase isn't initialized — fall back
+      // to the constants-based formula so the claim still succeeds.
+      return Day7ChestFormula.compute(
+        playerLevel: _level,
+        maxWorldReached: _maxWorldReached,
+        rng: _rng,
+      );
+    }
+  }
+
   /// Claims today's streak reward. Returns the granted [Reward], or
   /// [Reward.empty] if the streak is not currently claimable.
   Reward claimDailyReward() {
@@ -947,13 +1026,22 @@ class EconomyState extends ChangeNotifier {
     try {
       Reward reward;
       if (_streakDay == 7) {
-        reward = Day7ChestFormula.compute(
-          playerLevel: _level,
-          maxWorldReached: _maxWorldReached,
-          rng: _rng,
-        );
+        // Drive Day 7 from the same RC entry the calendar tile renders
+        // so the grant matches what the player sees — jet on unowned
+        // biome jet, parsed fallback bundle (e.g. epic_chest + 50gem)
+        // when already owned. Falls back to [Day7ChestFormula] when RC
+        // has no entry (test env / degraded RC).
+        reward = _resolveDay7Reward();
       } else {
-        var base = StreakClock.baseLadderReward(_streakDay);
+        // Source the base coin/gem grant from Remote Config so the player
+        // gets exactly the amounts shown on the reward calendar tile (the
+        // screen reads from the same `dailyReward(week, day)` entry).
+        // Falls back to constants when RC has no entry — keeps tests that
+        // run without an RC payload working.
+        var base = _ladderRewardFromRc(
+          week: _streakWeeksCompleted + 1,
+          day: _streakDay,
+        );
         // Layer in random power-ups (counts come from constants).
         final powerUpCount =
             EconomyConstants.streakDailyPowerUps[_streakDay - 1];
@@ -1311,6 +1399,10 @@ class EconomyState extends ChangeNotifier {
     for (final id in reward.powerUps) {
       _powerUpInventory[id] = (_powerUpInventory[id] ?? 0) + 1;
     }
+    final jet = reward.jet;
+    if (jet != null && jet.isNotEmpty) {
+      _ownedJets.add(jet);
+    }
     if (reward.xp > 0) addXP(reward.xp);
   }
 
@@ -1390,6 +1482,19 @@ class EconomyState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Resets the daily-reward calendar so the next claim starts at Day 1
+  /// regardless of when the player last claimed. Used to re-test the
+  /// streak ladder (especially Day 7) without waiting a full week.
+  void debugResetDailyStreak() {
+    assert(kDebugMode, 'debugResetDailyStreak is debug-only');
+    _streakDay = 1;
+    _streakWeeksCompleted = 0;
+    _longestStreak = 0;
+    _lastClaimDate = null;
+    _scheduleSync();
+    notifyListeners();
+  }
+
   /// Wipes the active challenge cycle only (keeps `challengeRevealed`
   /// true). Long-press LAUNCH still re-fires the reveal because that
   /// path early-returns on `challengeRevealed`, so this resets that flag
@@ -1412,8 +1517,9 @@ class EconomyState extends ChangeNotifier {
   /// without actually reinstalling.
   Future<void> debugHardReset() async {
     assert(kDebugMode, 'debugHardReset is debug-only');
-    _coins = 0;
-    _gems = 0;
+    final defaults = EconomySnapshot.defaults();
+    _coins = defaults.coins;
+    _gems = defaults.gems;
     _xp = 0;
     _xpMax = 1000;
     _level = 1;

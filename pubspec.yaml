@@ -39,6 +39,8 @@ flutter:
     - assets/enemies/
     - assets/ui/
     - assets/ui/home/
+    - assets/ui/home/monetization/
+    - assets/ui/challenges/
     - assets/bullets/
     - assets/themes/
     - assets/mock_backend/

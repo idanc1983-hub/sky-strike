@@ -5,7 +5,7 @@
     "metric": "kills",
     "target_enemy": "follow_biome",
     "duration_hours": 72,
-    "popup_bg": null,
+    "popup_bg": "assets/ui/challenges/bg_iron_skies.png",
     "active": true
   },
   {
@@ -14,7 +14,7 @@
     "metric": "kills",
     "target_enemy": "follow_biome",
     "duration_hours": 72,
-    "popup_bg": null,
+    "popup_bg": "assets/ui/challenges/bg_new_players.png",
     "active": true
   },
   {
@@ -23,7 +23,7 @@
     "metric": "survival",
     "target_enemy": "follow_biome",
     "duration_hours": 72,
-    "popup_bg": null,
+    "popup_bg": "assets/ui/challenges/bg_last_stand.png",
     "active": true
   },
   {
@@ -32,7 +32,7 @@
     "metric": "score",
     "target_enemy": "follow_biome",
     "duration_hours": 72,
-    "popup_bg": null,
+    "popup_bg": "assets/ui/challenges/bg_golden_sky.png",
     "active": true
   },
   {
@@ -41,7 +41,7 @@
     "metric": "stars",
     "target_enemy": "follow_biome",
     "duration_hours": 72,
-    "popup_bg": null,
+    "popup_bg": "assets/ui/challenges/bg_star_ascent.png",
     "active": true
   }
 ]

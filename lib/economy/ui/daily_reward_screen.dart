@@ -6,6 +6,7 @@ import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/app_buttons.dart';
 import '../../shared/widgets/app_top_bar.dart';
 import '../../shared/widgets/asset_placeholder.dart';
+import '../services/day7_reward_resolver.dart';
 import '../state/economy_state.dart';
 
 /// 7-day login ladder — full-screen route launched from the home menu.
@@ -71,12 +72,14 @@ class DailyRewardScreen extends StatelessWidget {
                           week: week,
                           today: today,
                           currentWorld: economy.currentWorld,
+                          ownedJets: economy.ownedJets,
                         ),
                         const SizedBox(height: 12),
                         _Day7Tile(
                           week: week,
                           today: today,
                           currentWorld: economy.currentWorld,
+                          ownedJets: economy.ownedJets,
                         ),
                       ],
                     ),
@@ -177,10 +180,12 @@ class _DayGrid extends StatelessWidget {
   final int week;
   final int today;
   final int currentWorld;
+  final Set<String> ownedJets;
   const _DayGrid({
     required this.week,
     required this.today,
     required this.currentWorld,
+    required this.ownedJets,
   });
 
   @override
@@ -202,6 +207,7 @@ class _DayGrid extends StatelessWidget {
           state: _stateForDay(day, today),
           rewardConfig: RemoteConfigService.instance.dailyReward(week, day),
           currentWorld: currentWorld,
+          ownedJets: ownedJets,
         );
       },
     );
@@ -215,10 +221,12 @@ class _Day7Tile extends StatelessWidget {
   final int week;
   final int today;
   final int currentWorld;
+  final Set<String> ownedJets;
   const _Day7Tile({
     required this.week,
     required this.today,
     required this.currentWorld,
+    required this.ownedJets,
   });
 
   @override
@@ -228,6 +236,7 @@ class _Day7Tile extends StatelessWidget {
       state: _stateForDay(7, today),
       rewardConfig: RemoteConfigService.instance.dailyReward(week, 7),
       currentWorld: currentWorld,
+      ownedJets: ownedJets,
       fullWidth: true,
     );
   }
@@ -241,6 +250,7 @@ class _DayTile extends StatelessWidget {
   final _TileState state;
   final Map<String, dynamic>? rewardConfig;
   final int currentWorld;
+  final Set<String> ownedJets;
   final bool fullWidth;
 
   const _DayTile({
@@ -248,6 +258,7 @@ class _DayTile extends StatelessWidget {
     required this.state,
     required this.rewardConfig,
     required this.currentWorld,
+    required this.ownedJets,
     this.fullWidth = false,
   });
 
@@ -275,16 +286,7 @@ class _DayTile extends StatelessWidget {
     }
   }
 
-  Color get _headerColor {
-    switch (state) {
-      case _TileState.claimed:
-        return AppColors.greenLight.withValues(alpha: 0.5);
-      case _TileState.today:
-        return Colors.white;
-      case _TileState.future:
-        return AppColors.amber;
-    }
-  }
+  Color get _headerColor => Colors.white;
 
   @override
   Widget build(BuildContext context) {
@@ -314,12 +316,13 @@ class _DayTile extends StatelessWidget {
                 _RewardRow(
                   reward: rewardConfig,
                   currentWorld: currentWorld,
+                  ownedJets: ownedJets,
                   large: true,
                 ),
               ],
             )
           : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
@@ -333,6 +336,7 @@ class _DayTile extends StatelessWidget {
                 _RewardRow(
                   reward: rewardConfig,
                   currentWorld: currentWorld,
+                  ownedJets: ownedJets,
                   large: false,
                 ),
               ],
@@ -422,16 +426,18 @@ class _StampPlaceholder extends StatelessWidget {
 class _RewardRow extends StatelessWidget {
   final Map<String, dynamic>? reward;
   final int currentWorld;
+  final Set<String> ownedJets;
   final bool large;
   const _RewardRow({
     required this.reward,
     required this.currentWorld,
+    required this.ownedJets,
     required this.large,
   });
 
   @override
   Widget build(BuildContext context) {
-    final items = _parseRewards(reward, currentWorld);
+    final items = _parseRewards(reward, currentWorld, ownedJets);
     // Center the row when there's exactly one icon with no amount text
     // (chest-only and jet-only tiles). Currency tiles stay left-aligned.
     final hasOnlyIcon = items.length == 1 && items[0].amountLabel == null;
@@ -502,27 +508,9 @@ class _RewardIcon extends StatelessWidget {
   }
 }
 
-// Biome ordering mirrors WorldMap / Jets — worldIndex (1..6) = biome
-// position. Keep in sync with jets_screen.dart's `_biomeToWorld`.
-const List<String> _worldToBiome = [
-  '', // 1-based padding
-  'jungle',
-  'desert',
-  'sea',
-  'ice',
-  'volcano',
-  'city',
-];
-
-// Biome → jet code-id (same as jets_screen's _codeIdToRcName reverse).
-const Map<String, String> _biomeToJetCodeId = {
-  'jungle': 'jet_player',
-  'desert': 'wraith_x',
-  'sea': 'specter',
-  'ice': 'viper',
-  'volcano': 'inferno',
-  'city': 'phantom',
-};
+// Biome → jet code-id mapping is owned by Day7RewardResolver
+// (kDay7BiomeToJetCodeId / kDay7WorldToBiome) so the calendar tile and
+// the actual grant can't drift apart.
 
 const Map<String, String> _jetAssets = {
   'jet_player': 'assets/jets/jet_player.png',
@@ -535,7 +523,7 @@ const Map<String, String> _jetAssets = {
 
 /// Translates an RC daily-reward entry into renderable items.
 List<_RewardItem> _parseRewards(
-    Map<String, dynamic>? reward, int currentWorld) {
+    Map<String, dynamic>? reward, int currentWorld, Set<String> ownedJets) {
   if (reward == null) {
     return const [
       _RewardItem(
@@ -578,7 +566,7 @@ List<_RewardItem> _parseRewards(
     ));
   }
   if (jet != null) {
-    items.addAll(_resolveJetReward(jet, jetFallback, currentWorld));
+    items.addAll(_resolveJetReward(jet, jetFallback, currentWorld, ownedJets));
   }
   if (items.isEmpty) {
     items.add(const _RewardItem(
@@ -591,27 +579,25 @@ List<_RewardItem> _parseRewards(
   return items;
 }
 
-/// Resolves the Day-7 jet reward. For `biome_match`: look up the player's
-/// current-biome jet; if "owned" (biome 1 = starter jet always owned),
-/// fall back to parsing the [jetFallback] bundle string. For an explicit
-/// jet id string, render that jet.
+/// Resolves the Day-7 jet reward. For `biome_match`: look up the
+/// player's current-biome jet via [Day7RewardResolver.resolveJetCodeId];
+/// if the player already owns it, fall back to parsing the [jetFallback]
+/// bundle string. For an explicit jet id, render that jet (or the
+/// fallback if already owned).
+///
+/// Uses the same biome-match logic as the grant path
+/// ([Day7RewardResolver]) so the calendar tile and the actual reward
+/// can't disagree.
 List<_RewardItem> _resolveJetReward(
-    String jet, String? jetFallback, int currentWorld) {
-  if (jet == 'biome_match') {
-    final biome = (currentWorld >= 1 && currentWorld < _worldToBiome.length)
-        ? _worldToBiome[currentWorld]
-        : 'jungle';
-    final jetCodeId = _biomeToJetCodeId[biome] ?? 'jet_player';
-    // Ownership proxy: biome 1's starter jet is always owned, so fall back.
-    // Higher biomes — assume the player hasn't farmed the jet yet, show it.
-    final owned = jetCodeId == 'jet_player';
-    if (owned && jetFallback != null && jetFallback.isNotEmpty) {
-      return _parseFallbackBundle(jetFallback);
-    }
-    return [_jetItem(jetCodeId)];
+    String jet, String? jetFallback, int currentWorld,
+    Set<String> ownedJets) {
+  final jetCodeId =
+      Day7RewardResolver.resolveJetCodeId(jet, currentWorld) ?? 'jet_player';
+  final owned = ownedJets.contains(jetCodeId);
+  if (owned && jetFallback != null && jetFallback.isNotEmpty) {
+    return _parseFallbackBundle(jetFallback);
   }
-  // Explicit jet id (rare — RC currently uses biome_match for D7).
-  return [_jetItem(jet)];
+  return [_jetItem(jetCodeId)];
 }
 
 _RewardItem _jetItem(String jetCodeId) => _RewardItem(

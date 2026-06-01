@@ -19,6 +19,17 @@ import '../shared/theme/app_colors.dart';
 import '../shared/widgets/app_buttons.dart';
 import '../shared/widgets/result_overlay.dart';
 
+// Equipped-jet asset lookup. Keys mirror `_codeIdToRcName` in jets_screen.dart.
+// Falls back to the starter jet if prefs holds an unknown id.
+const Map<String, String> _kJetAssetById = {
+  'jet_player': 'assets/jets/jet_player.png',
+  'wraith_x': 'assets/jets/jet_wraith_x.png',
+  'specter': 'assets/jets/jet_specter.png',
+  'viper': 'assets/jets/jet_viper.png',
+  'inferno': 'assets/jets/jet_inferno.png',
+  'phantom': 'assets/jets/jet_phantom.png',
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Data classes
 // ─────────────────────────────────────────────────────────────────────────────
@@ -373,8 +384,11 @@ class _GameScreenState extends State<GameScreen>
     if (_isBoostWave) _boostUsed = true;
 
     final biome = biomeName(_world);
+    final prefs = await SharedPreferences.getInstance();
+    final equippedJetId = prefs.getString('equipped_jet') ?? 'jet_player';
+    final jetAsset = _kJetAssetById[equippedJetId] ?? _kJetAssetById['jet_player']!;
     _bgImage        = await _loadUiImage('assets/backgrounds/bg_$biome.png');
-    _jetImage       = await _loadUiImage('assets/jets/jet_player.png');
+    _jetImage       = await _loadUiImage(jetAsset);
     _explosionSheet = await _loadUiImage('assets/ui/explosion_sheet.png');
     _bulletImage      = await _loadUiImage(bulletAsset(_world));
     _enemyBulletImage = await _loadUiImage(enemyBulletAsset(_world));

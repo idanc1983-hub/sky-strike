@@ -137,6 +137,17 @@ class DevToolsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               _DevAction(
+                title: 'Reset daily streak',
+                subtitle:
+                    'Sets streak day to 1, week to 0, longest to 0, clears '
+                    'lastClaimDate so the next claim starts from Day 1. '
+                    'Use to re-test the ladder (including the Day 7 jet).',
+                onConfirmed: (economy) async =>
+                    economy.debugResetDailyStreak(),
+                confirmLabel: 'RESET',
+              ),
+              const SizedBox(height: 10),
+              _DevAction(
                 title: 'Sim Stage 1 clear',
                 subtitle:
                     'Awards a 3★ Stage 1 clear (≈600 coins + 2 gems) and '

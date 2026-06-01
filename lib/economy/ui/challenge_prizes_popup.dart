@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/remote_config_service.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/asset_placeholder.dart';
 import '../services/challenge_prize_parser.dart';
@@ -12,24 +13,44 @@ import 'chest_contents_popup.dart';
 
 /// Popup launched by tapping the home-screen challenge card.
 ///
-/// Shows the cycle's grand prize plus a window of upcoming milestone
-/// rewards (current stage + next 4 locked). The player never sees the
-/// full ladder — only the next few stages are revealed at any time.
-/// A small `(!)` button at the bottom expands the active challenge
-/// type's goal description (Hunter / Survivor / Treasure / Conqueror).
+/// Renders the active cycle's reward ladder over a full-bleed cycle
+/// background. The player sees the current stage (progress bar + prize +
+/// countdown) at the bottom and the next ≤5 locked stages stacked above
+/// it, sorted hardest-on-top to mirror "rising" toward the grand prize.
 ///
-/// Placeholder stage ladder is hardcoded for now; when the cycle plan
-/// gains a `stages` array in remote config (alongside `display_name`),
-/// swap [_placeholderStages] / [_placeholderGrandPrize] for the parsed
-/// list from `EconomyState`.
+/// Backgrounds are resolved from the cycle's `popup_bg` field in
+/// `challenges_config` RC. The field accepts either a bundled asset path
+/// (default) or an absolute http(s) URL — LiveOps can swap art without a
+/// client release.
 class ChallengePrizesPopup extends StatefulWidget {
   const ChallengePrizesPopup({super.key});
 
+  /// Entry tuned to the Figma spec (smart-animate, ease-out, 300ms).
+  /// Exit is intentionally shorter (220ms ease-in) so dismissal feels
+  /// snappy — matches iOS/Material modal conventions.
+  /// Total entry timeline. Split into two beats:
+  ///   • 0.0 – 0.4 : chrome (bg + title + X + active card) fades in
+  ///   • 0.4 – 1.0 : locked-stage rows emerge upward from behind the
+  ///                 active card, staggered nearest-first
+  /// See [_ChromeReveal] and [_StaggeredRowReveal] for the per-element
+  /// intervals + curves.
+  static const Duration _entryDuration = Duration(milliseconds: 800);
+  static const Duration _exitDuration = Duration(milliseconds: 260);
+
   static Future<void> show(BuildContext context) {
-    return showDialog<void>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.72),
-      builder: (_) => const ChallengePrizesPopup(),
+    return Navigator.of(context, rootNavigator: true).push<void>(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.black.withValues(alpha: 0.85),
+        barrierDismissible: false,
+        barrierLabel: 'ChallengePrizes',
+        transitionDuration: _entryDuration,
+        reverseTransitionDuration: _exitDuration,
+        pageBuilder: (_, __, ___) => const ChallengePrizesPopup(),
+        transitionsBuilder: (ctx, anim, secondary, child) {
+          return _AnimatedSheet(animation: anim, child: child);
+        },
+      ),
     );
   }
 
@@ -40,32 +61,29 @@ class ChallengePrizesPopup extends StatefulWidget {
 class _ChallengePrizesPopupState extends State<ChallengePrizesPopup> {
   Timer? _ticker;
 
-  // ---------------------------------------------------------------------------
-  // Placeholder data. Real values come from challenges__cycle_plan__v1
-  // when wired through `EconomyState`.
-  // ---------------------------------------------------------------------------
+  /// Maximum number of *locked* (future) stage rows rendered above the
+  /// active card. Cycles with longer ladders still only reveal the next
+  /// few — keeps the early-game prize close to the player and hides
+  /// late-cycle goals that aren't yet meaningful.
+  static const int _maxLockedRows = 5;
+
   static const String _placeholderCycleName = 'Iron Skies';
 
-  static const _PrizeEntry _placeholderGrandPrize = _PrizeEntry(
-    asset: 'assets/ui/icon_chest_operation.png',
-    amount: 2500,
-  );
-
-  /// Index 0 = current (just-reached / claimable). 1..N = locked.
-  /// The list size matches the design: "current + next 4".
-  static const List<_PrizeEntry> _placeholderStages = <_PrizeEntry>[
-    _PrizeEntry(asset: 'assets/ui/icon_coin.png', amount: 300),
-    _PrizeEntry(asset: 'assets/ui/icon_gem.png', amount: 20),
-    _PrizeEntry(asset: 'assets/ui/icon_coin.png', amount: 500),
-    _PrizeEntry(asset: 'assets/ui/icon_chest_rare.png', amount: 1),
-    _PrizeEntry(asset: 'assets/ui/icon_coin.png', amount: 800),
+  /// Used when RC has no stage ladder for the active cycle. Each entry's
+  /// `goal` is the cumulative point threshold for that stage; `prize` uses
+  /// the same syntax accepted by [parseChallengePrize].
+  static const List<Map<String, dynamic>> _placeholderStages = [
+    {'stage': 1, 'goal': 350, 'prize': '300coin'},
+    {'stage': 2, 'goal': 700, 'prize': '20gem'},
+    {'stage': 3, 'goal': 1400, 'prize': '500coin'},
+    {'stage': 4, 'goal': 2000, 'prize': 'rare_chest'},
+    {'stage': 5, 'goal': 3000, 'prize': '800coin'},
+    {'stage': 6, 'goal': 7000, 'prize': 'operation_chest'},
   ];
-  static const int _currentStageIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    // Refresh every second so the "Time left" countdown stays current.
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -82,163 +100,278 @@ class _ChallengePrizesPopupState extends State<ChallengePrizesPopup> {
   Widget build(BuildContext context) {
     final economy = context.watch<EconomyState>();
     final view = economy.challengeView;
-    // Fallback type is Hunter so the goal description is meaningful even
-    // before the player has unlocked the challenge system.
     final type = view?.type ?? ChallengeType.hunter;
     final remaining =
         view?.remainingFrom(DateTime.now()) ?? const Duration(hours: 72);
+    final progress = view?.progress ?? 0;
+
+    final stages = _stagesFor(economy);
+    final currentIdx = _currentStageIndex(stages, progress);
+    final activeStage = stages[currentIdx];
+    final lockedFuture = stages.sublist(currentIdx + 1);
+    // Defensive sort: RC ladders aren't always monotonically increasing
+    // (LiveOps can publish stages out of goal order), but the visual
+    // ladder must always rise — hardest goal at the top, easiest just
+    // above the active card.
+    final lockedSorted = [...lockedFuture]..sort((a, b) {
+      final ga = (a['goal'] as num?)?.toInt() ?? 0;
+      final gb = (b['goal'] as num?)?.toInt() ?? 0;
+      return gb.compareTo(ga);
+    });
+    final lockedToShow = lockedSorted.take(_maxLockedRows).toList();
+
+    final bgPath = RemoteConfigService.instance
+            .challengeCyclePopupBg(type.jsonValue) ??
+        _fallbackBgFor(type);
+
+    // The route's forward/reverse animation drives the staggered row
+    // reveal. Falls back to a no-op completed animation if the popup is
+    // ever shown outside a route (e.g. embedded in a preview/test).
+    final routeAnim =
+        ModalRoute.of(context)?.animation ?? kAlwaysCompleteAnimation;
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 36),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppColors.amber.withValues(alpha: 0.6),
-            width: 1.0,
-          ),
-          // Cycle-specific background. Today only the "Iron Skies"
-          // placeholder is shipped; once cycle plumbing lands, this
-          // path comes from the active cycle's remote-config entry.
-          image: const DecorationImage(
-            image: AssetImage(
-              'assets/ui/home/challenge_popup_iron_skies.png',
-            ),
-            fit: BoxFit.cover,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.6),
-              blurRadius: 18,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _HeaderRow(
-                title: view?.type.displayName ?? _placeholderCycleName,
-                onClose: () => Navigator.of(context).pop(),
+      insetPadding: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      child: Stack(
+        children: [
+          Positioned.fill(child: _CycleBackground(path: bgPath)),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.35),
+                    Colors.black.withValues(alpha: 0.55),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              _GrandPrizeBanner(prize: _grandPrizeFor(economy)),
-              const SizedBox(height: 14),
-              ..._buildStageList(economy),
-              const SizedBox(height: 12),
-              _FooterRow(
-                remaining: remaining,
-                challengeType: type,
-              ),
-            ],
+            ),
           ),
-        ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _HeaderRow(
+                    title: type.displayName,
+                    onClose: () => Navigator.of(context).pop(),
+                  ),
+                  const Spacer(flex: 1),
+                  // Locked future stages + active card render as a single
+                  // visually-grouped block centered vertically below the
+                  // title. The reference design relies on plenty of bg
+                  // breathing room above and below — pinning the block to
+                  // top/bottom would lose the cycle art.
+                  //
+                  // Each row is wrapped in _StaggeredRowReveal so they
+                  // emerge upward from behind the active card on entry
+                  // (nearest-first). Painted before the active card in
+                  // the Column so the card visually masks them during
+                  // their slide-up. See _StaggeredRowReveal for timing.
+                  for (int i = 0; i < lockedToShow.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _StaggeredRowReveal(
+                        animation: routeAnim,
+                        fromBottom: lockedToShow.length - 1 - i,
+                        total: lockedToShow.length,
+                        child: _LockedStageRow(stage: lockedToShow[i]),
+                      ),
+                    ),
+                  const SizedBox(height: 2),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      _ActiveStageCard(
+                        title: type.displayName,
+                        stage: activeStage,
+                        progress: progress,
+                        fallbackTitle: _placeholderCycleName,
+                        remaining: remaining,
+                      ),
+                      Positioned(
+                        right: -2,
+                        bottom: -18,
+                        child: _GoalInfoButton(challengeType: type),
+                      ),
+                    ],
+                  ),
+                  // Fixed bottom dock so the active card lands at exactly
+                  // the same screen-Y as the home-screen challenge card,
+                  // which lets the player read the popup as "the card
+                  // stayed put while the ladder appeared above it" (the
+                  // Figma smart-animate intent).
+                  //
+                  // Offset budget mirrors main_shell + home screen chrome:
+                  //   bottom nav (78) + SizedBox(8) + CTA (60) + gap (48)
+                  //   = 194pt above safe-area bottom
+                  //   − the popup's own bottom padding (14)
+                  //   = 180pt SizedBox here.
+                  // Recompute if any of those constants change.
+                  const SizedBox(height: 180),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  /// Builds the visible stage rows from the active cycle's RC ladder.
-  /// Falls back to the hardcoded placeholders when no cycle is active or
-  /// RC has no ladder entry for it.
-  ///
-  /// Only renders a *window* of the ladder (current + next N) so cycles
-  /// with many stages (new_players has 15) don't bury the early prizes
-  /// at the bottom of a long scroll list. Furthest-from-current stages
-  /// render at the top so the ladder visually rises toward the grand-
-  /// prize banner.
-  List<Widget> _buildStageList(EconomyState economy) {
-    final stages = economy.activeChallengeStages;
-    final entries = stages.isEmpty
-        ? _placeholderStages
-        : stages
-            .map((s) => _prizeEntryFrom(
-                  parseChallengePrize((s['prize'] ?? '').toString()),
-                ))
-            .toList();
+  // ---------------------------------------------------------------------------
+  // Data resolution
+  // ---------------------------------------------------------------------------
 
-    // Window: current + next 4. Current is the lowest unclaimed stage,
-    // approximated here as stage 1 (index 0) until per-stage claim
-    // state is wired through EconomyState.
-    const windowSize = 5;
-    final windowEnd = entries.length < windowSize
-        ? entries.length
-        : windowSize;
-
-    return <Widget>[
-      for (int i = windowEnd - 1; i >= 0; i--)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: _StageRow(
-            stage: entries[i],
-            isCurrent: i == _currentStageIndex,
-            isLocked: i > _currentStageIndex,
-          ),
-        ),
-    ];
+  List<Map<String, dynamic>> _stagesFor(EconomyState economy) {
+    final rc = economy.activeChallengeStages;
+    return rc.isEmpty ? _placeholderStages : rc;
   }
 
-  /// Picks the last stage's prize as the "grand" banner so the popup
-  /// always shows the cycle's pinnacle reward at the top. Falls back to
-  /// the placeholder banner if RC has no ladder.
-  _PrizeEntry _grandPrizeFor(EconomyState economy) {
-    final stages = economy.activeChallengeStages;
-    if (stages.isEmpty) return _placeholderGrandPrize;
-    final parsed =
-        parseChallengePrize((stages.last['prize'] ?? '').toString());
-    return _prizeEntryFrom(parsed);
+  /// First stage whose goal hasn't been met yet — that's the one in
+  /// progress. Clamps to the last index so a fully-cleared cycle still
+  /// shows the final stage as "active" until the cycle resets.
+  int _currentStageIndex(List<Map<String, dynamic>> stages, int progress) {
+    for (int i = 0; i < stages.length; i++) {
+      final goal = (stages[i]['goal'] as num?)?.toInt() ?? 0;
+      if (progress < goal) return i;
+    }
+    return stages.length - 1;
+  }
+
+  /// Used when RC has no `popup_bg` entry for the cycle — keeps the popup
+  /// renderable in dev / offline before LiveOps populates the field.
+  String _fallbackBgFor(ChallengeType type) {
+    return 'assets/ui/challenges/bg_${type.jsonValue}.png';
   }
 }
 
-/// Adapter that lets a [ChallengePrize] satisfy the popup's existing
-/// `_PrizeEntry` shape without duplicating fields.
-_PrizeEntry _prizeEntryFrom(ChallengePrize p) =>
-    _PrizeEntry(asset: p.asset, amount: p.amount, chestId: p.chestId, label: p.label);
-
-class _PrizeEntry {
-  final String asset;
-  final int amount;
-  final String? chestId;
-  final String label;
-  const _PrizeEntry({
-    required this.asset,
-    required this.amount,
-    this.chestId,
-    this.label = '',
-  });
-}
-
-/// Wraps a child in a tappable that opens [ChestContentsPopup] when the
-/// prize has a [chestId]. Pass-through (no GestureDetector overhead) for
-/// non-chest prizes so coin/gem icons stay non-interactive.
-class _ChestTappable extends StatelessWidget {
-  final _PrizeEntry prize;
+// ---------------------------------------------------------------------------
+// Outer transition — fades the whole popup in/out. The internal
+// `_StaggeredRowReveal` handles the locked-row choreography on top of
+// this, so the chrome (background, header, active card) lands first and
+// the ladder rises out from behind the active card as a second beat.
+// ---------------------------------------------------------------------------
+class _AnimatedSheet extends StatelessWidget {
+  final Animation<double> animation;
   final Widget child;
-  const _ChestTappable({required this.prize, required this.child});
+  const _AnimatedSheet({required this.animation, required this.child});
 
   @override
   Widget build(BuildContext context) {
-    final id = prize.chestId;
-    if (id == null) return child;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => ChestContentsPopup.show(
-        context,
-        chestId: id,
-        chestAsset: prize.asset,
-        chestLabel: prize.label,
+    // Chrome fade-in occupies the first 40% of the 800ms entry timeline
+    // (≈320ms). The remaining 60% is reserved for the staggered row
+    // reveal further down the tree. On reverse (260ms total close), the
+    // full range fades — see Interval bounds.
+    final fade = CurvedAnimation(
+      parent: animation,
+      curve: const Interval(0.0, 0.4, curve: Curves.easeOutCubic),
+      reverseCurve: const Interval(0.0, 1.0, curve: Curves.easeInCubic),
+    );
+    return FadeTransition(opacity: fade, child: child);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Staggered locked-row reveal — each row slides up from behind the
+// active card and fades in, nearest-first ("dealing cards from a deck").
+// Tied to the route animation so the reverse plays cleanly on dismiss.
+// ---------------------------------------------------------------------------
+class _StaggeredRowReveal extends StatelessWidget {
+  final Animation<double> animation;
+
+  /// 0 = bottom row (nearest the active card); reveals first.
+  /// `total - 1` = top row (furthest goal); reveals last.
+  final int fromBottom;
+  final int total;
+  final Widget child;
+
+  const _StaggeredRowReveal({
+    required this.animation,
+    required this.fromBottom,
+    required this.total,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Reveal window on the route timeline: chrome finishes at 0.40; rows
+    // animate between 0.40 and 1.00. Each row's own travel takes ~0.35
+    // of the timeline (≈280ms of 800ms) so motion reads as deliberate
+    // rather than a flicker.
+    const chromeEnd = 0.40;
+    const revealEnd = 1.00;
+    const rowDuration = 0.35;
+    final stagger = total > 1
+        ? (revealEnd - chromeEnd - rowDuration) / (total - 1)
+        : 0.0;
+    final start = chromeEnd + fromBottom * stagger;
+    final end = (start + rowDuration).clamp(0.0, 1.0);
+
+    final curve = CurvedAnimation(
+      parent: animation,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+      reverseCurve: Interval(start, end, curve: Curves.easeInCubic),
+    );
+
+    // Begin offset is expressed in row-height units. 1.18 accounts for
+    // the 10px inter-row gap on top of the 56px row height — picks the
+    // travel distance that lands each row's start position exactly at
+    // the active card's top edge so they emerge from behind it rather
+    // than from a position the player can already see.
+    const rowHeightUnits = 1.18;
+    final slideY = (fromBottom + 1) * rowHeightUnits;
+
+    return FadeTransition(
+      opacity: curve,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset(0, slideY),
+          end: Offset.zero,
+        ).animate(curve),
+        child: child,
       ),
-      child: child,
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Header — cycle name + close button
+// Background — handles both bundled assets and remote URLs so LiveOps can
+// swap art without shipping a client build.
+// ---------------------------------------------------------------------------
+class _CycleBackground extends StatelessWidget {
+  final String path;
+  const _CycleBackground({required this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    final isNetwork =
+        path.startsWith('http://') || path.startsWith('https://');
+    final errorBuilder = AssetPlaceholder.image(
+      color: AppColors.cardBg,
+      label: 'cycle_bg',
+      borderRadius: 0,
+    );
+    return isNetwork
+        ? Image.network(
+            path,
+            fit: BoxFit.cover,
+            errorBuilder: errorBuilder,
+          )
+        : Image.asset(
+            path,
+            fit: BoxFit.cover,
+            errorBuilder: errorBuilder,
+          );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Header — X (top-left) + uppercase cycle title centered behind it.
 // ---------------------------------------------------------------------------
 class _HeaderRow extends StatelessWidget {
   final String title;
@@ -248,98 +381,25 @@ class _HeaderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.2,
-            ),
-          ),
-        ),
-        GestureDetector(
-          onTap: onClose,
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.surfaceDark,
-              border: Border.all(color: AppColors.amber, width: 0.8),
-            ),
-            child: const Icon(
-              Icons.close,
-              color: AppColors.amberLight,
-              size: 18,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Grand prize banner
-// ---------------------------------------------------------------------------
-class _GrandPrizeBanner extends StatelessWidget {
-  final _PrizeEntry prize;
-
-  const _GrandPrizeBanner({required this.prize});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.amber, width: 1.2),
-      ),
-      child: Column(
+    return SizedBox(
+      height: 40,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          const Text(
-            'GRAND PRIZE',
-            style: TextStyle(
-              color: AppColors.amber,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 2.4,
+          Center(
+            child: Text(
+              title.toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 4.0,
+              ),
             ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _ChestTappable(
-                prize: prize,
-                child: SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: Image.asset(
-                    prize.asset,
-                    errorBuilder: AssetPlaceholder.image(
-                      color: AppColors.amber,
-                      label: 'grand',
-                      borderRadius: 6,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                '${prize.amount}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _CloseButton(onTap: onClose),
           ),
         ],
       ),
@@ -347,131 +407,404 @@ class _GrandPrizeBanner extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Stage row — lock dot + prize card
-// ---------------------------------------------------------------------------
-class _StageRow extends StatelessWidget {
-  final _PrizeEntry stage;
-  final bool isCurrent;
-  final bool isLocked;
-
-  const _StageRow({
-    required this.stage,
-    required this.isCurrent,
-    required this.isLocked,
-  });
+class _CloseButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _CloseButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final accent = isCurrent ? AppColors.greenLight : AppColors.amber;
-    final bg = isCurrent
-        ? const Color(0xFF1A3A0A)
-        : AppColors.surfaceDark.withValues(alpha: 0.92);
-    return Row(
-      children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isLocked ? AppColors.surfaceDark : AppColors.greenLight,
-            border: Border.all(color: accent, width: 1),
-          ),
-          child: Icon(
-            isLocked ? Icons.lock : Icons.play_arrow_rounded,
-            color: isLocked
-                ? AppColors.amberLight.withValues(alpha: 0.85)
-                : AppColors.greenDeep,
-            size: 16,
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceBlack.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.amber, width: 1.2),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: bg,
-              border: Border.all(color: accent.withValues(alpha: 0.75), width: 0.8),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _ChestTappable(
-                  prize: stage,
-                  child: SizedBox(
-                    width: 30,
-                    height: 30,
-                    child: Image.asset(
-                      stage.asset,
-                      errorBuilder: AssetPlaceholder.image(
-                        color: AppColors.amber,
-                        label: 'prize',
-                        borderRadius: 4,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  '${stage.amount}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
+        child: const Icon(
+          Icons.close,
+          color: AppColors.amber,
+          size: 20,
         ),
-      ],
+      ),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Footer — time left + (!) info button
+// Locked future stage — lock chip on the left, "<N> pts" centered, prize
+// icon + amount on the right.
 // ---------------------------------------------------------------------------
-class _FooterRow extends StatelessWidget {
-  final Duration remaining;
-  final ChallengeType challengeType;
+class _LockedStageRow extends StatelessWidget {
+  final Map<String, dynamic> stage;
+  const _LockedStageRow({required this.stage});
 
-  const _FooterRow({
+  @override
+  Widget build(BuildContext context) {
+    final goal = (stage['goal'] as num?)?.toInt() ?? 0;
+    final prize = parseChallengePrize((stage['prize'] ?? '').toString());
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceBlack.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.amber.withValues(alpha: 0.75),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.lock,
+            color: AppColors.amber,
+            size: 22,
+          ),
+          Expanded(
+            child: Center(
+              child: Text(
+                '$goal pts',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ),
+          ),
+          _PrizeChip(prize: prize),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Active (in-progress) stage card — title, progress bar with overlapping
+// prize icon, countdown. Styling deliberately mirrors the home-screen
+// `_ChallengeCard` (border radius / weight, title font, bar height,
+// prize-icon overlap, countdown row) so the popup's active card lands
+// at exactly the same on-screen size as the home card — required by
+// the smart-animate continuity: "the card stayed put while the ladder
+// rose behind it."
+//
+// If the home card's visual spec changes, mirror the change here.
+// ---------------------------------------------------------------------------
+class _ActiveStageCard extends StatelessWidget {
+  final String title;
+  final Map<String, dynamic> stage;
+  final int progress;
+  final String fallbackTitle;
+  final Duration remaining;
+
+  const _ActiveStageCard({
+    required this.title,
+    required this.stage,
+    required this.progress,
+    required this.fallbackTitle,
     required this.remaining,
-    required this.challengeType,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    final goal = (stage['goal'] as num?)?.toInt() ?? 0;
+    final prize = parseChallengePrize((stage['prize'] ?? '').toString());
+    final shown = progress > goal ? goal : progress;
+    final fraction = goal == 0 ? 0.0 : shown / goal;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceBlack.withValues(alpha: 0.94),
+        border: Border.all(
+          color: AppColors.amber.withValues(alpha: 0.55),
+          width: 0.7,
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title.isEmpty ? fallbackTitle : title,
+              style: const TextStyle(
+                color: AppColors.amber,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 10),
+            _ProgressBarWithPrize(
+              fraction: fraction,
+              label: '$shown/$goal pts',
+              prize: prize,
+            ),
+            const SizedBox(height: 8),
+            _CountdownRowCentered(remaining: remaining),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Mirrors home_screen.dart `_ChallengeBar`: 28pt bar, 36pt prize icon
+// overlapping the bar's right end by 10%, 18pt amount badge below the
+// icon (also overlapping). Dimensions kept verbatim so the popup card
+// matches the home card pixel-for-pixel.
+class _ProgressBarWithPrize extends StatelessWidget {
+  static const double _barHeight = 28;
+  static const double _prizeIconSize = 36;
+  static const double _amountBadgeHeight = 18;
+  static const double _badgeBoxWidth = 56;
+  static const double _barOverlapFraction = 0.10;
+  static const double _badgeOverlapFraction = 0.10;
+
+  final double fraction;
+  final String label;
+  final ChallengePrize prize;
+
+  const _ProgressBarWithPrize({
+    required this.fraction,
+    required this.label,
+    required this.prize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const barRightInset = _prizeIconSize * (1 - _barOverlapFraction);
+    const barTop = (_prizeIconSize - _barHeight) / 2;
+    const badgeTop = _prizeIconSize - _amountBadgeHeight * _badgeOverlapFraction;
+    const totalHeight =
+        _prizeIconSize + _amountBadgeHeight * (1 - _badgeOverlapFraction);
+    final clamped = fraction.isNaN
+        ? 0.0
+        : fraction < 0
+            ? 0.0
+            : (fraction > 1 ? 1.0 : fraction);
+    final iconWidget = SizedBox(
+      width: _prizeIconSize,
+      height: _prizeIconSize,
+      child: Image.asset(
+        prize.asset,
+        errorBuilder: AssetPlaceholder.image(
+          color: AppColors.amber,
+          label: 'prize',
+          borderRadius: 4,
+        ),
+      ),
+    );
+    final tappableIcon = prize.chestId == null
+        ? iconWidget
+        : GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => ChestContentsPopup.show(
+              context,
+              chestId: prize.chestId!,
+              chestAsset: prize.asset,
+              chestLabel: prize.label,
+            ),
+            child: iconWidget,
+          );
+
+    return SizedBox(
+      height: totalHeight,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            right: barRightInset,
+            top: barTop,
+            height: _barHeight,
+            child: _BarTrack(fraction: clamped, label: label),
+          ),
+          Positioned(
+            right: 0,
+            top: 0,
+            width: _prizeIconSize,
+            height: _prizeIconSize,
+            child: tappableIcon,
+          ),
+          Positioned(
+            right: 16 - _badgeBoxWidth / 2,
+            top: badgeTop,
+            width: _badgeBoxWidth,
+            height: _amountBadgeHeight,
+            child: Center(
+              child: Container(
+                height: _amountBadgeHeight,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0A1606),
+                  border: Border.all(color: AppColors.amber, width: 0.7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${prize.amount}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.greenPale,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BarTrack extends StatelessWidget {
+  static const Color _trackColor = Color(0xFF0d1a0d);
+  final double fraction;
+  final String label;
+  const _BarTrack({required this.fraction, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(7),
+      child: Stack(
+        children: [
+          Positioned.fill(child: Container(color: _trackColor)),
+          LayoutBuilder(builder: (ctx, c) {
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 350),
+              width: c.maxWidth * fraction,
+              decoration: const BoxDecoration(color: AppColors.green),
+            );
+          }),
+          Align(
+            alignment: const Alignment(0, 0),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                height: 1.0,
+                shadows: [
+                  Shadow(
+                    color: Color(0xCC000000),
+                    offset: Offset(0, 1),
+                    blurRadius: 2,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CountdownRowCentered extends StatelessWidget {
+  final Duration remaining;
+  const _CountdownRowCentered({required this.remaining});
 
   String _format(Duration d) {
-    final h = d.inHours.toString().padLeft(2, '0');
-    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$h:$m:$s';
+    if (d.inDays >= 1) {
+      final h = d.inHours - d.inDays * 24;
+      return '${d.inDays}d ${h}h';
+    }
+    if (d.inHours >= 1) {
+      final m = d.inMinutes - d.inHours * 60;
+      return '${d.inHours}h ${m}m';
+    }
+    final m = d.inMinutes;
+    return '${m < 1 ? 1 : m}m';
   }
 
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Expanded(
-          child: Text(
-            'Time left: ${_format(remaining)}',
-            style: const TextStyle(
-              color: AppColors.greenPale,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
+        const Icon(Icons.access_time, color: AppColors.greenPale, size: 13),
+        const SizedBox(width: 5),
+        Text(
+          '${_format(remaining)} remaining',
+          style: const TextStyle(
+            color: AppColors.greenPale,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
           ),
         ),
-        _GoalInfoButton(challengeType: challengeType),
       ],
     );
   }
 }
 
+// ---------------------------------------------------------------------------
+// Prize chip — icon + amount. Tapping a chest prize opens its contents.
+// ---------------------------------------------------------------------------
+class _PrizeChip extends StatelessWidget {
+  final ChallengePrize prize;
+  const _PrizeChip({required this.prize});
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = SizedBox(
+      width: 28,
+      height: 28,
+      child: Image.asset(
+        prize.asset,
+        errorBuilder: AssetPlaceholder.image(
+          color: AppColors.amber,
+          label: 'prize',
+          borderRadius: 4,
+        ),
+      ),
+    );
+    final body = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '${prize.amount}',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(width: 6),
+        icon,
+      ],
+    );
+    final id = prize.chestId;
+    if (id == null) return body;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => ChestContentsPopup.show(
+        context,
+        chestId: id,
+        chestAsset: prize.asset,
+        chestLabel: prize.label,
+      ),
+      child: body,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Info (!) — opens the cycle's goal description.
+// ---------------------------------------------------------------------------
 class _GoalInfoButton extends StatelessWidget {
   final ChallengeType challengeType;
-
   const _GoalInfoButton({required this.challengeType});
 
   @override
@@ -479,19 +812,25 @@ class _GoalInfoButton extends StatelessWidget {
     return GestureDetector(
       onTap: () => _showGoal(context),
       child: Container(
-        width: 32,
-        height: 32,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: AppColors.surfaceDark,
-          border: Border.all(color: AppColors.amber, width: 1),
+          color: AppColors.surfaceBlack,
+          border: Border.all(color: AppColors.amber, width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.5),
+              blurRadius: 6,
+            ),
+          ],
         ),
         child: const Center(
           child: Text(
             '!',
             style: TextStyle(
               color: AppColors.amber,
-              fontSize: 20,
+              fontSize: 22,
               fontWeight: FontWeight.w900,
               height: 1.0,
             ),
