@@ -109,6 +109,15 @@ class AdsService {
 
     _initialized = true;
     debugPrint('[ads] MobileAds initialized');
+
+    // Warm every rewarded slot once the consent + ATT + SDK chain has
+    // resolved. Without this, the very first show() for any placement
+    // returns false (no ad in `_rewardedAds`) and surfaces as
+    // "Ad unavailable, try again" — even when AdMob would have filled.
+    // Subsequent reloads happen automatically from the show callbacks.
+    for (final p in RewardedPlacement.values) {
+      preloadRewarded(p);
+    }
   }
 
   Future<void> _requestATT() async {
