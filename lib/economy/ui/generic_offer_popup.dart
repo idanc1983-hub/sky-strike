@@ -37,10 +37,11 @@ class _GenericOfferPopupState extends State<GenericOfferPopup> {
   @override
   void initState() {
     super.initState();
-    final config = RemoteConfigService.instance.popupFor(widget.assetId);
-    final hours = config?['duration_hours'];
-    if (hours is num) {
-      _remaining = Duration(seconds: (hours * 3600).round());
+    final config =
+        RemoteConfigService.I.monetization.configByAssetName(widget.assetId);
+    final hours = config?.duration.hours;
+    if (hours != null) {
+      _remaining = Duration(seconds: hours * 3600);
     }
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -61,18 +62,18 @@ class _GenericOfferPopupState extends State<GenericOfferPopup> {
 
   @override
   Widget build(BuildContext context) {
-    final rcs = RemoteConfigService.instance;
-    final config = rcs.popupFor(widget.assetId) ?? const <String, dynamic>{};
-    final offer = rcs.offersGeneric[widget.assetId];
+    final rcs = RemoteConfigService.I;
+    final config = rcs.monetization.configByAssetName(widget.assetId);
+    final GenericOffer? offer = rcs.monetization.templates.generic
+        .cast<GenericOffer?>()
+        .firstWhere((o) => o?.assetId == widget.assetId, orElse: () => null);
 
-    final displayName = (config['display_name'] as String?) ?? widget.assetId;
-    final popupBg = config['popup_bg'] as String?;
-    final cycle = config['trigger_challenge_id'] as String?;
+    final displayName = config?.displayName ?? widget.assetId;
+    final popupBg = config?.popupBg;
+    final cycle = config?.triggerChallengeId;
 
     final rewards = _readRewards(offer);
-    final priceUsd = (offer is Map && offer['price_usd'] is num)
-        ? (offer['price_usd'] as num).toDouble()
-        : null;
+    final priceUsd = offer?.price;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -117,13 +118,11 @@ class _GenericOfferPopupState extends State<GenericOfferPopup> {
     );
   }
 
-  static List<OfferRewardItem> _readRewards(dynamic offer) {
-    if (offer is! Map) return const [];
-    final list = offer['rewards'];
-    if (list is! List) return const [];
+  static List<OfferRewardItem> _readRewards(GenericOffer? offer) {
+    if (offer == null) return const [];
     final out = <OfferRewardItem>[];
-    for (final r in list) {
-      out.addAll(OfferRewardParser.parse(r?.toString()));
+    for (final r in offer.rewards) {
+      out.addAll(OfferRewardParser.parse(r));
     }
     return out;
   }

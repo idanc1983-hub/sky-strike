@@ -120,8 +120,9 @@ class _ChallengePrizesPopupState extends State<ChallengePrizesPopup> {
     });
     final lockedToShow = lockedSorted.take(_maxLockedRows).toList();
 
-    final bgPath = RemoteConfigService.instance
-            .challengeCyclePopupBg(type.jsonValue) ??
+    final bgPath = RemoteConfigService.I
+            .challengeById(type.jsonValue)
+            ?.popupBg ??
         _fallbackBgFor(type);
 
     // The route's forward/reverse animation drives the staggered row

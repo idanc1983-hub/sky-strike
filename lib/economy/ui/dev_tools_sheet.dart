@@ -933,7 +933,7 @@ class _MonetizationLauncherState extends State<_MonetizationLauncher> {
     final selected = _selected;
     final config = selected == null
         ? null
-        : RemoteConfigService.instance.popupFor(selected);
+        : RemoteConfigService.I.monetization.configByAssetName(selected);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -988,10 +988,10 @@ class _MonetizationLauncherState extends State<_MonetizationLauncher> {
           if (config != null) ...[
             const SizedBox(height: 6),
             Text(
-              'display_name: ${config['display_name']}\n'
-              'popup_bg: ${config['popup_bg']}\n'
-              'cycle: ${config['trigger_challenge_id']}\n'
-              'unlock_level: ${config['unlock_level']}',
+              'display_name: ${config.displayName}\n'
+              'popup_bg: ${config.popupBg}\n'
+              'cycle: ${config.triggerChallengeId}\n'
+              'unlock_level: ${config.unlockLevel}',
               style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 10,

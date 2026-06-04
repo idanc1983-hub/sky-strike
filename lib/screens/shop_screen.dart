@@ -207,17 +207,11 @@ class _GemPacksSection extends StatelessWidget {
   }
 
   static List<_PackEntry> _readGemPacks() {
-    final raw = RemoteConfigService.instance.shopIap['gem_packs'];
-    if (raw is! Map) return const [];
-    return raw.entries.map((e) {
-      final v = e.value;
-      if (v is! Map) return _PackEntry.empty(e.key.toString());
-      return _PackEntry(
-        id: e.key.toString(),
-        amount: (v['gem_amount'] as num?)?.toInt() ?? 0,
-        priceUsd: (v['price_usd'] as num?)?.toDouble() ?? 0.0,
-      );
-    }).toList()
+    final packs = RemoteConfigService.I.shop.gemPacks;
+    return packs
+        .map((p) =>
+            _PackEntry(id: p.id, amount: p.amount, priceUsd: p.price))
+        .toList()
       ..sort((a, b) => a.priceUsd.compareTo(b.priceUsd));
   }
 }
@@ -270,19 +264,21 @@ class _ChestsSection extends StatelessWidget {
   }
 
   static List<_ChestEntry> _readChests() {
-    final raw = RemoteConfigService.instance.shopIap['chest_prices'];
-    if (raw is! Map) return const [];
+    final deals = RemoteConfigService.I.shop.chestDeals;
+    if (deals.isEmpty) return const [];
     // Canonical tier order — basic / unique / epic. (special_chest is
     // earned-only per the economy plan; never in shop.)
     const order = ['basic_chest', 'unique_chest', 'epic_chest'];
     final out = <_ChestEntry>[];
     for (final id in order) {
-      final v = raw[id];
-      if (v is! Map) continue;
+      final deal = deals
+          .cast<ChestDeal?>()
+          .firstWhere((d) => d?.chestId == id, orElse: () => null);
+      if (deal == null) continue;
       out.add(_ChestEntry(
         id: id,
-        coinPrice: (v['coin_price'] as num?)?.toInt() ?? 0,
-        gemPrice: (v['gem_price'] as num?)?.toInt() ?? 0,
+        coinPrice: deal.coinPrice,
+        gemPrice: deal.gemPrice,
       ));
     }
     return out;
@@ -325,17 +321,11 @@ class _CoinPacksSection extends StatelessWidget {
   }
 
   static List<_PackEntry> _readCoinPacks() {
-    final raw = RemoteConfigService.instance.shopIap['coin_packs'];
-    if (raw is! Map) return const [];
-    return raw.entries.map((e) {
-      final v = e.value;
-      if (v is! Map) return _PackEntry.empty(e.key.toString());
-      return _PackEntry(
-        id: e.key.toString(),
-        amount: (v['coin_amount'] as num?)?.toInt() ?? 0,
-        priceUsd: (v['price_usd'] as num?)?.toDouble() ?? 0.0,
-      );
-    }).toList()
+    final packs = RemoteConfigService.I.shop.coinPacks;
+    return packs
+        .map((p) =>
+            _PackEntry(id: p.id, amount: p.amount, priceUsd: p.price))
+        .toList()
       ..sort((a, b) => a.priceUsd.compareTo(b.priceUsd));
   }
 }
@@ -393,26 +383,25 @@ class _PowerUpsTab extends StatelessWidget {
   }
 
   static List<_PowerUpEntry> _readPowerUps() {
-    final rcs = RemoteConfigService.instance;
-    final powerUps = rcs.shopPowerups;
-    final prices = rcs.shopIap['powerup_prices'];
+    final rcs = RemoteConfigService.I;
+    final powerUps = rcs.powerUps;
+    final prices = rcs.shop.powerUps;
     if (powerUps.isEmpty) return const [];
     final out = <_PowerUpEntry>[];
-    powerUps.forEach((id, v) {
-      if (v is! Map) return;
-      final priceMap = prices is Map ? prices[id] : null;
-      final price = (priceMap is Map && priceMap['coin_price'] is num)
-          ? (priceMap['coin_price'] as num).toInt()
-          : 0;
+    for (final pu in powerUps) {
+      final priceEntry = prices
+          .cast<ShopPowerUp?>()
+          .firstWhere((p) => p?.powerUpId == pu.id, orElse: () => null);
+      final price = priceEntry?.coinPrice ?? 0;
       out.add(_PowerUpEntry(
-        id: id,
-        displayName: (v['display_name'] as String?) ?? id,
-        unlockBiome: (v['unlock_biome'] as String?) ?? 'jungle',
-        category: (v['category'] as String?) ?? 'instant',
-        duration: (v['duration'] as String?) ?? '-',
+        id: pu.id,
+        displayName: pu.name.isEmpty ? pu.id : pu.name,
+        unlockBiome: pu.unlockBiome.isEmpty ? 'jungle' : pu.unlockBiome,
+        category: pu.category.isEmpty ? 'instant' : pu.category,
+        duration: pu.isInstant ? 'instant' : '${pu.durationSec}s',
         coinPrice: price,
       ));
-    });
+    }
     // Sort by unlock_biome order, then by price within biome — matches the
     // progression in `Power-ups unlock.xlsx`.
     out.sort((a, b) {
@@ -985,9 +974,16 @@ class _ChestPreviewSheet extends StatelessWidget {
   }
 
   Map<String, dynamic> get _config {
-    final all = RemoteConfigService.instance.chests;
-    final v = all[chest.id];
-    return v is Map<String, dynamic> ? v : <String, dynamic>{};
+    final def = RemoteConfigService.I.chests.byId(chest.id);
+    if (def == null) return const <String, dynamic>{};
+    return <String, dynamic>{
+      'coin_min': def.coinMin,
+      'coin_max': def.coinMax,
+      'gem_min': def.gemMin,
+      'gem_max': def.gemMax,
+      'jet_drop_chance': def.jetDropChance,
+      'jet_id': def.jetId,
+    };
   }
 
   int _readInt(String key) {
@@ -1239,10 +1235,17 @@ class _ChestRowActions {
     _ChestEntry chest,
     String label,
   ) {
-    final definition = RemoteConfigService.instance.chests[chest.id];
-    if (definition is! Map<String, dynamic>) return;
+    final def = RemoteConfigService.I.chests.byId(chest.id);
+    if (def == null) return;
     final result = ChestRewardResolver.resolve(
-      definition: definition,
+      definition: <String, dynamic>{
+        'coin_min': def.coinMin,
+        'coin_max': def.coinMax,
+        'gem_min': def.gemMin,
+        'gem_max': def.gemMax,
+        'jet_drop_chance': def.jetDropChance,
+        'jet_id': def.jetId,
+      },
       rng: _rng,
     );
     if (result.reward.coins > 0) {

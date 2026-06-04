@@ -205,7 +205,7 @@ class _DayGrid extends StatelessWidget {
         return _DayTile(
           day: day,
           state: _stateForDay(day, today),
-          rewardConfig: RemoteConfigService.instance.dailyReward(week, day),
+          rewardConfig: _dailyRewardLegacyMap(week, day),
           currentWorld: currentWorld,
           ownedJets: ownedJets,
         );
@@ -234,7 +234,7 @@ class _Day7Tile extends StatelessWidget {
     return _DayTile(
       day: 7,
       state: _stateForDay(7, today),
-      rewardConfig: RemoteConfigService.instance.dailyReward(week, 7),
+      rewardConfig: _dailyRewardLegacyMap(week, 7),
       currentWorld: currentWorld,
       ownedJets: ownedJets,
       fullWidth: true,
@@ -697,9 +697,16 @@ class _ChestProbabilityDialog extends StatelessWidget {
   }
 
   Map<String, dynamic> get _config {
-    final all = RemoteConfigService.instance.chests;
-    final v = all[chestId];
-    return v is Map<String, dynamic> ? v : <String, dynamic>{};
+    final def = RemoteConfigService.I.chests.byId(chestId);
+    if (def == null) return const <String, dynamic>{};
+    return <String, dynamic>{
+      'coin_min': def.coinMin,
+      'coin_max': def.coinMax,
+      'gem_min': def.gemMin,
+      'gem_max': def.gemMax,
+      'jet_drop_chance': def.jetDropChance,
+      'jet_id': def.jetId,
+    };
   }
 
   int _readInt(String key) {
@@ -909,4 +916,23 @@ class _RewardRangeRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Adapter: typed [DailyRewardDay] → legacy-shaped map for the
+/// `_parseRewards` / `_RewardRow` chain, which still reads raw
+/// `coin` / `gem` / `chest` / `jet` / `jet_fallback` keys. Honours the
+/// new `week_cap` rule so weeks past the cap repeat the capped week.
+Map<String, dynamic>? _dailyRewardLegacyMap(int week, int day) {
+  final rcs = RemoteConfigService.I;
+  final cap = rcs.dailyReward.weekCap;
+  final cappedWeek = week > cap ? cap : week;
+  final entry = rcs.dailyReward.dayFor(week: cappedWeek, dayOfWeek: day);
+  if (entry == null) return null;
+  return <String, dynamic>{
+    'coin': entry.coinPrize,
+    'gem': entry.gemPrize,
+    'chest': entry.chestType,
+    'jet': entry.jetType,
+    'jet_fallback': entry.jetFallback,
+  };
 }

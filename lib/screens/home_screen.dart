@@ -513,7 +513,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   // ---------------------------------------------------------------------------
   // Offers row — up to 4 monetization slots, left-aligned. Reads
-  // `RemoteConfigService.popupOffers` and shows any entry whose
+  // `RemoteConfigService.monetization.configs` and shows any entry whose
   // `active == true`, `unlock_level <= player.level`, and whose
   // `trigger_challenge_id` matches the player's current state:
   //   - `new_players`              → always while active (intro)
@@ -554,23 +554,22 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   List<_OfferSpec> _resolveActiveOffers(EconomyState economy) {
-    final rc = RemoteConfigService.instance;
+    final rc = RemoteConfigService.I;
     final activeCycleId = economy.activeChallengeType?.jsonValue;
     final level = economy.level;
     final out = <_OfferSpec>[];
     _kLobbyIconAssets.forEach((assetId, iconAsset) {
-      final cfg = rc.popupFor(assetId);
+      final cfg = rc.monetization.configByAssetName(assetId);
       if (cfg == null) return;
-      if (cfg['active'] != true) return;
-      final unlock = cfg['unlock_level'];
-      if (unlock is num && level < unlock.toInt()) return;
-      final trigger = (cfg['trigger_challenge_id'] ?? '').toString();
+      if (!cfg.active) return;
+      if (level < cfg.unlockLevel) return;
+      final trigger = cfg.triggerChallengeId ?? '';
       final triggerMatches = trigger.isEmpty ||
           trigger == 'none' ||
           trigger == 'new_players' ||
           trigger == activeCycleId;
       if (!triggerMatches) return;
-      final displayName = (cfg['display_name'] ?? assetId).toString();
+      final displayName = cfg.displayName.isEmpty ? assetId : cfg.displayName;
       out.add(_OfferSpec(
         assetId: assetId,
         iconAsset: iconAsset,
@@ -1297,7 +1296,7 @@ class _BarTrack extends StatelessWidget {
 
 // ---------------------------------------------------------------------------
 // One monetization slot in the home offers row. The row supports up to 4
-// of these and filters them by `RemoteConfigService.isOfferActive`.
+// of these and filters them by `OfferConfig.active` + unlock/trigger gates.
 // ---------------------------------------------------------------------------
 class _OfferSpec {
   final String assetId;

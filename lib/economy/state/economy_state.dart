@@ -353,29 +353,24 @@ class EconomyState extends ChangeNotifier {
   List<Map<String, dynamic>> get activeChallengeStages {
     final type = _activeChallengeType;
     if (type == null) return const <Map<String, dynamic>>[];
-    final ladders = RemoteConfigService.instance.challengeStageLadders;
-    final cycle = ladders[type.jsonValue];
-    if (cycle is! Map) return const <Map<String, dynamic>>[];
-    final stages = cycle['stages'];
-    if (stages is! List) return const <Map<String, dynamic>>[];
-    return stages.whereType<Map>().map((e) {
-      return e.map((k, v) => MapEntry(k.toString(), v));
-    }).toList();
+    final stages = RemoteConfigService.I.stagesFor(type.jsonValue);
+    if (stages.isEmpty) return const <Map<String, dynamic>>[];
+    return stages
+        .map((s) => <String, dynamic>{
+              'stage': s.stage,
+              'goal': s.goal,
+              'prize': s.prize,
+            })
+        .toList();
   }
 
   /// Reads the first stage's `goal` from the RC stage ladder for [type].
   /// Returns null if RC has no ladder entry for this cycle so the caller
   /// can fall back to [ChallengeFormulas.targetFor].
   int? _ladderTargetFor(ChallengeType type) {
-    final ladders = RemoteConfigService.instance.challengeStageLadders;
-    final cycle = ladders[type.jsonValue];
-    if (cycle is! Map) return null;
-    final stages = cycle['stages'];
-    if (stages is! List || stages.isEmpty) return null;
-    final first = stages.first;
-    if (first is! Map) return null;
-    final goal = first['goal'];
-    return goal is int ? goal : (goal is num ? goal.toInt() : null);
+    final stages = RemoteConfigService.I.stagesFor(type.jsonValue);
+    if (stages.isEmpty) return null;
+    return stages.first.goal;
   }
 
   /// Starts a brand-new challenge cycle. The first-ever cycle is locked
@@ -939,22 +934,25 @@ class EconomyState extends ChangeNotifier {
     // early boot). Fall back to the constants ladder in that case so a
     // claim never crashes the app — the displayed amount may differ from
     // the granted one in that degraded path, but the claim still succeeds.
-    Map<String, dynamic>? rc;
+    DailyRewardDay? rc;
     Map<String, dynamic>? chestDefinition;
     String? chestId;
     try {
-      rc = RemoteConfigService.instance.dailyReward(week, day);
-      chestId = rc?['chest'] is String ? rc!['chest'] as String : null;
+      final rcs = RemoteConfigService.I;
+      final cap = rcs.dailyReward.weekCap;
+      final cappedWeek = week > cap ? cap : week;
+      rc = rcs.dailyReward.dayFor(week: cappedWeek, dayOfWeek: day);
+      chestId = rc?.chestType;
       if (chestId != null && chestId.isNotEmpty) {
-        final raw = RemoteConfigService.instance.chests[chestId];
-        if (raw is Map<String, dynamic>) chestDefinition = raw;
+        final def = rcs.chests.byId(chestId);
+        if (def != null) chestDefinition = _chestDefAsLegacyMap(def);
       }
     } catch (_) {
       return StreakClock.baseLadderReward(day);
     }
     if (rc == null) return StreakClock.baseLadderReward(day);
-    final coin = (rc['coin'] as num?)?.toInt() ?? 0;
-    final gem = (rc['gem'] as num?)?.toInt() ?? 0;
+    final coin = rc.coinPrize;
+    final gem = rc.gemPrize;
     var reward = Reward(coins: coin, gems: gem);
     if (chestDefinition != null) {
       final roll = ChestRewardResolver.resolve(
@@ -972,8 +970,11 @@ class EconomyState extends ChangeNotifier {
   /// path never crashes.
   Reward _resolveDay7Reward() {
     try {
-      final rcEntry = RemoteConfigService.instance
-          .dailyReward(_streakWeeksCompleted + 1, 7);
+      final rcs = RemoteConfigService.I;
+      final requestedWeek = _streakWeeksCompleted + 1;
+      final cap = rcs.dailyReward.weekCap;
+      final cappedWeek = requestedWeek > cap ? cap : requestedWeek;
+      final rcEntry = rcs.dailyReward.dayFor(week: cappedWeek, dayOfWeek: 7);
       if (rcEntry == null) {
         return Day7ChestFormula.compute(
           playerLevel: _level,
@@ -981,14 +982,20 @@ class EconomyState extends ChangeNotifier {
           rng: _rng,
         );
       }
-      final chestsById = RemoteConfigService.instance.chests;
+      final chestsConfig = rcs.chests;
       final resolved = Day7RewardResolver.resolve(
-        rcEntry: rcEntry,
+        rcEntry: <String, dynamic>{
+          'coin': rcEntry.coinPrize,
+          'gem': rcEntry.gemPrize,
+          'chest': rcEntry.chestType,
+          'jet': rcEntry.jetType,
+          'jet_fallback': rcEntry.jetFallback,
+        },
         currentWorld: _currentWorld,
         ownsJet: (codeId) => _ownedJets.contains(codeId),
         chestDefinitionLookup: (chestId) {
-          final raw = chestsById[chestId];
-          return raw is Map<String, dynamic> ? raw : null;
+          final def = chestsConfig.byId(chestId);
+          return def == null ? null : _chestDefAsLegacyMap(def);
         },
         rng: _rng,
       );
@@ -1582,3 +1589,15 @@ class EconomyState extends ChangeNotifier {
     super.dispose();
   }
 }
+
+/// Adapter: typed [ChestDefinition] → legacy-shaped map for
+/// [ChestRewardResolver] / [Day7RewardResolver] which still read raw
+/// `coin_min` / `gem_max` / `jet_id` keys.
+Map<String, dynamic> _chestDefAsLegacyMap(ChestDefinition def) => {
+      'coin_min': def.coinMin,
+      'coin_max': def.coinMax,
+      'gem_min': def.gemMin,
+      'gem_max': def.gemMax,
+      'jet_drop_chance': def.jetDropChance,
+      'jet_id': def.jetId,
+    };

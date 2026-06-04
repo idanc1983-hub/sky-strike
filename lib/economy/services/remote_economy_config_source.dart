@@ -12,20 +12,15 @@ class RemoteEconomyConfigSource implements EconomyConfigSource {
   final RemoteConfigService _rc;
 
   RemoteEconomyConfigSource({RemoteConfigService? rc})
-      : _rc = rc ?? RemoteConfigService.instance;
+      : _rc = rc ?? RemoteConfigService.I;
 
   @override
   int? waveClearCoins(int wave1to10) {
     if (wave1to10 < 1 || wave1to10 > 10) return null;
-    final drops = _rc.coinDrops;
-    final list = drops['wave_clear_W1'];
-    if (list is! List || wave1to10 - 1 >= list.length) return null;
-    final v = list[wave1to10 - 1];
-    if (v is num) {
-      final i = v.toInt();
-      return i < 0 ? 0 : i;
-    }
-    return null;
+    final v = _rc.coinsDrop.waveClear['wave_$wave1to10'];
+    if (v == null) return null;
+    final i = v.toInt();
+    return i < 0 ? 0 : i;
   }
 
   @override
@@ -34,18 +29,14 @@ class RemoteEconomyConfigSource implements EconomyConfigSource {
     // Per-biome multiplier lives on the first level of each biome in
     // the canonical RC `levels_economy` blob: `world_coin_mult`. Same
     // value across all 10 levels in the biome — we just sample level 1.
-    final levels = _rc.biomeLevels;
     final biomeKey = _biomeKey(world);
     if (biomeKey == null) return null;
-    final entry = levels['${biomeKey}_1'];
-    if (entry is! Map) return null;
-    final v = entry['world_coin_mult'];
-    if (v is num) {
-      final d = v.toDouble();
-      if (d.isNaN || d.isInfinite || d < 0) return null;
-      return d;
-    }
-    return null;
+    final globalLevel = (world - 1) * 10 + 1;
+    final entry = _rc.levelFor(biome: biomeKey, level: globalLevel);
+    if (entry == null) return null;
+    final d = entry.worldCoinMult;
+    if (d.isNaN || d.isInfinite || d < 0) return null;
+    return d;
   }
 
   @override
@@ -80,25 +71,20 @@ class RemoteEconomyConfigSource implements EconomyConfigSource {
 
   @override
   int? powerUpSinglePrice(String powerUpId) {
-    final prices = _rc.shopIap['powerup_prices'];
-    if (prices is! Map) return null;
-    final entry = prices[powerUpId];
-    if (entry is! Map) return null;
-    final v = entry['coin_price'];
-    if (v is num) {
-      final i = v.toInt();
-      return i < 0 ? 0 : i;
+    for (final p in _rc.shop.powerUps) {
+      if (p.powerUpId == powerUpId) {
+        final i = p.coinPrice;
+        return i < 0 ? 0 : i;
+      }
     }
     return null;
   }
 
   int? _intFromCoinDrops(String key) {
-    final v = _rc.coinDrops[key];
-    if (v is num) {
-      final i = v.toInt();
-      return i < 0 ? 0 : i;
-    }
-    return null;
+    final v = _rc.coinsDrop.world1Sources[key];
+    if (v == null) return null;
+    final i = v.toInt();
+    return i < 0 ? 0 : i;
   }
 
   static String? _biomeKey(int world) {

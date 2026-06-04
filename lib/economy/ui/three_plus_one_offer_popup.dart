@@ -44,10 +44,11 @@ class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
   @override
   void initState() {
     super.initState();
-    final config = RemoteConfigService.instance.popupFor(widget.assetId);
-    final hours = config?['duration_hours'];
-    if (hours is num) {
-      _remaining = Duration(seconds: (hours * 3600).round());
+    final config =
+        RemoteConfigService.I.monetization.configByAssetName(widget.assetId);
+    final hours = config?.duration.hours;
+    if (hours != null) {
+      _remaining = Duration(seconds: hours * 3600);
     }
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -68,15 +69,17 @@ class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
 
   @override
   Widget build(BuildContext context) {
-    final rcs = RemoteConfigService.instance;
-    final config = rcs.popupFor(widget.assetId) ?? const <String, dynamic>{};
-    final offer = rcs.offers1Plus3[widget.assetId];
+    final rcs = RemoteConfigService.I;
+    final config = rcs.monetization.configByAssetName(widget.assetId);
+    final OnePlusTwoOffer? offer = rcs.monetization.templates.onePlusTwo
+        .cast<OnePlusTwoOffer?>()
+        .firstWhere((o) => o?.assetId == widget.assetId, orElse: () => null);
     final slots = _readSlots(offer);
 
-    final displayName = (config['display_name'] as String?) ?? widget.assetId;
-    final popupBg = config['popup_bg'] as String?;
-    final cycle = config['trigger_challenge_id'] as String?;
-    final isIntro = config['is_intro'] == true;
+    final displayName = config?.displayName ?? widget.assetId;
+    final popupBg = config?.popupBg;
+    final cycle = config?.triggerChallengeId;
+    final isIntro = config?.isIntro ?? false;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -126,21 +129,16 @@ class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
     );
   }
 
-  static List<_SlotData> _readSlots(dynamic offer) {
-    if (offer is! Map) return const [];
-    final raw = offer['slots'];
-    if (raw is! List) return const [];
-    return raw.map<_SlotData>((s) {
-      if (s is! Map) return _SlotData.empty();
-      final reward = s['reward']?.toString();
-      final price = s['price'];
-      return _SlotData(
-        rewards: OfferRewardParser.parse(reward),
-        priceUsd: price is num ? price.toDouble() : null,
-        isFree: price == 'free',
-        rawReward: reward ?? '',
-      );
-    }).toList(growable: false);
+  static List<_SlotData> _readSlots(OnePlusTwoOffer? offer) {
+    if (offer == null) return const [];
+    return offer.slots
+        .map<_SlotData>((s) => _SlotData(
+              rewards: OfferRewardParser.parse(s.reward),
+              priceUsd: s.priceUsd,
+              isFree: s.isFree,
+              rawReward: s.reward ?? '',
+            ))
+        .toList(growable: false);
   }
 }
 

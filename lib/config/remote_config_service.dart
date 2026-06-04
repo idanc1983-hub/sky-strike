@@ -1,582 +1,961 @@
 // remote_config_service.dart
 //
-// SkyStrike Remote Config integration — v3 (10 parameters, per
-// Firebase_RemoteConfig_Instructions.md §Option B).
+// Firebase Remote Config service for SKYSTRIKE.
+// Matches deployed Server template v3 / v4 schema:
+//   _meta, levels_economy, jets, chests, coins_drop, power_ups, shop,
+//   daily_reward, challenges_config, challenge_stages, monetization
 //
-// Wraps firebase_remote_config: fetch + activate once, then read each of
-// the 10 top-level parameters and adapt the canonical list-of-objects
-// shape into the maps-keyed-by-id shape the rest of the codebase
-// expects. Adapter lives entirely inside this file — callers see the
-// same public API as the v2 service.
+// All parameters are JSON-typed and parsed into immutable models on first read.
+// Offline defaults are bundled as assets under: assets/remote_config_defaults/
 //
-// Every parameter is stored as a JSON STRING in Remote Config (valueType:
-// JSON). Every getter is defensive: missing / empty / garbled value falls
-// back to an empty map/list so the game never crashes on a bad LiveOps push.
-//
-// Bundled defaults are loaded from assets/remote_config_defaults/ so a
-// brand-new install with no network plays with the same config that was
-// published to Firebase.
+// Usage:
+//   final rc = RemoteConfigService.I;
+//   await rc.initialize();
+//   final level = rc.levelFor(biome: 'jungle', level: 3);
+//   final offer = rc.monetization.configByAssetName('1+2_ironsky');
 
+import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:firebase_remote_config/firebase_remote_config.dart';
 
-/// The 10 top-level Remote Config parameter names, per
-/// Firebase_RemoteConfig_Instructions.md.
+import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Parameter keys
+// ─────────────────────────────────────────────────────────────────────────────
+
 class RcKeys {
-  static const levelsEconomy    = 'levels_economy';
-  static const powerUps         = 'power_ups';
-  static const jets             = 'jets';
+  RcKeys._();
+
+  static const meta = '_meta';
+  static const levelsEconomy = 'levels_economy';
+  static const jets = 'jets';
+  static const chests = 'chests';
+  static const coinsDrop = 'coins_drop';
+  static const powerUps = 'power_ups';
+  static const shop = 'shop';
+  static const dailyReward = 'daily_reward';
   static const challengesConfig = 'challenges_config';
-  static const challengeStages  = 'challenge_stages';
-  static const chests           = 'chests';
-  static const coinsDrop        = 'coins_drop';
-  static const dailyReward      = 'daily_reward';
-  static const monetization     = 'monetization';
-  static const shop             = 'shop';
+  static const challengeStages = 'challenge_stages';
+  static const monetization = 'monetization';
 
   static const all = <String>[
+    meta,
     levelsEconomy,
-    powerUps,
     jets,
-    challengesConfig,
-    challengeStages,
     chests,
     coinsDrop,
-    dailyReward,
-    monetization,
+    powerUps,
     shop,
+    dailyReward,
+    challengesConfig,
+    challengeStages,
+    monetization,
   ];
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+T? _asT<T>(dynamic v) => v is T ? v : null;
+
+int? _asInt(dynamic v) {
+  if (v is int) return v;
+  if (v is double) return v.toInt();
+  if (v is String) return int.tryParse(v);
+  return null;
+}
+
+double? _asDouble(dynamic v) {
+  if (v is double) return v;
+  if (v is int) return v.toDouble();
+  if (v is String) return double.tryParse(v);
+  return null;
+}
+
+bool _asBool(dynamic v) {
+  if (v is bool) return v;
+  if (v is String) return v.toLowerCase() == 'true' || v == 'yes' || v == '1';
+  if (v is num) return v != 0;
+  return false;
+}
+
+String? _asString(dynamic v) => v == null ? null : v.toString();
+
+List<dynamic> _asList(dynamic v) =>
+    v is List ? v : const <dynamic>[];
+
+Map<String, dynamic> _asMap(dynamic v) =>
+    v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────────────────────────────────────
+
+@immutable
+class MetaInfo {
+  final String? generated;
+  final String? schemaVersion;
+  final String? rewardTokenGrammar;
+
+  const MetaInfo({this.generated, this.schemaVersion, this.rewardTokenGrammar});
+
+  factory MetaInfo.fromJson(Map<String, dynamic> j) => MetaInfo(
+        generated: _asString(j['generated']),
+        schemaVersion: _asString(j['schema_version']),
+        rewardTokenGrammar: _asString(j['reward_token_grammar']),
+      );
+}
+
+// ── levels_economy ──────────────────────────────────────────────────────────
+
+@immutable
+class EnemyWave {
+  final int count;
+  final double power;
+  const EnemyWave({required this.count, required this.power});
+  factory EnemyWave.fromJson(Map<String, dynamic> j) => EnemyWave(
+        count: _asInt(j['count']) ?? 0,
+        power: _asDouble(j['power']) ?? 0,
+      );
+}
+
+@immutable
+class BossWave {
+  final int count;
+  final double power;
+  const BossWave({required this.count, required this.power});
+  factory BossWave.fromJson(Map<String, dynamic> j) => BossWave(
+        count: _asInt(j['count']) ?? 0,
+        power: _asDouble(j['power']) ?? 0,
+      );
+}
+
+@immutable
+class LevelConfig {
+  final String biome;
+  final int level;
+  final int waves;
+  final double jetMultiplier;
+  final double worldCoinMult;
+  final List<EnemyWave> enemies;
+  final BossWave? boss;
+
+  const LevelConfig({
+    required this.biome,
+    required this.level,
+    required this.waves,
+    required this.jetMultiplier,
+    required this.worldCoinMult,
+    required this.enemies,
+    required this.boss,
+  });
+
+  factory LevelConfig.fromJson(Map<String, dynamic> j) => LevelConfig(
+        biome: _asString(j['biome']) ?? '',
+        level: _asInt(j['level']) ?? 0,
+        waves: _asInt(j['waves']) ?? 0,
+        jetMultiplier: _asDouble(j['jet_multiplier']) ?? 1.0,
+        worldCoinMult: _asDouble(j['world_coin_mult']) ?? 1.0,
+        enemies: _asList(j['enemies'])
+            .whereType<Map>()
+            .map((e) => EnemyWave.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false),
+        boss: j['boss'] is Map
+            ? BossWave.fromJson(Map<String, dynamic>.from(j['boss']))
+            : null,
+      );
+}
+
+// ── jets ────────────────────────────────────────────────────────────────────
+
+@immutable
+class JetConfig {
+  final String jetId;
+  final int basePower;
+  final String unlockBiome;
+  final int unlockPriceGems;
+
+  const JetConfig({
+    required this.jetId,
+    required this.basePower,
+    required this.unlockBiome,
+    required this.unlockPriceGems,
+  });
+
+  factory JetConfig.fromJson(Map<String, dynamic> j) => JetConfig(
+        jetId: _asString(j['jet_id']) ?? '',
+        basePower: _asInt(j['base_power']) ?? 0,
+        unlockBiome: _asString(j['unlock_biome']) ?? '',
+        unlockPriceGems: _asInt(j['unlock_price_gems']) ?? 0,
+      );
+}
+
+// ── chests ──────────────────────────────────────────────────────────────────
+
+@immutable
+class ChestDefinition {
+  final String chestId;
+  final int coinMin;
+  final int coinMax;
+  final int gemMin;
+  final int gemMax;
+  final double jetDropChance;
+  final String? jetId;
+
+  const ChestDefinition({
+    required this.chestId,
+    required this.coinMin,
+    required this.coinMax,
+    required this.gemMin,
+    required this.gemMax,
+    required this.jetDropChance,
+    required this.jetId,
+  });
+
+  factory ChestDefinition.fromJson(Map<String, dynamic> j) => ChestDefinition(
+        chestId: _asString(j['chest_id']) ?? '',
+        coinMin: _asInt(j['coin_min']) ?? 0,
+        coinMax: _asInt(j['coin_max']) ?? 0,
+        gemMin: _asInt(j['gem_min']) ?? 0,
+        gemMax: _asInt(j['gem_max']) ?? 0,
+        jetDropChance: _asDouble(j['jet_drop_chance']) ?? 0,
+        jetId: _asString(j['jet_id']),
+      );
+}
+
+@immutable
+class ChestsConfig {
+  final List<ChestDefinition> definitions;
+  final String? note;
+
+  const ChestsConfig({required this.definitions, required this.note});
+
+  factory ChestsConfig.fromJson(Map<String, dynamic> j) => ChestsConfig(
+        definitions: _asList(j['definitions'])
+            .whereType<Map>()
+            .map((e) => ChestDefinition.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false),
+        note: _asString(j['note']),
+      );
+
+  ChestDefinition? byId(String id) =>
+      definitions.cast<ChestDefinition?>().firstWhere(
+            (c) => c?.chestId == id,
+            orElse: () => null,
+          );
+}
+
+// ── coins_drop ──────────────────────────────────────────────────────────────
+
+@immutable
+class CoinsDropConfig {
+  final Map<String, num> world1Sources;
+  final Map<String, num> waveClear;
+  final String? note;
+
+  const CoinsDropConfig({
+    required this.world1Sources,
+    required this.waveClear,
+    required this.note,
+  });
+
+  factory CoinsDropConfig.fromJson(Map<String, dynamic> j) {
+    Map<String, num> toNumMap(dynamic v) {
+      final out = <String, num>{};
+      _asMap(v).forEach((k, val) {
+        final n = (val is num) ? val : _asDouble(val);
+        if (n != null) out[k] = n;
+      });
+      return out;
+    }
+
+    return CoinsDropConfig(
+      world1Sources: toNumMap(j['world1_sources']),
+      waveClear: toNumMap(j['wave_clear']),
+      note: _asString(j['_note']),
+    );
+  }
+
+  /// World coin value = base wave coin × biome's world_coin_mult.
+  num waveCoinFor(int waveIndex1Based) =>
+      waveClear['wave_$waveIndex1Based'] ?? 0;
+}
+
+// ── power_ups ───────────────────────────────────────────────────────────────
+
+@immutable
+class PowerUpConfig {
+  final String id;
+  final String name;
+  final String unlockBiome;
+  final String category; // e.g. 'stack'
+  final int? durationSec; // null for instant-use (e.g. Bomb)
+
+  const PowerUpConfig({
+    required this.id,
+    required this.name,
+    required this.unlockBiome,
+    required this.category,
+    required this.durationSec,
+  });
+
+  factory PowerUpConfig.fromJson(Map<String, dynamic> j) => PowerUpConfig(
+        id: _asString(j['id']) ?? '',
+        name: _asString(j['name']) ?? '',
+        unlockBiome: _asString(j['unlock_biome']) ?? '',
+        category: _asString(j['category']) ?? '',
+        durationSec: _asInt(j['duration_sec']),
+      );
+
+  bool get isInstant => durationSec == null;
+}
+
+// ── shop ────────────────────────────────────────────────────────────────────
+
+@immutable
+class CurrencyPack {
+  final String id;
+  final int amount;
+  final double price;
+
+  const CurrencyPack({required this.id, required this.amount, required this.price});
+
+  factory CurrencyPack.fromJson(Map<String, dynamic> j) => CurrencyPack(
+        id: _asString(j['id']) ?? '',
+        amount: _asInt(j['amount']) ?? 0,
+        price: _asDouble(j['price']) ?? 0,
+      );
+}
+
+@immutable
+class ChestDeal {
+  final String chestId;
+  final int coinPrice;
+  final int gemPrice;
+
+  const ChestDeal({
+    required this.chestId,
+    required this.coinPrice,
+    required this.gemPrice,
+  });
+
+  factory ChestDeal.fromJson(Map<String, dynamic> j) => ChestDeal(
+        chestId: _asString(j['chest_id']) ?? '',
+        coinPrice: _asInt(j['coin_price']) ?? 0,
+        gemPrice: _asInt(j['gem_price']) ?? 0,
+      );
+}
+
+@immutable
+class ShopPowerUp {
+  final String powerUpId;
+  final int coinPrice;
+
+  const ShopPowerUp({required this.powerUpId, required this.coinPrice});
+
+  factory ShopPowerUp.fromJson(Map<String, dynamic> j) => ShopPowerUp(
+        powerUpId: _asString(j['power_up_id']) ?? '',
+        coinPrice: _asInt(j['coin_price']) ?? 0,
+      );
+}
+
+@immutable
+class ShopConfig {
+  final List<CurrencyPack> coinPacks;
+  final List<CurrencyPack> gemPacks;
+  final List<ChestDeal> chestDeals;
+  final List<ShopPowerUp> powerUps;
+
+  const ShopConfig({
+    required this.coinPacks,
+    required this.gemPacks,
+    required this.chestDeals,
+    required this.powerUps,
+  });
+
+  factory ShopConfig.fromJson(Map<String, dynamic> j) => ShopConfig(
+        coinPacks: _asList(j['coin_packs'])
+            .whereType<Map>()
+            .map((e) => CurrencyPack.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false),
+        gemPacks: _asList(j['gem_packs'])
+            .whereType<Map>()
+            .map((e) => CurrencyPack.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false),
+        chestDeals: _asList(j['chest_deals'])
+            .whereType<Map>()
+            .map((e) => ChestDeal.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false),
+        powerUps: _asList(j['power_ups'])
+            .whereType<Map>()
+            .map((e) => ShopPowerUp.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false),
+      );
+}
+
+// ── daily_reward ────────────────────────────────────────────────────────────
+
+@immutable
+class DailyRewardDay {
+  final String dayId; // e.g. 'w1_d3'
+  final int week;
+  final int coinPrize;
+  final int gemPrize;
+  final String? chestType;
+  final String? jetType; // 'biome_match' on D7
+  final String? jetFallback; // when D7 jet already owned
+
+  const DailyRewardDay({
+    required this.dayId,
+    required this.week,
+    required this.coinPrize,
+    required this.gemPrize,
+    required this.chestType,
+    required this.jetType,
+    required this.jetFallback,
+  });
+
+  factory DailyRewardDay.fromJson(Map<String, dynamic> j) => DailyRewardDay(
+        dayId: _asString(j['day_id']) ?? '',
+        week: _asInt(j['week']) ?? 0,
+        coinPrize: _asInt(j['coin_prize']) ?? 0,
+        gemPrize: _asInt(j['gem_prize']) ?? 0,
+        chestType: _asString(j['chest_type']),
+        jetType: _asString(j['jet_type']),
+        jetFallback: _asString(j['jet_fallback']),
+      );
+}
+
+@immutable
+class DailyRewardRule {
+  /// Raw value — may be a String (e.g. 'freeze_then_reset') or num (e.g. 50).
+  final dynamic value;
+  final String? note;
+
+  const DailyRewardRule({required this.value, required this.note});
+
+  factory DailyRewardRule.fromJson(Map<String, dynamic> j) => DailyRewardRule(
+        value: j['value'],
+        note: _asString(j['note']),
+      );
+
+  String? get asString => _asString(value);
+  int? get asInt => _asInt(value);
+}
+
+@immutable
+class DailyRewardConfig {
+  final List<DailyRewardDay> days;
+  final Map<String, DailyRewardRule> rules;
+
+  const DailyRewardConfig({required this.days, required this.rules});
+
+  factory DailyRewardConfig.fromJson(Map<String, dynamic> j) {
+    final rules = <String, DailyRewardRule>{};
+    _asMap(j['rules']).forEach((k, v) {
+      rules[k] = DailyRewardRule.fromJson(Map<String, dynamic>.from(v as Map));
+    });
+    return DailyRewardConfig(
+      days: _asList(j['days'])
+          .whereType<Map>()
+          .map((e) => DailyRewardDay.fromJson(Map<String, dynamic>.from(e)))
+          .toList(growable: false),
+      rules: rules,
+    );
+  }
+
+  DailyRewardDay? dayFor({required int week, required int dayOfWeek}) {
+    final id = 'w${week}_d$dayOfWeek';
+    return days.cast<DailyRewardDay?>().firstWhere(
+          (d) => d?.dayId == id,
+          orElse: () => null,
+        );
+  }
+
+  int get weekCap => rules['week_cap']?.asInt ?? 5;
+  int get streakRescueCostGems => rules['streak_rescue_cost_gems']?.asInt ?? 50;
+}
+
+// ── challenges_config ───────────────────────────────────────────────────────
+
+@immutable
+class ChallengeConfig {
+  final String challengeId;
+  final String displayName;
+  final String metric; // 'kills', 'survival', 'score', 'stars'
+  final String targetEnemy; // 'follow_biome'
+  final int durationHours;
+  final String? popupBg;
+  final bool active;
+  final bool isIntro; // NEW in v4 (not in deployed v3)
+
+  const ChallengeConfig({
+    required this.challengeId,
+    required this.displayName,
+    required this.metric,
+    required this.targetEnemy,
+    required this.durationHours,
+    required this.popupBg,
+    required this.active,
+    required this.isIntro,
+  });
+
+  factory ChallengeConfig.fromJson(Map<String, dynamic> j) => ChallengeConfig(
+        challengeId: _asString(j['challenge_id']) ?? '',
+        displayName: _asString(j['display_name']) ?? '',
+        metric: _asString(j['metric']) ?? 'kills',
+        targetEnemy: _asString(j['target_enemy']) ?? 'follow_biome',
+        durationHours: _asInt(j['duration_hours']) ?? 72,
+        popupBg: _asString(j['popup_bg']),
+        active: _asBool(j['active']),
+        isIntro: _asBool(j['is_intro']),
+      );
+}
+
+// ── challenge_stages ────────────────────────────────────────────────────────
+
+@immutable
+class StageConfig {
+  final int stage;
+  final int goal;
+  final String prize; // e.g. '70coin', 'epic_chest', '200coin + epic_chest'
+
+  const StageConfig({
+    required this.stage,
+    required this.goal,
+    required this.prize,
+  });
+
+  factory StageConfig.fromJson(Map<String, dynamic> j) => StageConfig(
+        stage: _asInt(j['stage']) ?? 0,
+        goal: _asInt(j['goal']) ?? 0,
+        prize: _asString(j['prize']) ?? '',
+      );
+}
+
+// ── monetization ────────────────────────────────────────────────────────────
+
+/// duration_hours can be: int (e.g. 48), -1 (persistent), or 'session' (string).
+@immutable
+class OfferDuration {
+  final dynamic raw;
+  const OfferDuration._(this.raw);
+
+  factory OfferDuration.fromJson(dynamic v) => OfferDuration._(v);
+
+  bool get isSession => raw is String && (raw as String) == 'session';
+  bool get isPersistent => _asInt(raw) == -1;
+  int? get hours {
+    if (isSession) return null;
+    final i = _asInt(raw);
+    return (i != null && i >= 0) ? i : null;
+  }
+}
+
+@immutable
+class OfferConfig {
+  final String assetName;
+  final String displayName;
+  final OfferDuration duration;
+  final int cooldownHours;
+  final String? popupBg;
+  final String? lobbyIcon; // NEW in v4 (not in deployed v3)
+  final bool active;
+  final bool isIntro;
+  final String? triggerChallengeId; // 'iron_skies', 'none', etc.
+  final int unlockLevel;
+  final String? dismissTrigger; // 'duration_expire_or_purchase', etc.
+
+  const OfferConfig({
+    required this.assetName,
+    required this.displayName,
+    required this.duration,
+    required this.cooldownHours,
+    required this.popupBg,
+    required this.lobbyIcon,
+    required this.active,
+    required this.isIntro,
+    required this.triggerChallengeId,
+    required this.unlockLevel,
+    required this.dismissTrigger,
+  });
+
+  factory OfferConfig.fromJson(Map<String, dynamic> j) => OfferConfig(
+        assetName: _asString(j['asset_name']) ?? '',
+        displayName: _asString(j['display_name']) ?? '',
+        duration: OfferDuration.fromJson(j['duration_hours']),
+        cooldownHours: _asInt(j['cooldown_hours']) ?? 0,
+        popupBg: _asString(j['popup_bg']),
+        lobbyIcon: _asString(j['lobby_icon']),
+        active: _asBool(j['active']),
+        isIntro: _asBool(j['is_intro']),
+        triggerChallengeId: _asString(j['trigger_challenge_id']),
+        unlockLevel: _asInt(j['unlock_level']) ?? 0,
+        dismissTrigger: _asString(j['dismiss_trigger']),
+      );
+}
+
+/// 1+2 layout: 3 slots (1 paid main + 2 free claim slots).
+@immutable
+class OnePlusTwoSlot {
+  final String? reward;
+  /// May be num (USD price) or 'free'.
+  final dynamic price;
+
+  const OnePlusTwoSlot({required this.reward, required this.price});
+
+  factory OnePlusTwoSlot.fromJson(Map<String, dynamic> j) => OnePlusTwoSlot(
+        reward: _asString(j['reward']),
+        price: j['price'],
+      );
+
+  bool get isFree => price is String && (price as String) == 'free';
+  double? get priceUsd => isFree ? null : _asDouble(price);
+}
+
+@immutable
+class OnePlusTwoOffer {
+  final String assetId;
+  final List<OnePlusTwoSlot> slots;
+  const OnePlusTwoOffer({required this.assetId, required this.slots});
+  factory OnePlusTwoOffer.fromJson(Map<String, dynamic> j) => OnePlusTwoOffer(
+        assetId: _asString(j['asset_id']) ?? '',
+        slots: _asList(j['slots'])
+            .whereType<Map>()
+            .map((e) => OnePlusTwoSlot.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false),
+      );
+}
+
+/// Snake layout: 6 alternating slots, each with 1-2 rewards and a free/paid price.
+@immutable
+class SnakeSlot {
+  final List<String> rewards;
+  final dynamic price; // num or 'free'
+
+  const SnakeSlot({required this.rewards, required this.price});
+
+  factory SnakeSlot.fromJson(Map<String, dynamic> j) => SnakeSlot(
+        rewards: _asList(j['rewards'])
+            .map((e) => _asString(e))
+            .whereType<String>()
+            .toList(growable: false),
+        price: j['price'],
+      );
+
+  bool get isFree => price is String && (price as String) == 'free';
+  double? get priceUsd => isFree ? null : _asDouble(price);
+}
+
+@immutable
+class SnakeOffer {
+  final String assetId;
+  final List<SnakeSlot> slots;
+  const SnakeOffer({required this.assetId, required this.slots});
+  factory SnakeOffer.fromJson(Map<String, dynamic> j) => SnakeOffer(
+        assetId: _asString(j['asset_id']) ?? '',
+        slots: _asList(j['slots'])
+            .whereType<Map>()
+            .map((e) => SnakeSlot.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false),
+      );
+}
+
+/// Generic layout: 4 rewards in one paid bundle.
+@immutable
+class GenericOffer {
+  final String assetId;
+  final List<String> rewards;
+  final double price;
+
+  const GenericOffer({
+    required this.assetId,
+    required this.rewards,
+    required this.price,
+  });
+
+  factory GenericOffer.fromJson(Map<String, dynamic> j) => GenericOffer(
+        assetId: _asString(j['asset_id']) ?? '',
+        rewards: _asList(j['rewards'])
+            .map((e) => _asString(e))
+            .whereType<String>()
+            .toList(growable: false),
+        price: _asDouble(j['price']) ?? 0,
+      );
+}
+
+@immutable
+class OfferTemplates {
+  final List<OnePlusTwoOffer> onePlusTwo;
+  final List<SnakeOffer> snake;
+  final List<GenericOffer> generic;
+
+  const OfferTemplates({
+    required this.onePlusTwo,
+    required this.snake,
+    required this.generic,
+  });
+
+  factory OfferTemplates.fromJson(Map<String, dynamic> j) => OfferTemplates(
+        onePlusTwo: _asList(j['one_plus_two'])
+            .whereType<Map>()
+            .map((e) => OnePlusTwoOffer.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false),
+        snake: _asList(j['snake'])
+            .whereType<Map>()
+            .map((e) => SnakeOffer.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false),
+        generic: _asList(j['generic'])
+            .whereType<Map>()
+            .map((e) => GenericOffer.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false),
+      );
+}
+
+@immutable
+class MonetizationConfig {
+  final List<OfferConfig> configs;
+  final Map<String, String> rules;
+  final OfferTemplates templates;
+
+  const MonetizationConfig({
+    required this.configs,
+    required this.rules,
+    required this.templates,
+  });
+
+  factory MonetizationConfig.fromJson(Map<String, dynamic> j) {
+    final rules = <String, String>{};
+    _asMap(j['rules']).forEach((k, v) {
+      final s = _asString(v);
+      if (s != null) rules[k] = s;
+    });
+    return MonetizationConfig(
+      configs: _asList(j['configs'])
+          .whereType<Map>()
+          .map((e) => OfferConfig.fromJson(Map<String, dynamic>.from(e)))
+          .toList(growable: false),
+      rules: rules,
+      templates: OfferTemplates.fromJson(_asMap(j['templates'])),
+    );
+  }
+
+  OfferConfig? configByAssetName(String assetName) =>
+      configs.cast<OfferConfig?>().firstWhere(
+            (c) => c?.assetName == assetName,
+            orElse: () => null,
+          );
+
+  /// Returns offers whose trigger_challenge_id matches and unlock_level <= playerLevel.
+  List<OfferConfig> activeOffersFor({
+    required String? currentChallengeId,
+    required int playerLevel,
+  }) =>
+      configs
+          .where((c) =>
+              c.active &&
+              c.unlockLevel <= playerLevel &&
+              (c.triggerChallengeId == currentChallengeId ||
+                  c.triggerChallengeId == 'none'))
+          .toList(growable: false);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Service
+// ─────────────────────────────────────────────────────────────────────────────
+
 class RemoteConfigService {
   RemoteConfigService._();
-  static final RemoteConfigService instance = RemoteConfigService._();
+  static final RemoteConfigService I = RemoteConfigService._();
 
-  final FirebaseRemoteConfig _rc = FirebaseRemoteConfig.instance;
+  static const _defaultsAssetDir = 'assets/remote_config_defaults';
+
+  late final FirebaseRemoteConfig _rc = FirebaseRemoteConfig.instance;
   bool _initialized = false;
 
-  /// Call once during app startup, AFTER Firebase.initializeApp().
-  /// Returns true if a fresh config was activated, false if it used
-  /// cached/last values.
-  Future<bool> init({
+  // Parsed-model caches (reset on each successful fetchAndActivate)
+  MetaInfo? _meta;
+  List<LevelConfig>? _levels;
+  List<JetConfig>? _jets;
+  ChestsConfig? _chests;
+  CoinsDropConfig? _coinsDrop;
+  List<PowerUpConfig>? _powerUps;
+  ShopConfig? _shop;
+  DailyRewardConfig? _dailyReward;
+  List<ChallengeConfig>? _challenges;
+  Map<String, List<StageConfig>>? _stages;
+  MonetizationConfig? _monetization;
+
+  /// Initialize with sensible polling intervals.
+  /// In debug builds we allow frequent fetches; in release we cache for 1h.
+  Future<void> initialize({
     Duration fetchTimeout = const Duration(seconds: 10),
-    // In production keep this at hours; for dev testing use Duration.zero
-    // so every launch pulls the newest published template.
-    Duration minimumFetchInterval = const Duration(hours: 1),
+    Duration? minimumFetchInterval,
   }) async {
-    if (_initialized) return false;
+    if (_initialized) return;
+    _initialized = true;
 
     await _rc.setConfigSettings(RemoteConfigSettings(
       fetchTimeout: fetchTimeout,
-      minimumFetchInterval: minimumFetchInterval,
+      minimumFetchInterval: minimumFetchInterval ??
+          (kDebugMode ? const Duration(minutes: 1) : const Duration(hours: 1)),
     ));
 
-    final defaults = await _loadDefaultsFromAssets();
-    await _rc.setDefaults(defaults);
+    await _loadAssetDefaults();
 
-    bool activated = false;
     try {
-      activated = await _rc.fetchAndActivate();
-    } catch (e) {
-      // Network failure / timeout: defaults and last-activated values
-      // remain in effect, so the game keeps running.
-      // ignore: avoid_print
-      print('[RemoteConfig] fetchAndActivate failed, using cached/defaults: $e');
+      await _rc.fetchAndActivate();
+    } catch (e, st) {
+      debugPrint('RemoteConfigService: fetchAndActivate failed: $e\n$st');
+      // Continue with cached or default values; getters below still work.
     }
 
-    _initialized = true;
-    return activated;
+    _clearCaches();
   }
 
-  // ---- defaults loading -------------------------------------------------
+  /// Re-fetch from Firebase (respects minimumFetchInterval) and clear caches.
+  Future<bool> refresh() async {
+    final ok = await _rc.fetchAndActivate();
+    _clearCaches();
+    return ok;
+  }
 
-  static const Map<String, String> _defaultAssets = <String, String>{
-    RcKeys.levelsEconomy:
-        'assets/remote_config_defaults/levels_economy.json',
-    RcKeys.powerUps:
-        'assets/remote_config_defaults/power_ups.json',
-    RcKeys.jets:
-        'assets/remote_config_defaults/jets.json',
-    RcKeys.challengesConfig:
-        'assets/remote_config_defaults/challenges_config.json',
-    RcKeys.challengeStages:
-        'assets/remote_config_defaults/challenge_stages.json',
-    RcKeys.chests:
-        'assets/remote_config_defaults/chests.json',
-    RcKeys.coinsDrop:
-        'assets/remote_config_defaults/coins_drop.json',
-    RcKeys.dailyReward:
-        'assets/remote_config_defaults/daily_reward.json',
-    RcKeys.monetization:
-        'assets/remote_config_defaults/monetization.json',
-    RcKeys.shop:
-        'assets/remote_config_defaults/shop.json',
-  };
-
-  Future<Map<String, dynamic>> _loadDefaultsFromAssets() async {
-    final out = <String, dynamic>{};
-    for (final entry in _defaultAssets.entries) {
+  Future<void> _loadAssetDefaults() async {
+    final defaults = <String, Object>{};
+    for (final key in RcKeys.all) {
       try {
-        out[entry.key] = await rootBundle.loadString(entry.value);
+        final raw = await rootBundle.loadString('$_defaultsAssetDir/$key.json');
+        defaults[key] = raw;
       } catch (e) {
-        // ignore: avoid_print
-        print('[RemoteConfig] default asset "${entry.value}" missing: $e');
-        out[entry.key] = '{}';
+        debugPrint('RemoteConfigService: missing default asset for "$key" ($e)');
       }
     }
-    return out;
-  }
-
-  /// Force a refresh at runtime (e.g. pull-to-refresh on a LiveOps screen).
-  Future<bool> refresh() async {
-    try {
-      return await _rc.fetchAndActivate();
-    } catch (e) {
-      // ignore: avoid_print
-      print('[RemoteConfig] refresh failed: $e');
-      return false;
+    if (defaults.isNotEmpty) {
+      await _rc.setDefaults(defaults);
     }
   }
 
-  // ---- low-level safe readers -------------------------------------------
-
-  /// Reads a raw string parameter. Returns [fallback] when Remote Config
-  /// hasn't been initialised yet or the key has no value. Used for plain
-  /// config keys that don't need JSON decoding (e.g. third-party API
-  /// keys plumbed through RC instead of bundled in the binary).
-  String getString(String key, {String fallback = ''}) {
-    try {
-      final raw = _rc.getString(key);
-      return raw.isEmpty ? fallback : raw;
-    } catch (_) {
-      return fallback;
-    }
+  void _clearCaches() {
+    _meta = null;
+    _levels = null;
+    _jets = null;
+    _chests = null;
+    _coinsDrop = null;
+    _powerUps = null;
+    _shop = null;
+    _dailyReward = null;
+    _challenges = null;
+    _stages = null;
+    _monetization = null;
   }
 
-  dynamic _readJson(String key) {
-    final raw = _rc.getString(key);
-    if (raw.isEmpty) return null;
+  // ── Raw access (for debugging / passthrough) ──────────────────────────────
+
+  String rawString(String key) => _rc.getString(key);
+
+  dynamic rawJson(String key) {
+    final s = _rc.getString(key);
+    if (s.isEmpty) return null;
     try {
-      return json.decode(raw);
+      return jsonDecode(s);
     } catch (e) {
-      // ignore: avoid_print
-      print('[RemoteConfig] bad JSON for "$key", falling back to null: $e');
+      debugPrint('RemoteConfigService: bad JSON for "$key": $e');
       return null;
     }
   }
 
-  Map<String, dynamic> _readMap(String key) {
-    final v = _readJson(key);
-    return v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
-  }
+  // ── Typed accessors ───────────────────────────────────────────────────────
 
-  List<dynamic> _readList(String key) {
-    final v = _readJson(key);
-    return v is List ? v : const <dynamic>[];
-  }
+  MetaInfo get meta =>
+      _meta ??= MetaInfo.fromJson(_asMap(rawJson(RcKeys.meta)));
 
-  // ---- defensive bounds for RC numerics ---------------------------------
-  //
-  // Mirrors the clamping in EconomyPersistence._Caps. A bad LiveOps push
-  // (or a compromised RC project) can flip economy numbers to garbage —
-  // these clamps make sure a downstream multiplication can't overflow
-  // and that prices/payouts stay inside a sane window. Players see a
-  // tuning bug but never a crash and never an outright free million.
-  static const int _maxCoinAmount = 1 << 24;   // ~16.7M coins
-  static const int _maxGemAmount  = 1 << 20;   // ~1.05M gems
-  static const double _maxPriceUsd = 999.99;
-  static const double _maxChance   = 1.0;
+  List<LevelConfig> get levels => _levels ??= _asList(rawJson(RcKeys.levelsEconomy))
+      .whereType<Map>()
+      .map((e) => LevelConfig.fromJson(Map<String, dynamic>.from(e)))
+      .toList(growable: false);
 
-  /// Clamps a JSON-decoded int (or null) into `[min, max]`. Anything
-  /// outside the window collapses to [fallback].
-  static int _clampInt(dynamic raw, {
-    required int min,
-    required int max,
-    required int fallback,
-  }) {
-    if (raw is! num) return fallback;
-    final v = raw.toInt();
-    if (v < min) return min;
-    if (v > max) return max;
-    return v;
-  }
+  List<JetConfig> get jets => _jets ??= _asList(rawJson(RcKeys.jets))
+      .whereType<Map>()
+      .map((e) => JetConfig.fromJson(Map<String, dynamic>.from(e)))
+      .toList(growable: false);
 
-  /// Clamps a JSON-decoded double (or null) into `[min, max]`.
-  static double _clampDouble(dynamic raw, {
-    required double min,
-    required double max,
-    required double fallback,
-  }) {
-    if (raw is! num) return fallback;
-    final v = raw.toDouble();
-    if (v.isNaN || v.isInfinite) return fallback;
-    if (v < min) return min;
-    if (v > max) return max;
-    return v;
-  }
+  ChestsConfig get chests =>
+      _chests ??= ChestsConfig.fromJson(_asMap(rawJson(RcKeys.chests)));
 
-  static int _coin(dynamic raw) =>
-      _clampInt(raw, min: 0, max: _maxCoinAmount, fallback: 0);
-  static int _gem(dynamic raw) =>
-      _clampInt(raw, min: 0, max: _maxGemAmount, fallback: 0);
-  static double _priceUsd(dynamic raw) =>
-      _clampDouble(raw, min: 0.0, max: _maxPriceUsd, fallback: 0.0);
-  static double _chance(dynamic raw) =>
-      _clampDouble(raw, min: 0.0, max: _maxChance, fallback: 0.0);
+  CoinsDropConfig get coinsDrop =>
+      _coinsDrop ??= CoinsDropConfig.fromJson(_asMap(rawJson(RcKeys.coinsDrop)));
 
-  /// Indexes a list of objects by [idField], dropping that field from
-  /// each output value so the result matches the legacy
-  /// "Map keyed by id" shape.
-  Map<String, dynamic> _indexById(List<dynamic> list, String idField) {
-    final out = <String, dynamic>{};
-    for (final entry in list) {
-      if (entry is! Map) continue;
-      final id = entry[idField];
-      if (id is! String) continue;
-      out[id] = Map<String, dynamic>.from(entry)..remove(idField);
-    }
-    return out;
-  }
+  List<PowerUpConfig> get powerUps =>
+      _powerUps ??= _asList(rawJson(RcKeys.powerUps))
+          .whereType<Map>()
+          .map((e) => PowerUpConfig.fromJson(Map<String, dynamic>.from(e)))
+          .toList(growable: false);
 
-  /// Returns true once the parameter blob decodes to something non-null —
-  /// kept as a thin compat shim since the canonical v3 blobs no longer
-  /// carry a `schema_version` field.
-  bool schemaOk(String key, {int expected = 1}) => _readJson(key) != null;
+  ShopConfig get shop =>
+      _shop ??= ShopConfig.fromJson(_asMap(rawJson(RcKeys.shop)));
 
-  // ---- LEVELS group -----------------------------------------------------
+  DailyRewardConfig get dailyReward => _dailyReward ??=
+      DailyRewardConfig.fromJson(_asMap(rawJson(RcKeys.dailyReward)));
 
-  /// 60 entries keyed `"<biome>_<level>"` (e.g. `"jungle_1"`).
-  /// Each entry preserves the canonical fields: biome, level, waves,
-  /// jet_multiplier, world_coin_mult, enemies, boss.
-  Map<String, dynamic> get biomeLevels {
-    final list = _readList(RcKeys.levelsEconomy);
-    final out = <String, dynamic>{};
-    for (final entry in list) {
-      if (entry is! Map) continue;
-      final biome = entry['biome'];
-      final level = entry['level'];
-      if (biome is String && level is num) {
-        out['${biome}_${level.toInt()}'] = Map<String, dynamic>.from(entry);
-      }
-    }
-    return out;
-  }
+  List<ChallengeConfig> get challenges =>
+      _challenges ??= _asList(rawJson(RcKeys.challengesConfig))
+          .whereType<Map>()
+          .map((e) => ChallengeConfig.fromJson(Map<String, dynamic>.from(e)))
+          .toList(growable: false);
 
-  // ---- JETS / ECONOMY ---------------------------------------------------
-
-  /// Keyed by `jet_id`. Each entry: { base_power, unlock_biome,
-  /// unlock_price_gems }.
-  Map<String, dynamic> get jetBasePowers =>
-      _indexById(_readList(RcKeys.jets), 'jet_id');
-
-  /// 10 power-ups keyed by id. Field names normalized to the legacy
-  /// shape so existing callers keep working:
-  /// `name` → `display_name`, `duration_sec` → `duration`.
-  Map<String, dynamic> get shopPowerups {
-    final list = _readList(RcKeys.powerUps);
-    final out = <String, dynamic>{};
-    for (final entry in list) {
-      if (entry is! Map) continue;
-      final id = entry['id'];
-      if (id is! String) continue;
-      final durSec = entry['duration_sec'];
-      out[id] = <String, dynamic>{
-        if (entry['name'] != null) 'display_name': entry['name'],
-        if (entry['unlock_biome'] != null) 'unlock_biome': entry['unlock_biome'],
-        if (entry['category'] != null) 'category': entry['category'],
-        if (durSec != null)
-          'duration': durSec is num && durSec > 0 ? '${durSec.toInt()}s' : '-',
-      };
-    }
-    return out;
-  }
-
-  /// 10 chests keyed by chest_id. Each entry: { coin_min, coin_max,
-  /// gem_min, gem_max, jet_drop_chance, jet_id }. All numerics clamped
-  /// — a malformed RC push can't make a chest pay millions of coins or
-  /// a 200% jet-drop chance.
-  Map<String, dynamic> get chests {
-    final blob = _readMap(RcKeys.chests);
-    final defs = blob['definitions'];
-    if (defs is! List) return <String, dynamic>{};
-    final indexed = _indexById(defs, 'chest_id');
-    final out = <String, dynamic>{};
-    indexed.forEach((id, raw) {
-      if (raw is! Map) return;
-      final coinMin = _coin(raw['coin_min']);
-      var coinMax = _coin(raw['coin_max']);
-      if (coinMax < coinMin) coinMax = coinMin;
-      final gemMin = _gem(raw['gem_min']);
-      var gemMax = _gem(raw['gem_max']);
-      if (gemMax < gemMin) gemMax = gemMin;
-      out[id] = <String, dynamic>{
-        'coin_min': coinMin,
-        'coin_max': coinMax,
-        'gem_min': gemMin,
-        'gem_max': gemMax,
-        'jet_drop_chance': _chance(raw['jet_drop_chance']),
-        'jet_id': raw['jet_id'] is String ? raw['jet_id'] : null,
-      };
+  Map<String, List<StageConfig>> get challengeStages {
+    if (_stages != null) return _stages!;
+    final out = <String, List<StageConfig>>{};
+    _asMap(rawJson(RcKeys.challengeStages)).forEach((cid, list) {
+      out[cid] = _asList(list)
+          .whereType<Map>()
+          .map((e) => StageConfig.fromJson(Map<String, dynamic>.from(e)))
+          .toList(growable: false);
     });
-    return out;
+    return _stages = out;
   }
 
-  /// Flat numeric config. world1_sources keys are promoted to the top
-  /// level (`coin_pickup_regular`, `stage_clear_bonus`, `star_bonus_*`,
-  /// etc.) and the canonical `wave_clear: { wave_1: N, ... }` sub-map
-  /// is unrolled into the legacy `wave_clear_W1` list indexed 0..9 for
-  /// waves 1..10.
-  Map<String, dynamic> get coinDrops {
-    final blob = _readMap(RcKeys.coinsDrop);
-    final out = <String, dynamic>{};
-    final sources = blob['world1_sources'];
-    if (sources is Map) {
-      sources.forEach((k, v) => out[k.toString()] = v);
-    }
-    final waveClear = blob['wave_clear'];
-    if (waveClear is Map) {
-      final waves = <dynamic>[];
-      for (var i = 1; i <= 10; i++) {
-        final v = waveClear['wave_$i'];
-        if (v != null) waves.add(v);
-      }
-      out['wave_clear_W1'] = waves;
-    }
-    return out;
-  }
+  MonetizationConfig get monetization => _monetization ??=
+      MonetizationConfig.fromJson(_asMap(rawJson(RcKeys.monetization)));
 
-  /// Shop bundles, adapted from the canonical `shop` blob's lists into
-  /// the legacy shape:
-  /// - coin_packs:     { id: {coin_amount, price_usd}, ... }
-  /// - gem_packs:      { id: {gem_amount,  price_usd}, ... }
-  /// - chest_prices:   { chest_id: {coin_price, gem_price}, ... }
-  /// - powerup_prices: { power_up_id: {coin_price}, ... }
-  Map<String, dynamic> get shopIap {
-    final blob = _readMap(RcKeys.shop);
-    Map<String, dynamic> packs(String section, String amountField) {
-      final raw = blob[section];
-      if (raw is! List) return <String, dynamic>{};
-      final isCoin = amountField == 'coin_amount';
-      final out = <String, dynamic>{};
-      for (final entry in raw) {
-        if (entry is! Map) continue;
-        final id = entry['id'];
-        if (id is! String) continue;
-        out[id] = <String, dynamic>{
-          amountField: isCoin ? _coin(entry['amount']) : _gem(entry['amount']),
-          'price_usd': _priceUsd(entry['price']),
-        };
-      }
-      return out;
-    }
+  // ── Convenience helpers ───────────────────────────────────────────────────
 
-    final chestDealsRaw = blob['chest_deals'];
-    final powerUpsRaw = blob['power_ups'];
-
-    return <String, dynamic>{
-      'coin_packs': packs('coin_packs', 'coin_amount'),
-      'gem_packs':  packs('gem_packs',  'gem_amount'),
-      'chest_prices': chestDealsRaw is List
-          ? _indexById(chestDealsRaw, 'chest_id')
-          : <String, dynamic>{},
-      'powerup_prices': powerUpsRaw is List
-          ? _indexById(powerUpsRaw, 'power_up_id')
-          : <String, dynamic>{},
-    };
-  }
-
-  // ---- CHALLENGES group -------------------------------------------------
-
-  /// Keyed by challenge_id. Each entry: { display_name, metric,
-  /// target_enemy, duration_hours, popup_bg, active }.
-  Map<String, dynamic> get challengeCyclePlan =>
-      _indexById(_readList(RcKeys.challengesConfig), 'challenge_id');
-
-  /// Resolves the prize-popup background for [cycleId] from the
-  /// `challenges_config` RC entry. The field accepts either a bundled
-  /// asset path (`assets/ui/challenges/bg_<cycle>.png`) or an absolute
-  /// `http(s)` URL pushed via LiveOps. Returns null when RC has no entry
-  /// — caller should pick a sensible fallback.
-  String? challengeCyclePopupBg(String cycleId) {
-    final entry = challengeCyclePlan[cycleId];
-    if (entry is! Map) return null;
-    final raw = entry['popup_bg'];
-    if (raw is! String) return null;
-    final trimmed = raw.trim();
-    return trimmed.isEmpty ? null : trimmed;
-  }
-
-  /// `{ cycle_id: { stages: [{stage, goal, prize}, ...] } }`. The
-  /// canonical JSON stores each cycle as a bare list of stages; we wrap
-  /// each into a `{stages: [...]}` map so callers reading `.stages`
-  /// keep working.
-  Map<String, dynamic> get challengeStageLadders {
-    final blob = _readMap(RcKeys.challengeStages);
-    final out = <String, dynamic>{};
-    blob.forEach((cycleId, stages) {
-      if (stages is List) {
-        out[cycleId] = <String, dynamic>{'stages': stages};
-      }
-    });
-    return out;
-  }
-
-  /// Daily login rewards keyed by `day_id` (e.g. "w1_d1"). Field names
-  /// normalized: `coin_prize`→`coin`, `gem_prize`→`gem`,
-  /// `chest_type`→`chest`, `jet_type`→`jet`.
-  Map<String, dynamic> get dailyRewardDays {
-    final blob = _readMap(RcKeys.dailyReward);
-    final raw = blob['days'];
-    if (raw is! List) return <String, dynamic>{};
-    final out = <String, dynamic>{};
-    for (final entry in raw) {
-      if (entry is! Map) continue;
-      final id = entry['day_id'];
-      if (id is! String) continue;
-      out[id] = <String, dynamic>{
-        if (entry['week'] != null) 'week': entry['week'],
-        if (entry['coin_prize'] != null) 'coin': entry['coin_prize'],
-        if (entry['gem_prize'] != null) 'gem': entry['gem_prize'],
-        if (entry['chest_type'] != null) 'chest': entry['chest_type'],
-        if (entry['jet_type'] != null) 'jet': entry['jet_type'],
-        if (entry['jet_fallback'] != null)
-          'jet_fallback': entry['jet_fallback'],
-      };
-    }
-    return out;
-  }
-
-  // ---- MONETIZATION group ----------------------------------------------
-
-  Map<String, dynamic> _monetizationTemplate(String section) {
-    final blob = _readMap(RcKeys.monetization);
-    final templates = blob['templates'];
-    if (templates is! Map) return <String, dynamic>{};
-    final raw = templates[section];
-    return raw is List
-        ? _indexById(raw, 'asset_id')
-        : <String, dynamic>{};
-  }
-
-  /// Popup configs keyed by asset_name. Sourced from
-  /// `monetization.configs` in the canonical JSON.
-  Map<String, dynamic> get popupOffers {
-    final blob = _readMap(RcKeys.monetization);
-    final raw = blob['configs'];
-    return raw is List
-        ? _indexById(raw, 'asset_name')
-        : <String, dynamic>{};
-  }
-
-  /// Human-readable rules from monetization.rules (reference only).
-  Map<String, dynamic> get popupRules {
-    final blob = _readMap(RcKeys.monetization);
-    final r = blob['rules'];
-    return r is Map ? Map<String, dynamic>.from(r) : <String, dynamic>{};
-  }
-
-  /// 1+2 offers (FTO, first_purchase, per-challenge bundles).
-  /// Each: { slots: [{reward, price}, ...] }.
-  Map<String, dynamic> get offers1Plus3 =>
-      _monetizationTemplate('one_plus_two');
-
-  /// Generic per-challenge offers. Renames `price` → `price_usd` to
-  /// match the field name generic_offer_popup reads.
-  Map<String, dynamic> get offersGeneric {
-    final raw = _monetizationTemplate('generic');
-    final out = <String, dynamic>{};
-    raw.forEach((id, entry) {
-      if (entry is! Map) return;
-      out[id] = <String, dynamic>{
-        if (entry['rewards'] != null) 'rewards': entry['rewards'],
-        if (entry['price'] != null) 'price_usd': entry['price'],
-      };
-    });
-    return out;
-  }
-
-  /// "Snake" multi-slot offers. Adapts each slot's `rewards: [...]` list
-  /// back into the legacy `reward_1` / `reward_2` field names that
-  /// snake_offer_popup reads, and renames `price` → `price_usd`.
-  Map<String, dynamic> get offersSnake {
-    final raw = _monetizationTemplate('snake');
-    final out = <String, dynamic>{};
-    raw.forEach((id, entry) {
-      if (entry is! Map) return;
-      final slots = entry['slots'];
-      if (slots is! List) return;
-      final adaptedSlots = <Map<String, dynamic>>[];
-      for (final slot in slots) {
-        if (slot is! Map) continue;
-        final rewards = slot['rewards'];
-        final adapted = <String, dynamic>{};
-        if (rewards is List) {
-          if (rewards.isNotEmpty) adapted['reward_1'] = rewards[0];
-          if (rewards.length >= 2) adapted['reward_2'] = rewards[1];
-        }
-        if (slot['price'] != null) adapted['price_usd'] = slot['price'];
-        adaptedSlots.add(adapted);
-      }
-      out[id] = <String, dynamic>{'slots': adaptedSlots};
-    });
-    return out;
-  }
-
-  // ---- small typed convenience helpers ---------------------------------
-
-  /// Base power for a given jet_id (e.g. "basic"), or null if unknown.
-  int? jetBasePower(String jetId) {
-    final j = jetBasePowers[jetId];
-    if (j is Map && j['base_power'] is num) {
-      return (j['base_power'] as num).toInt();
+  /// Returns the level config for a given (biome, level) pair, or null.
+  LevelConfig? levelFor({required String biome, required int level}) {
+    for (final l in levels) {
+      if (l.biome == biome && l.level == level) return l;
     }
     return null;
   }
 
-  /// Coins awarded for clearing wave [waveIndex] (0-based) in world 1.
-  int waveClearCoins(int waveIndex, {int fallback = 0}) {
-    final list = coinDrops['wave_clear_W1'];
-    if (list is List && waveIndex >= 0 && waveIndex < list.length) {
-      final v = list[waveIndex];
-      if (v is num) return v.toInt();
-    }
-    return fallback;
-  }
-
-  /// Level entry for a biome and level number.
-  Map<String, dynamic>? levelFor(String biome, int level) {
-    final v = biomeLevels['${biome}_$level'];
-    if (v is Map) return Map<String, dynamic>.from(v);
-    return null;
-  }
-
-  /// Coin pack price in USD, e.g. coinPackPriceUsd('coin_3') -> 4.99.
-  double? coinPackPriceUsd(String packId) {
-    final p = (shopIap['coin_packs'] as Map?)?[packId];
-    if (p is Map && p['price_usd'] is num) {
-      return (p['price_usd'] as num).toDouble();
+  /// Returns the jet config for an id (e.g. 'basic', 'Wraith X'), or null.
+  JetConfig? jetById(String jetId) {
+    for (final j in jets) {
+      if (j.jetId == jetId) return j;
     }
     return null;
   }
 
-  /// Returns the popup-config entry for an offer, or null if unknown.
-  Map<String, dynamic>? popupFor(String assetName) {
-    final v = popupOffers[assetName];
-    if (v is Map) return Map<String, dynamic>.from(v);
+  /// Returns the challenge config by id, or null.
+  ChallengeConfig? challengeById(String challengeId) {
+    for (final c in challenges) {
+      if (c.challengeId == challengeId) return c;
+    }
     return null;
   }
 
-  /// True if a popup offer is marked active in Remote Config.
-  bool isOfferActive(String assetName) {
-    final p = popupFor(assetName);
-    return p != null && p['active'] == true;
-  }
+  /// Stage ladder for a challenge, or an empty list if unknown.
+  List<StageConfig> stagesFor(String challengeId) =>
+      challengeStages[challengeId] ?? const <StageConfig>[];
 
-  /// Daily reward for a given week (1-based) and day (1..7).
-  Map<String, dynamic>? dailyReward(int week, int day) {
-    final v = dailyRewardDays['w${week}_d$day'];
-    if (v is Map) return Map<String, dynamic>.from(v);
+  /// Returns the power-up by id (slugified, e.g. 'speed_boost'), or null.
+  PowerUpConfig? powerUpById(String id) {
+    for (final p in powerUps) {
+      if (p.id == id) return p;
+    }
     return null;
   }
 }

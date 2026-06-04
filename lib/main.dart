@@ -49,7 +49,7 @@ Future<void> main() async {
   // with bundled defaults.
   try {
     await Firebase.initializeApp();
-    await RemoteConfigService.instance.init();
+    await RemoteConfigService.I.initialize();
     // Route Flutter framework + isolate errors to Crashlytics. Disabled
     // in non-release builds so developer stack traces still show in the
     // console without being duplicated to the dashboard.
@@ -158,7 +158,7 @@ Future<void> _applyConsentToAnalytics() async {
   // events server-side, but we stop sending new ones (the Amplitude
   // singleton stays uninitialised for this app launch).
   if (granted) {
-    final key = RemoteConfigService.instance.getString('amplitude_api_key');
+    final key = RemoteConfigService.I.rawString('amplitude_api_key');
     if (key.isNotEmpty) {
       try {
         final amplitude = Amplitude(Configuration(apiKey: key));

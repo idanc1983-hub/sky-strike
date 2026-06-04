@@ -136,20 +136,21 @@ class _JetsScreenState extends State<JetsScreen> {
   /// Builds the ordered jet list with status computed from RC + player
   /// progression + ownership. Returns empty when RC has no jet data.
   List<JetModel> _buildJets(int currentWorld, EconomyState economy) {
-    final rcJets = RemoteConfigService.instance.jetBasePowers;
-    if (rcJets.isEmpty) return const [];
+    final rcs = RemoteConfigService.I;
+    if (rcs.jets.isEmpty) return const [];
     final out = <JetModel>[];
     for (final codeId in _orderedJetIds) {
       final rcName = _codeIdToRcName[codeId];
       if (rcName == null) continue;
-      final entry = rcJets[rcName];
-      if (entry is! Map) continue;
+      final entry = rcs.jetById(rcName);
+      if (entry == null) continue;
 
-      final basePower = (entry['base_power'] as num?)?.toInt() ?? 0;
-      final unlockBiome = (entry['unlock_biome'] as String?) ?? 'jungle';
+      final basePower = entry.basePower;
+      final unlockBiome =
+          entry.unlockBiome.isEmpty ? 'jungle' : entry.unlockBiome;
       final unlockWorld = _biomeToWorld[unlockBiome] ?? 1;
       final unlocked = currentWorld >= unlockWorld;
-      final priceGems = (entry['unlock_price_gems'] as num?)?.toInt() ?? 0;
+      final priceGems = entry.unlockPriceGems;
       final owns = economy.ownsJet(codeId);
 
       // Status: locked > equipped > owned > purchasable

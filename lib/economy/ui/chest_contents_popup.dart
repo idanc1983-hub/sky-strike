@@ -42,15 +42,13 @@ class ChestContentsPopup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final def = RemoteConfigService.instance.chests[chestId];
-    final coinMin = _intFrom(def, 'coin_min');
-    final coinMax = _intFrom(def, 'coin_max');
-    final gemMin = _intFrom(def, 'gem_min');
-    final gemMax = _intFrom(def, 'gem_max');
-    final jetChance = _doubleFrom(def, 'jet_drop_chance');
-    final jetId = (def is Map && def['jet_id'] is String)
-        ? def['jet_id'] as String
-        : null;
+    final def = RemoteConfigService.I.chests.byId(chestId);
+    final coinMin = def?.coinMin ?? 0;
+    final coinMax = def?.coinMax ?? 0;
+    final gemMin = def?.gemMin ?? 0;
+    final gemMax = def?.gemMax ?? 0;
+    final jetChance = def?.jetDropChance ?? 0.0;
+    final jetId = def?.jetId;
     final hasJet = jetId != null && jetId.isNotEmpty && jetChance > 0;
 
     return Dialog(
@@ -140,20 +138,6 @@ class ChestContentsPopup extends StatelessWidget {
     return '$min – $max';
   }
 
-  int _intFrom(dynamic def, String key) {
-    if (def is! Map) return 0;
-    final v = def[key];
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return 0;
-  }
-
-  double _doubleFrom(dynamic def, String key) {
-    if (def is! Map) return 0.0;
-    final v = def[key];
-    if (v is num) return v.toDouble();
-    return 0.0;
-  }
 }
 
 class _HeaderRow extends StatelessWidget {

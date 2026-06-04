@@ -1,4 +1,4 @@
-import 'remote_config_service.dart';
+import 'remote_config_service.dart' hide LevelConfig;
 
 /// Single enemy entry within a [LevelConfig] — one per tier present at
 /// this level. Mirrors the v2 RC `enemies: [{tag, count, power}, ...]`
@@ -25,8 +25,8 @@ class LevelEnemy {
 
 /// Typed view of one entry in `levels__biome_levels__v1.levels`.
 ///
-/// Built via [LevelConfig.fromRc] which reads from
-/// [RemoteConfigService.biomeLevels]. Returns `null` when the requested
+/// Built via [LevelConfig.fromRc] which reads the raw `levels_economy`
+/// JSON from [RemoteConfigService]. Returns `null` when the requested
 /// `(world, stage)` has no RC entry — callers should fall back to their
 /// hardcoded defaults so gameplay never crashes on a bad LiveOps push.
 class LevelConfig {
@@ -73,13 +73,20 @@ class LevelConfig {
   }) {
     if (world < 1 || world > 6) return null;
     if (stage < 1 || stage > 10) return null;
-    final service = rcs ?? RemoteConfigService.instance;
-    final levels = service.biomeLevels;
-    if (levels.isEmpty) return null;
-    final key = _keyFor(world: world, stage: stage);
-    final raw = levels[key];
-    if (raw is! Map) return null;
-    return _parse(raw);
+    final service = rcs ?? RemoteConfigService.I;
+    final raw = service.rawJson(RcKeys.levelsEconomy);
+    if (raw is! List) return null;
+    const biomeOrder = ['jungle', 'desert', 'sea', 'ice', 'volcano', 'city'];
+    final biome = biomeOrder[world - 1];
+    final globalLevel = (world - 1) * 10 + stage;
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      if (entry['biome'] == biome &&
+          (entry['level'] as num?)?.toInt() == globalLevel) {
+        return _parse(entry);
+      }
+    }
+    return null;
   }
 
   /// Visible for tests — accepts a pre-decoded `levels` map (the inner

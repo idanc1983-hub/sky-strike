@@ -38,10 +38,11 @@ class _SnakeOfferPopupState extends State<SnakeOfferPopup> {
   @override
   void initState() {
     super.initState();
-    final config = RemoteConfigService.instance.popupFor(widget.assetId);
-    final hours = config?['duration_hours'];
-    if (hours is num) {
-      _remaining = Duration(seconds: (hours * 3600).round());
+    final config =
+        RemoteConfigService.I.monetization.configByAssetName(widget.assetId);
+    final hours = config?.duration.hours;
+    if (hours != null) {
+      _remaining = Duration(seconds: hours * 3600);
     }
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -62,13 +63,15 @@ class _SnakeOfferPopupState extends State<SnakeOfferPopup> {
 
   @override
   Widget build(BuildContext context) {
-    final rcs = RemoteConfigService.instance;
-    final config = rcs.popupFor(widget.assetId) ?? const <String, dynamic>{};
-    final offer = rcs.offersSnake[widget.assetId];
+    final rcs = RemoteConfigService.I;
+    final config = rcs.monetization.configByAssetName(widget.assetId);
+    final SnakeOffer? offer = rcs.monetization.templates.snake
+        .cast<SnakeOffer?>()
+        .firstWhere((o) => o?.assetId == widget.assetId, orElse: () => null);
 
-    final displayName = (config['display_name'] as String?) ?? widget.assetId;
-    final popupBg = config['popup_bg'] as String?;
-    final cycle = config['trigger_challenge_id'] as String?;
+    final displayName = config?.displayName ?? widget.assetId;
+    final popupBg = config?.popupBg;
+    final cycle = config?.triggerChallengeId;
 
     final slots = _readSlots(offer);
 
@@ -113,23 +116,16 @@ class _SnakeOfferPopupState extends State<SnakeOfferPopup> {
     );
   }
 
-  static List<_SnakeSlot> _readSlots(dynamic offer) {
-    if (offer is! Map) return const [];
-    final raw = offer['slots'];
-    if (raw is! List) return const [];
-    return raw.map<_SnakeSlot>((s) {
-      if (s is! Map) return _SnakeSlot.empty();
-      final r1 = s['reward_1']?.toString();
-      final r2 = s['reward_2']?.toString();
-      final price = s['price'];
-      return _SnakeSlot(
-        rewards: [
-          ...OfferRewardParser.parse(r1),
-          ...OfferRewardParser.parse(r2),
-        ],
-        priceUsd: price is num ? price.toDouble() : null,
-      );
-    }).toList(growable: false);
+  static List<_SnakeSlot> _readSlots(SnakeOffer? offer) {
+    if (offer == null) return const [];
+    return offer.slots
+        .map<_SnakeSlot>((s) => _SnakeSlot(
+              rewards: [
+                for (final r in s.rewards) ...OfferRewardParser.parse(r),
+              ],
+              priceUsd: s.priceUsd,
+            ))
+        .toList(growable: false);
   }
 }
 
