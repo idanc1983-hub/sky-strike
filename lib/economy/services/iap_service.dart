@@ -30,6 +30,14 @@ abstract class IapService {
   /// checks the platform's `queryProductDetails`.
   bool isAvailable(String productId);
 
+  /// Asks the platform to re-deliver any non-consumable entitlements
+  /// the user has previously purchased on this account (Remove Ads is
+  /// the main one). Apple requires a user-visible restore control for
+  /// non-consumables. Re-delivered purchases flow through the same
+  /// purchase stream as fresh ones and resolve as
+  /// [IapPurchaseResult.success].
+  Future<void> restorePurchases();
+
   /// Releases any subscriptions/listeners held by the implementation.
   void dispose();
 }

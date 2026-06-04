@@ -1,10 +1,19 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../economy/state/economy_state.dart';
 import '../economy/ui/dev_tools_sheet.dart';
+import '../services/ads/consent_manager.dart';
 import '../shared/theme/app_colors.dart';
 import '../shared/widgets/app_buttons.dart';
 import '../shared/widgets/app_top_bar.dart';
+
+/// Hosted privacy policy. Surfaced from Settings → Privacy Policy and
+/// referenced by the UMP consent form configured in the AdMob console.
+const String _privacyPolicyUrl =
+    'https://idanc1983-hub.github.io/skystrike-privacy/';
 
 /// Settings — title-only top bar, two cards (audio toggles + Support IAP),
 /// and a version footer that's hidden in release builds. Replaces the
@@ -20,6 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _musicEnabled = true;
   bool _sfxEnabled = true;
   bool _vibration = false;
+  bool _restoring = false;
 
   @override
   void initState() {
@@ -76,6 +86,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildAudioCard(),
                         const SizedBox(height: 14),
                         _buildSupportCard(),
+                        const SizedBox(height: 14),
+                        _buildPrivacyCard(),
                       ],
                     ),
                   ),
@@ -164,6 +176,92 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Privacy & account card — Privacy Policy link, conditional UMP
+  // re-prompt, Restore Purchases (Apple requires the last one for any
+  // app with non-consumable IAPs, e.g. Remove Ads).
+  // ---------------------------------------------------------------------------
+  Widget _buildPrivacyCard() {
+    final showPrivacyChoices =
+        ConsentManager.lastResult.isPrivacyOptionsRequired;
+    return _Card(
+      child: Column(
+        children: [
+          _NavRow(
+            label: 'Privacy Policy',
+            onTap: _onPrivacyPolicyTap,
+          ),
+          if (showPrivacyChoices) const _RowDivider(),
+          if (showPrivacyChoices)
+            _NavRow(
+              label: 'Privacy Choices',
+              onTap: _onPrivacyChoicesTap,
+            ),
+          const _RowDivider(),
+          _NavRow(
+            label: 'Restore Purchases',
+            trailing: _restoring
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(AppColors.amber),
+                    ),
+                  )
+                : null,
+            onTap: _restoring ? null : _onRestoreTap,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _onPrivacyPolicyTap() async {
+    final uri = Uri.parse(_privacyPolicyUrl);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.inAppWebView);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open privacy policy')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open privacy policy: $e')),
+      );
+    }
+  }
+
+  Future<void> _onPrivacyChoicesTap() async {
+    await ConsentManager.showPrivacyOptionsForm();
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _onRestoreTap() async {
+    setState(() => _restoring = true);
+    final economy = context.read<EconomyState>();
+    String message;
+    try {
+      await economy.restorePurchases();
+      message = 'Restore complete. Any prior purchases will reappear shortly.';
+    } catch (e) {
+      message = 'Restore failed: $e';
+    }
+    if (!mounted) return;
+    setState(() => _restoring = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF0d1f0d),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -276,6 +374,54 @@ class _ToggleRow extends StatelessWidget {
               ),
             ),
             _Toggle(value: value),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tappable nav row — label left, chevron (or spinner) right. Used by the
+// Privacy & account card.
+// ---------------------------------------------------------------------------
+class _NavRow extends StatelessWidget {
+  final String label;
+  final VoidCallback? onTap;
+  final Widget? trailing;
+
+  const _NavRow({
+    required this.label,
+    required this.onTap,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: disabled ? Colors.white60 : Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            trailing ??
+                Icon(
+                  Icons.chevron_right,
+                  color: AppColors.amber.withValues(alpha: 0.65),
+                  size: 20,
+                ),
           ],
         ),
       ),

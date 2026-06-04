@@ -141,6 +141,19 @@ class RemoteConfigService {
 
   // ---- low-level safe readers -------------------------------------------
 
+  /// Reads a raw string parameter. Returns [fallback] when Remote Config
+  /// hasn't been initialised yet or the key has no value. Used for plain
+  /// config keys that don't need JSON decoding (e.g. third-party API
+  /// keys plumbed through RC instead of bundled in the binary).
+  String getString(String key, {String fallback = ''}) {
+    try {
+      final raw = _rc.getString(key);
+      return raw.isEmpty ? fallback : raw;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   dynamic _readJson(String key) {
     final raw = _rc.getString(key);
     if (raw.isEmpty) return null;

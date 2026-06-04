@@ -84,6 +84,17 @@ class StoreIapService implements IapService {
   bool isAvailable(String productId) => _products.containsKey(productId);
 
   @override
+  Future<void> restorePurchases() async {
+    if (!_initialized) await initialize();
+    try {
+      await _store.restorePurchases();
+    } catch (e, st) {
+      debugPrint('[iap] restorePurchases failed: $e\n$st');
+      rethrow;
+    }
+  }
+
+  @override
   Future<IapPurchaseOutcome> requestPurchase(String productId) async {
     if (!_initialized) await initialize();
     final product = _products[productId];

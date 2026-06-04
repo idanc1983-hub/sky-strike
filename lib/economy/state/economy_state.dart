@@ -1193,6 +1193,12 @@ class EconomyState extends ChangeNotifier {
     return outcome;
   }
 
+  /// Asks the platform store to re-deliver previously purchased
+  /// non-consumables (Remove Ads). Re-delivered purchases flow through
+  /// the same purchase stream as fresh ones, so any matching reward is
+  /// applied by the existing handler without extra work here.
+  Future<void> restorePurchases() => _iap.restorePurchases();
+
   /// Shows a rewarded ad for [placement] via [AdsService]. On success
   /// applies the placement's reward and updates daily counters.
   Future<AdShowOutcome> showRewardedAd(AdPlacement placement) async {

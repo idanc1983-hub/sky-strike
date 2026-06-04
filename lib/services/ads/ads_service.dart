@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ad_units.dart';
 import 'ads_state.dart';
+import 'consent_manager.dart';
 
 class AdsService {
   AdsService._();
@@ -24,6 +25,18 @@ class AdsService {
 
   bool _initialized = false;
   bool _isShowing = false;
+  Future<void>? _initFuture;
+  int _attStatus = 0;
+
+  /// True once UMP + (iOS) ATT + Mobile Ads init have all resolved. Ad
+  /// loads are gated on this so a fast preload call from gameplay can't
+  /// race the boot sequence.
+  bool get isReady => _initialized;
+
+  /// Raw ATTrackingManager status value captured during init. iOS
+  /// values: 0=notDetermined, 1=restricted, 2=denied, 3=authorized.
+  /// Always 3 on non-iOS / pre-iOS 14.
+  int get attStatus => _attStatus;
 
   final Map<RewardedPlacement, RewardedAd?> _rewardedAds = {
     for (final p in RewardedPlacement.values) p: null,
@@ -41,13 +54,48 @@ class AdsService {
   Map<RewardedPlacement, ValueNotifier<bool>> get rewardedAdLoaded =>
       AdsState.instance.rewardedAdLoaded;
 
-  Future<void> initialize() async {
-    if (_initialized) return;
+  /// Boots the ad stack in the order required by Google's EU User
+  /// Consent Policy and Apple's ATT rules:
+  ///
+  ///   1. UMP — fetch consent info, show the consent form if required.
+  ///   2. iOS only — request ATT (UMP coordinates the explainer; the
+  ///      actual prompt is fired here so AdMob's IDFA usage is gated
+  ///      on the user's ATT choice).
+  ///   3. Apply the global `RequestConfiguration` (child flags, max
+  ///      content rating) before any ad request.
+  ///   4. Initialize the Mobile Ads SDK.
+  ///
+  /// Idempotent — concurrent or repeat calls share the same future.
+  /// Errors are logged, never thrown: a consent failure must not block
+  /// gameplay.
+  Future<void> initialize() {
+    if (_initialized) return Future<void>.value();
+    return _initFuture ??= _doInitialize();
+  }
 
+  Future<void> _doInitialize() async {
+    // 1. UMP consent.
+    await ConsentManager.requestConsentIfNeeded();
+
+    // 2. iOS ATT — must run AFTER UMP so the consent form can prep the
+    //    user for the system prompt.
     if (Platform.isIOS) {
       await _requestATT();
     }
 
+    // 3. Global request configuration (child flags + content rating
+    //    cap). Set BEFORE MobileAds.initialize so the very first ad
+    //    request inherits it.
+    await MobileAds.instance.updateRequestConfiguration(
+      RequestConfiguration(
+        tagForChildDirectedTreatment:
+            TagForChildDirectedTreatment.unspecified,
+        tagForUnderAgeOfConsent: TagForUnderAgeOfConsent.unspecified,
+        maxAdContentRating: MaxAdContentRating.g,
+      ),
+    );
+
+    // 4. Mobile Ads SDK init.
     final status = await MobileAds.instance.initialize();
     if (kDebugMode) {
       for (final entry in status.adapterStatuses.entries) {
@@ -67,6 +115,7 @@ class AdsService {
     try {
       final raw = await _attChannel.invokeMethod<int>('requestATT');
       final status = raw ?? 0;
+      _attStatus = status;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_kAttStatusKey, status);
       debugPrint('[ads] ATT status=$status');
@@ -77,6 +126,18 @@ class AdsService {
 
   void preloadRewarded(RewardedPlacement placement) {
     if (_isLoading[placement]! || _rewardedAds[placement] != null) {
+      return;
+    }
+    // Gate on the consent + ATT + MobileAds init chain. A preload call
+    // that races boot (e.g. from the splash screen warming up the first
+    // rewarded ad) must not hit AdMob before consent is resolved.
+    if (!_initialized) {
+      _isLoading[placement] = true;
+      rewardedAdLoaded[placement]!.value = false;
+      initialize().then((_) {
+        _isLoading[placement] = false;
+        preloadRewarded(placement);
+      });
       return;
     }
     _isLoading[placement] = true;

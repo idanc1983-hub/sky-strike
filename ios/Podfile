@@ -31,7 +31,17 @@ target 'Runner' do
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 
-  pod 'GoogleMobileAdsMediationAppLovin'
+  # AdMob mediation adapters for v1 production. Mediation is routed by
+  # the AdMob console waterfall; the Flutter layer stays network-agnostic.
+  #
+  # To add AppLovin in a later release:
+  #   1. Add `pod 'GoogleMobileAdsMediationAppLovin'` below.
+  #   2. Run `pod install` from ios/.
+  #   3. Add AppLovin as a mediation source in the AdMob console for each
+  #      rewarded ad unit listed in lib/services/ads/ad_units.dart.
+  #   4. The AppLovin SKAdNetwork IDs are already present in
+  #      ios/Runner/Info.plist (kept from the previous integration) — no
+  #      Info.plist change required.
   pod 'GoogleMobileAdsMediationUnity'
   pod 'GoogleMobileAdsMediationFacebook'
 

@@ -64,7 +64,7 @@
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-6794495381248740~4139909806</string>
 	<key>NSUserTrackingUsageDescription</key>
-	<string>Sky Strike uses this to deliver more relevant ads.</string>
+	<string>Sky Strike uses your device identifier to show more relevant ads. You can change this anytime in Settings.</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict><key>SKAdNetworkIdentifier</key><string>cstr6suwn9.skadnetwork</string></dict>

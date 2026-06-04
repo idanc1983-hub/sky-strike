@@ -4,11 +4,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
+import '../config/remote_config_service.dart';
 import '../economy/constants/challenge_constants.dart';
 import '../economy/services/challenge_prize_parser.dart';
 import '../economy/state/challenge_state.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/challenge_prizes_popup.dart';
+import '../economy/ui/coming_soon_popup.dart';
 import '../economy/ui/pre_mission_popup.dart';
 import '../game/models.dart';
 import '../shared/widgets/app_top_bar.dart';
@@ -106,7 +108,6 @@ const String _kPlaceholderPrizeAsset = 'assets/ui/icon_coin.png';
 // All 13 shipped lobby icons are registered here so RC can flip any of them
 // on without a code change. _buildOffersRow() reads from this map when
 // composing the visible offers row.
-// ignore: unused_element
 const Map<String, String> _kLobbyIconAssets = {
   'fto':
       'assets/ui/home/monetization/fto_lobby.png',
@@ -498,7 +499,7 @@ class _HomeScreenState extends State<HomeScreen>
             child: Column(
               children: [
                 const AppTopBar.full(forceShowCoin: true),
-                _buildOffersRow(),
+                _buildOffersRow(economy),
                 Expanded(child: _buildCentreContent()),
                 _buildChallengeAndLaunch(economy),
                 const SizedBox(height: 8),
@@ -511,28 +512,28 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ---------------------------------------------------------------------------
-  // Offers row — up to 4 monetization slots, left-aligned. Only offers
-  // marked `active: true` in remote config render; the row hides entirely
-  // when no offers are active.
+  // Offers row — up to 4 monetization slots, left-aligned. Reads
+  // `RemoteConfigService.popupOffers` and shows any entry whose
+  // `active == true`, `unlock_level <= player.level`, and whose
+  // `trigger_challenge_id` matches the player's current state:
+  //   - `new_players`              → always while active (intro)
+  //   - `none` / empty             → always while active
+  //   - `<cycle_id>` (e.g. `iron_skies`) → only while that cycle is active
+  // Iteration order follows [_kLobbyIconAssets] so the visual slot
+  // order is deterministic. Entries without a registered icon (e.g.
+  // `first_purchase`) are skipped — they surface via other flows.
   //
-  // Add a new entry to [specs] when a new offer popup is wired. The order
-  // here determines the left-to-right display order.
+  // Tap currently opens [ComingSoonPopup]; swap to the matching offer
+  // popup once they're wired (`1+2_*` → ThreePlusOneOfferPopup,
+  // `snake_*` → SnakeOfferPopup, `generic_*` → GenericOfferPopup,
+  // `fto` → ThreePlusOneOfferPopup).
   // ---------------------------------------------------------------------------
-  Widget _buildOffersRow() {
-    // Empty until RC drives the lobby slots. The 13 lobby icons shipped
-    // with the app live in [_kLobbyIconAssets] keyed by RC `asset_name`;
-    // when an asset is wired in, build an [_OfferSpec] for it here and
-    // route onTap to the matching popup based on its prefix
-    // (`1+2_*` → ThreePlusOneOfferPopup, `snake_*` → SnakeOfferPopup,
-    // `generic_*` → GenericOfferPopup, `fto` → ThreePlusOneOfferPopup).
-    final specs = <_OfferSpec>[];
+  Widget _buildOffersRow(EconomyState economy) {
+    final specs = _resolveActiveOffers(economy);
     final active = specs.take(4).toList();
     if (active.isEmpty) {
       return const SizedBox(height: 8);
     }
-    // 4 evenly-spaced slots, each 72×72. Active offers fill from the left;
-    // remaining slots are invisible spacers that hold the layout so the
-    // real icons sit in the same positions as slots 1..N of the mock.
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
       child: Row(
@@ -550,6 +551,34 @@ class _HomeScreenState extends State<HomeScreen>
         ],
       ),
     );
+  }
+
+  List<_OfferSpec> _resolveActiveOffers(EconomyState economy) {
+    final rc = RemoteConfigService.instance;
+    final activeCycleId = economy.activeChallengeType?.jsonValue;
+    final level = economy.level;
+    final out = <_OfferSpec>[];
+    _kLobbyIconAssets.forEach((assetId, iconAsset) {
+      final cfg = rc.popupFor(assetId);
+      if (cfg == null) return;
+      if (cfg['active'] != true) return;
+      final unlock = cfg['unlock_level'];
+      if (unlock is num && level < unlock.toInt()) return;
+      final trigger = (cfg['trigger_challenge_id'] ?? '').toString();
+      final triggerMatches = trigger.isEmpty ||
+          trigger == 'none' ||
+          trigger == 'new_players' ||
+          trigger == activeCycleId;
+      if (!triggerMatches) return;
+      final displayName = (cfg['display_name'] ?? assetId).toString();
+      out.add(_OfferSpec(
+        assetId: assetId,
+        iconAsset: iconAsset,
+        placeholderLabel: assetId,
+        onTap: () => ComingSoonPopup.show(context, offerName: displayName),
+      ));
+    });
+    return out;
   }
 
   // ---------------------------------------------------------------------------

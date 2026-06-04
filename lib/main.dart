@@ -1,6 +1,11 @@
 import 'dart:async' show unawaited;
+import 'dart:ui' show PlatformDispatcher;
 
+import 'package:amplitude_flutter/amplitude.dart';
+import 'package:amplitude_flutter/configuration.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,6 +28,7 @@ import 'screens/loading_screen.dart';
 import 'screens/main_shell.dart';
 import 'screens/splash_screen.dart';
 import 'services/ads/ads_service.dart' as platform_ads;
+import 'services/ads/consent_manager.dart';
 import 'shop/services/bundle_cache.dart';
 import 'shop/services/bundle_service.dart';
 import 'shop/services/bundle_validator.dart';
@@ -44,6 +50,23 @@ Future<void> main() async {
   try {
     await Firebase.initializeApp();
     await RemoteConfigService.instance.init();
+    // Route Flutter framework + isolate errors to Crashlytics. Disabled
+    // in non-release builds so developer stack traces still show in the
+    // console without being duplicated to the dashboard.
+    FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(kReleaseMode);
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+    // Pessimistic defaults pre-UMP: every data-collecting SDK starts in
+    // a denied state. Once consent resolves we re-apply the real values.
+    await FirebaseAnalytics.instance.setConsent(
+      adStorageConsentGranted: false,
+      analyticsStorageConsentGranted: false,
+      adPersonalizationSignalsConsentGranted: false,
+      adUserDataConsentGranted: false,
+    );
   } catch (e, st) {
     debugPrint('[FIREBASE_INIT_FAIL] $e\n$st');
   }
@@ -69,12 +92,18 @@ Future<void> main() async {
       debugPrint('[IAP_INIT_FAIL] $e\n$st');
     }));
     iap = storeIap;
-    try {
-      // ignore: discarded_futures
-      platform_ads.AdsService.instance.initialize();
-    } catch (e, st) {
+    // Boot the consent → ATT → MobileAds chain in the background. We
+    // don't block `runApp` on it (so a slow network can't stall the
+    // splash screen), but `preloadRewarded` is gated on `isReady` so no
+    // ad request can fire before the chain resolves. When it does
+    // resolve, re-apply the analytics consent signals so Firebase /
+    // Amplitude flip from the pessimistic pre-consent defaults to the
+    // user's actual choice.
+    unawaited(platform_ads.AdsService.instance.initialize().then((_) {
+      _applyConsentToAnalytics();
+    }).catchError((Object e, StackTrace st) {
       debugPrint('[ADS_INIT_FAIL] $e\n$st');
-    }
+    }));
     ads = GoogleMobileAdsEconomyService();
   } else {
     iap = MockIapService();
@@ -99,6 +128,58 @@ Future<void> main() async {
   }
 
   runApp(SkyStrikeApp(economy: economy));
+}
+
+/// Applies the resolved UMP / ATT state to every data-collecting SDK.
+/// Called once the ad init chain has finished; safe to call again if
+/// the user later re-opens the privacy options form from Settings.
+///
+/// The principle from the compliance task: every data SDK reads the
+/// same consent state, and no SDK collects ahead of consent in
+/// regulated regions. `canRequestAds` is UMP's authoritative answer to
+/// "is this user OK with personalised data flows here?" — outside the
+/// EEA/UK it returns true by default (no consent required), inside
+/// regulated regions it returns true only after the user accepts.
+Future<void> _applyConsentToAnalytics() async {
+  final consent = ConsentManager.lastResult;
+  final granted = consent.canRequestAds;
+  try {
+    await FirebaseAnalytics.instance.setConsent(
+      adStorageConsentGranted: granted,
+      analyticsStorageConsentGranted: granted,
+      adPersonalizationSignalsConsentGranted: granted,
+      adUserDataConsentGranted: granted,
+    );
+  } catch (e, st) {
+    debugPrint('[ANALYTICS_CONSENT_FAIL] $e\n$st');
+  }
+  // Amplitude only starts collecting when consent is granted. If the
+  // user later withdraws, we don't have a way to scrub already-sent
+  // events server-side, but we stop sending new ones (the Amplitude
+  // singleton stays uninitialised for this app launch).
+  if (granted) {
+    final key = RemoteConfigService.instance.getString('amplitude_api_key');
+    if (key.isNotEmpty) {
+      try {
+        final amplitude = Amplitude(Configuration(apiKey: key));
+        // amplitude_flutter 4.x kicks off init in the constructor and
+        // exposes the resulting future as `isBuilt` (no public init()).
+        await amplitude.isBuilt;
+        debugPrint('[analytics] amplitude initialised');
+      } catch (e, st) {
+        debugPrint('[AMPLITUDE_INIT_FAIL] $e\n$st');
+      }
+    } else {
+      debugPrint(
+        '[analytics] amplitude_api_key not in Remote Config — skipping',
+      );
+    }
+  } else {
+    debugPrint(
+      '[analytics] consent not granted (status=${consent.status.name}) '
+      '— amplitude skipped, firebase consent set to denied',
+    );
+  }
 }
 
 class SkyStrikeApp extends StatefulWidget {

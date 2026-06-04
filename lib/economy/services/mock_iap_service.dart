@@ -65,6 +65,11 @@ class MockIapService implements IapService {
   }
 
   @override
+  Future<void> restorePurchases() async {
+    await Future<void>.delayed(latency);
+  }
+
+  @override
   void dispose() {
     // No resources to release in the mock.
   }
