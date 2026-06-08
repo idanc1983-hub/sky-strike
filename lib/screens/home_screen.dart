@@ -11,7 +11,10 @@ import '../economy/state/challenge_state.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/challenge_prizes_popup.dart';
 import '../economy/ui/coming_soon_popup.dart';
+import '../economy/ui/generic_offer_popup.dart';
 import '../economy/ui/pre_mission_popup.dart';
+import '../economy/ui/snake_offer_popup.dart';
+import '../economy/ui/three_plus_one_offer_popup.dart';
 import '../game/models.dart';
 import '../shared/widgets/app_top_bar.dart';
 import '../shared/widgets/asset_placeholder.dart';
@@ -574,10 +577,29 @@ class _HomeScreenState extends State<HomeScreen>
         assetId: assetId,
         iconAsset: iconAsset,
         placeholderLabel: assetId,
-        onTap: () => ComingSoonPopup.show(context, offerName: displayName),
+        onTap: () => _openOfferPopup(assetId, displayName),
       ));
     });
     return out;
+  }
+
+  /// Routes a lobby-icon tap to the matching offer template by asset_id
+  /// prefix. Anything that doesn't fit the three known templates falls
+  /// back to [ComingSoonPopup] so we don't crash on a future RC entry.
+  void _openOfferPopup(String assetId, String displayName) {
+    if (assetId == 'fto' || assetId.startsWith('1+2_')) {
+      ThreePlusOneOfferPopup.show(context, assetId: assetId);
+      return;
+    }
+    if (assetId.startsWith('snake_')) {
+      SnakeOfferPopup.show(context, assetId: assetId);
+      return;
+    }
+    if (assetId.startsWith('generic_')) {
+      GenericOfferPopup.show(context, assetId: assetId);
+      return;
+    }
+    ComingSoonPopup.show(context, offerName: displayName);
   }
 
   // ---------------------------------------------------------------------------
@@ -627,12 +649,26 @@ class _HomeScreenState extends State<HomeScreen>
         ? (progress / target).clamp(0.0, 1.0).toDouble()
         : 0.0;
     final remaining = view?.remainingFrom(DateTime.now());
-    // Pull stage 1's prize from the active cycle's RC ladder so the
-    // bar-end reward matches RC instead of the legacy formula preview.
+    // Pull the *current* stage's prize from the active cycle's RC
+    // ladder so the bar-end reward stays in sync as the player advances
+    // — using stage 1 forever made every cycle look like 70coin even
+    // when the player was about to clear a chest stage.
     final stages = economy.activeChallengeStages;
-    final stage1Prize = stages.isNotEmpty
-        ? parseChallengePrize((stages.first['prize'] ?? '').toString())
+    final stageIdx =
+        view == null ? 0 : view.stageIndex.clamp(0, stages.length - 1).toInt();
+    final activePrize = stages.isNotEmpty
+        ? parseChallengePrize((stages[stageIdx]['prize'] ?? '').toString())
         : ChallengePrize.unknown;
+    final unitLabel = view?.metricLabel ?? 'pts';
+    // Title comes from RC's `display_name` so card + popup match. Falls
+    // back to the enum label, then the locked placeholder.
+    final type = view?.type;
+    final rcDisplayName = type == null
+        ? ''
+        : (RemoteConfigService.I.challengeById(type.jsonValue)?.displayName ?? '');
+    final displayName = type == null
+        ? _kPlaceholderCycleDisplayName
+        : (rcDisplayName.isEmpty ? type.displayName : rcDisplayName);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
@@ -640,20 +676,21 @@ class _HomeScreenState extends State<HomeScreen>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _ChallengeCard(
-            displayName: view?.type.displayName ?? _kPlaceholderCycleDisplayName,
+            displayName: displayName,
             progress: progress,
             target: target,
             fraction: fraction,
-            prizeAsset: locked || stage1Prize.amount == 0
+            unitLabel: unitLabel,
+            prizeAsset: locked || activePrize.amount == 0
                 ? _kPlaceholderPrizeAsset
-                : stage1Prize.asset,
+                : activePrize.asset,
             prizeAmount: locked
                 ? _previewMilestoneCoins(economy.level)
-                : stage1Prize.amount,
+                : activePrize.amount,
             remaining: remaining,
             locked: locked,
             unlockLabel:
-                'Unlock at stage ${EconomyState.challengeUnlockLevel}',
+                'Unlock after stage ${EconomyState.challengeUnlockLevel - 1}',
             onTap: () => ChallengePrizesPopup.show(context),
             // Cycle bg + bar colour are dynamic via remote config. Until
             // the cycle plumbing lands, render the styled fallback.
@@ -707,9 +744,11 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   /// Long-press LAUNCH debug hook: simulates a Stage 3 clear and reveals
-  /// the challenge system if it's still locked. Per v2 the gate is player
-  /// level 4 (set via Dev Tools); [EconomyState.markChallengeRevealed]
-  /// is idempotent so this stays safe after the gate has already fired.
+  /// the challenge system if it's still locked. The real gate is the
+  /// `priorGlobalLevel < challengeUnlockLevel` check in
+  /// [EconomyState.setCurrentStage] (crossing stage 3 → 4); this debug
+  /// path forces the reveal directly via [markChallengeRevealed], which
+  /// is idempotent so re-tapping is safe after the gate has already fired.
   Future<void> _onLaunchLongPressed(EconomyState economy) async {
     final outcome = economy.debugSimulateStageClear(
       world: 1,
@@ -935,6 +974,10 @@ class _ChallengeCard extends StatelessWidget {
   final int progress;
   final int target;
   final double fraction;
+  /// Metric-specific unit suffix (e.g. 'kills', 'survives', 'score',
+  /// 'stars'). Pulled from the active cycle's RC `metric` so each cycle
+  /// reads in its own units instead of a generic "pts".
+  final String unitLabel;
   // v2: single completion prize at 100% — no mid-cycle 50% milestone.
   final String prizeAsset;
   final int prizeAmount;
@@ -963,6 +1006,7 @@ class _ChallengeCard extends StatelessWidget {
     required this.progress,
     required this.target,
     required this.fraction,
+    required this.unitLabel,
     required this.prizeAsset,
     required this.prizeAmount,
     required this.onTap,
@@ -1011,8 +1055,9 @@ class _ChallengeCard extends StatelessWidget {
                 maintainState: true,
                 child: Text(
                   displayName,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: _cAmber,
+                    color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1024,6 +1069,7 @@ class _ChallengeCard extends StatelessWidget {
                 fraction: fraction,
                 progress: progress,
                 target: target,
+                unitLabel: unitLabel,
                 prizeAsset: prizeAsset,
                 prizeAmount: prizeAmount,
                 barColor: barColor,
@@ -1124,6 +1170,7 @@ class _ChallengeBar extends StatelessWidget {
   final double fraction;
   final int progress;
   final int target;
+  final String unitLabel;
   final String prizeAsset;
   final int prizeAmount;
   final Color barColor;
@@ -1134,6 +1181,7 @@ class _ChallengeBar extends StatelessWidget {
     required this.fraction,
     required this.progress,
     required this.target,
+    required this.unitLabel,
     required this.prizeAsset,
     required this.prizeAmount,
     required this.barColor,
@@ -1163,8 +1211,14 @@ class _ChallengeBar extends StatelessWidget {
               fraction: fraction,
               barColor: barColor,
               // Locked: same green fill as the unlocked state — only
-              // the centre label swaps to "Unlock at stage N".
-              progressText: locked ? lockedLabel : '$progress/$target',
+              // the centre label swaps to "Unlock at stage N". The
+              // shown progress clamps at the goal so a stale save
+              // (e.g. legacy cumulative counter) doesn't render
+              // "119/5 kills" — the active card in the popup uses
+              // the same clamp.
+              progressText: locked
+                  ? lockedLabel
+                  : '${progress > target ? target : progress}/$target $unitLabel',
             ),
           ),
           Positioned(
@@ -1261,10 +1315,18 @@ class _BarTrack extends StatelessWidget {
             child: Container(color: _cChallengeBarTrack),
           ),
           LayoutBuilder(builder: (ctx, constraints) {
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 350),
-              width: constraints.maxWidth * fraction,
-              decoration: BoxDecoration(color: barColor),
+            // TweenAnimationBuilder animates from 0 → fraction on the
+            // first build (visible fill on lobby entry) and from the
+            // previous end → new end whenever the player earns more
+            // progress while on screen.
+            return TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: fraction),
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeOutCubic,
+              builder: (_, value, __) => Container(
+                width: constraints.maxWidth * value,
+                decoration: BoxDecoration(color: barColor),
+              ),
             );
           }),
           // Progress label — centred along the bar (v2 removed the 50%

@@ -133,21 +133,24 @@ void main() {
       s.dispose();
     });
 
-    test('v2: crossing the level-4 gate starts the newPlayers cycle',
+    test('v2: XP gains alone must NOT reveal the newPlayers cycle',
         () async {
       final s = _buildState();
       await s.initialize();
       expect(s.challengeRevealed, isFalse);
 
-      // Cross the level-4 gate (xpMax default = 1000, so award 4*1000
-      // XP to land on level 5 — past the gate). markChallengeRevealed
-      // fires inside addXP.
+      // XP-only growth (FTUE coin grants, daily reward, etc.) must NOT
+      // unlock the challenge — that trigger was removed so the 72h
+      // timer can only burn after the player engages with stage
+      // gameplay. The stage-progression gate lives in [setCurrentStage]
+      // and is exercised end-to-end via [debugSimulateStageClear] in
+      // the home-screen long-press flow (not unit-testable here because
+      // [startNewChallengeCycle] reaches into RemoteConfigService and
+      // the test harness has no Firebase mock).
       s.addXP(EconomyState.challengeUnlockLevel * 1000);
-      expect(s.challengeRevealed, isTrue);
-
-      // First-ever cycle is the newPlayers intro per v2.
-      expect(s.activeChallengeType, ChallengeType.newPlayers);
-      expect(s.challengeTarget, greaterThan(0));
+      expect(s.challengeRevealed, isFalse,
+          reason: 'XP gains alone must not reveal the challenge');
+      expect(s.activeChallengeType, isNull);
       s.dispose();
     });
 

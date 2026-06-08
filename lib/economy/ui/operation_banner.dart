@@ -146,7 +146,7 @@ class _OperationBannerState extends State<OperationBanner> {
                           }),
                           Center(
                             child: Text(
-                              '${view.progress} / ${view.target}',
+                              '${view.progress} / ${view.target} ${view.metricLabel}',
                               style: const TextStyle(
                                 color: _cGreenPale,
                                 fontSize: 10,

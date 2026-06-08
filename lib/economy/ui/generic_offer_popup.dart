@@ -5,13 +5,21 @@ import 'package:flutter/material.dart';
 import '../../config/remote_config_service.dart';
 import '../../shared/theme/app_colors.dart';
 import '../services/offer_reward_parser.dart';
+import '../services/offer_state_store.dart';
+import 'offer_popup_chrome.dart';
 import 'popup_bg_view.dart';
-import 'reward_chips.dart';
 
-/// "Generic" 4-slot offer popup — one bundle, four rewards, single price.
+/// "Generic" bundle popup — single price, 4 fixed rewards in a row,
+/// cosmetic discount badge picked once per sale instance.
 ///
-/// Data-driven from `monetization__offers_generic__v1.offers.<assetId>`
-/// + `monetization__popup_config__v1.offers.<assetId>`.
+/// All copy / numbers driven from Remote Config:
+///   - `monetization.configs.<asset>` → display_name, popup_bg,
+///     duration_hours
+///   - `monetization.templates.generic.<asset>` → rewards[], price
+///
+/// The 70/75/80% discount badge is purely visual — the displayed price
+/// is the RC price unchanged. See [OfferStateStore.discountFor] for the
+/// roll-once-per-instance contract.
 class GenericOfferPopup extends StatefulWidget {
   final String assetId;
   const GenericOfferPopup({super.key, required this.assetId});
@@ -19,7 +27,7 @@ class GenericOfferPopup extends StatefulWidget {
   static Future<void> show(BuildContext context, {required String assetId}) {
     return showDialog<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.72),
+      barrierColor: Colors.black.withValues(alpha: 0.70),
       builder: (_) => GenericOfferPopup(assetId: assetId),
     );
   }
@@ -29,58 +37,61 @@ class GenericOfferPopup extends StatefulWidget {
 }
 
 class _GenericOfferPopupState extends State<GenericOfferPopup> {
-  static const double _aspect = 862 / 1824;
-
   Timer? _ticker;
-  Duration _remaining = const Duration(hours: 47, minutes: 59, seconds: 59);
+  Duration _remaining = const Duration(hours: 0);
+  int _discountPct = 70;
+  bool _purchased = false;
 
   @override
   void initState() {
     super.initState();
-    final config =
-        RemoteConfigService.I.monetization.configByAssetName(widget.assetId);
-    final hours = config?.duration.hours;
-    if (hours != null) {
-      _remaining = Duration(seconds: hours * 3600);
+    final cfg = RemoteConfigService.I.monetization
+        .configByAssetName(widget.assetId);
+    final hours = cfg?.duration.hours;
+    if (hours != null && hours > 0) {
+      _remaining = Duration(hours: hours);
     }
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() {
-        if (_remaining.inSeconds > 0) {
-          _remaining = _remaining - const Duration(seconds: 1);
-        }
-      });
+      if (_remaining.inSeconds <= 0) return;
+      setState(() => _remaining -= const Duration(seconds: 1));
     });
+    _loadDiscount();
+  }
+
+  Future<void> _loadDiscount() async {
+    final pct = await OfferStateStore.instance.discountFor(widget.assetId);
+    if (!mounted) return;
+    setState(() => _discountPct = pct);
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
-    _ticker = null;
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final rcs = RemoteConfigService.I;
-    final config = rcs.monetization.configByAssetName(widget.assetId);
-    final GenericOffer? offer = rcs.monetization.templates.generic
+    final mc = RemoteConfigService.I.monetization;
+    final cfg = mc.configByAssetName(widget.assetId);
+    final displayName =
+        (cfg?.displayName.isNotEmpty ?? false) ? cfg!.displayName : widget.assetId;
+    final popupBg = cfg?.popupBg;
+    final cycle = cfg?.triggerChallengeId;
+
+    final offer = mc.templates.generic
         .cast<GenericOffer?>()
         .firstWhere((o) => o?.assetId == widget.assetId, orElse: () => null);
-
-    final displayName = config?.displayName ?? widget.assetId;
-    final popupBg = config?.popupBg;
-    final cycle = config?.triggerChallengeId;
-
-    final rewards = _readRewards(offer);
-    final priceUsd = offer?.price;
+    final rewards = _parseRewards(offer?.rewards);
+    final priceUsd = offer?.price ?? 0.0;
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 24),
-      child: AspectRatio(
-        aspectRatio: _aspect,
+      insetPadding: const EdgeInsets.fromLTRB(14, 56, 14, 90),
+      child: SizedBox.expand(
         child: Stack(
+          clipBehavior: Clip.none,
           children: [
             Positioned.fill(
               child: PopupBgView(
@@ -89,28 +100,40 @@ class _GenericOfferPopupState extends State<GenericOfferPopup> {
                 cycle: cycle,
               ),
             ),
-            LayoutBuilder(builder: (ctx, constraints) {
-              return Positioned(
-                top: constraints.maxHeight * 0.15,
-                bottom: constraints.maxHeight * 0.04,
-                left: 16,
-                right: 16,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _Header(displayName: displayName),
-                    Expanded(child: _RewardGrid(rewards: rewards)),
-                    _BuyButton(priceUsd: priceUsd),
-                    const SizedBox(height: 8),
-                    _CountdownLabel(remaining: _remaining),
-                  ],
-                ),
-              );
-            }),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 28, 20, 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Title(displayName: displayName),
+                  const SizedBox(height: 20),
+                  _DiscountBadge(percent: _discountPct),
+                  const SizedBox(height: 14),
+                  _RewardsBox(rewards: rewards),
+                  const Spacer(),
+                  OfferCta(
+                    label: _purchased
+                        ? 'CLAIMED'
+                        : (priceUsd > 0
+                            ? '\$${priceUsd.toStringAsFixed(2)}'
+                            : '\$\$\$'),
+                    claimed: _purchased,
+                    height: 54,
+                    onTap: priceUsd <= 0
+                        ? null
+                        : () => setState(() => _purchased = true),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(child: OfferCountdown(remaining: _remaining)),
+                ],
+              ),
+            ),
             Positioned(
-              top: 8,
-              right: 8,
-              child: _CloseButton(onTap: () => Navigator.of(context).pop()),
+              top: -44,
+              left: -2,
+              child: OfferCloseButton(
+                onTap: () => Navigator.of(context).pop(),
+              ),
             ),
           ],
         ),
@@ -118,19 +141,19 @@ class _GenericOfferPopupState extends State<GenericOfferPopup> {
     );
   }
 
-  static List<OfferRewardItem> _readRewards(GenericOffer? offer) {
-    if (offer == null) return const [];
+  static List<OfferRewardItem> _parseRewards(List<String>? raw) {
+    if (raw == null) return const [];
     final out = <OfferRewardItem>[];
-    for (final r in offer.rewards) {
+    for (final r in raw) {
       out.addAll(OfferRewardParser.parse(r));
     }
     return out;
   }
 }
 
-class _Header extends StatelessWidget {
+class _Title extends StatelessWidget {
   final String displayName;
-  const _Header({required this.displayName});
+  const _Title({required this.displayName});
 
   @override
   Widget build(BuildContext context) {
@@ -140,33 +163,28 @@ class _Header extends StatelessWidget {
           displayName.toUpperCase(),
           textAlign: TextAlign.center,
           style: const TextStyle(
-            color: AppColors.amberLight,
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 2,
-            height: 1.1,
+            color: Colors.white,
+            fontSize: 32,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 3,
+            height: 1.05,
             shadows: [
               Shadow(
-                  color: Color(0xCC000000),
-                  offset: Offset(0, 2),
-                  blurRadius: 4),
+                color: Color(0xCC000000),
+                offset: Offset(0, 2),
+                blurRadius: 6,
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         const Text(
-          'BUNDLE OFFER',
+          'LIMITED',
           style: TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.6,
-            shadows: [
-              Shadow(
-                  color: Color(0xCC000000),
-                  offset: Offset(0, 1),
-                  blurRadius: 3),
-            ],
+            color: Colors.white70,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 4,
           ),
         ),
       ],
@@ -174,116 +192,74 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _RewardGrid extends StatelessWidget {
-  final List<OfferRewardItem> rewards;
-  const _RewardGrid({required this.rewards});
+class _DiscountBadge extends StatelessWidget {
+  final int percent;
+  const _DiscountBadge({required this.percent});
 
   @override
   Widget build(BuildContext context) {
-    if (rewards.isEmpty) {
-      return const Center(
-        child: Text(
-          'No rewards configured',
-          style: TextStyle(color: Colors.white70, fontSize: 12),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F0CD),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.greenLight, width: 1),
         ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: GridView.count(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.4,
-        physics: const NeverScrollableScrollPhysics(),
-        shrinkWrap: true,
-        children: [
-          for (final r in rewards)
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceDark.withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.amber, width: 0.8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.workspace_premium,
+                color: AppColors.amber, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              '$percent% OFF',
+              style: const TextStyle(
+                color: AppColors.green,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
               ),
-              child: Center(child: RewardChip(item: r, iconSize: 40)),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _BuyButton extends StatelessWidget {
-  final double? priceUsd;
-  const _BuyButton({required this.priceUsd});
+class _RewardsBox extends StatelessWidget {
+  final List<OfferRewardItem> rewards;
+  const _RewardsBox({required this.rewards});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 44,
-      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF6FAD1F), AppColors.green],
-        ),
+        color: AppColors.surfaceBlack.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.greenLight, width: 0.8),
+        border: Border.all(color: AppColors.amber, width: 0.8),
       ),
-      alignment: Alignment.center,
-      child: Text(
-        priceUsd != null ? '\$${priceUsd!.toStringAsFixed(2)}' : 'BUY',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
-class _CountdownLabel extends StatelessWidget {
-  final Duration remaining;
-  const _CountdownLabel({required this.remaining});
-
-  @override
-  Widget build(BuildContext context) {
-    final h = remaining.inHours.toString().padLeft(2, '0');
-    final m = (remaining.inMinutes % 60).toString().padLeft(2, '0');
-    final s = (remaining.inSeconds % 60).toString().padLeft(2, '0');
-    return Text(
-      'Ends in $h:$m:$s',
-      style: const TextStyle(
-        color: AppColors.greenPale,
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
-}
-
-class _CloseButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _CloseButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.surfaceDark,
-          border: Border.all(color: AppColors.amber, width: 0.8),
-        ),
-        child: const Icon(Icons.close,
-            color: AppColors.amberLight, size: 16),
-      ),
+      child: rewards.isEmpty
+          ? const SizedBox(
+              height: 64,
+              child: Center(
+                child: Text(
+                  'No rewards configured',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ),
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                for (final r in rewards)
+                  Expanded(child: Center(child: OfferRewardChip(item: r, iconSize: 44))),
+              ],
+            ),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../economy/state/economy_state.dart';
@@ -26,12 +27,18 @@ class AppTopBar extends StatelessWidget {
   /// where the FTUE rule doesn't apply (pause/result overlays).
   final bool _forceShowCoin;
 
+  /// Optional 5-second long-press handler wired to a single hidden letter
+  /// inside the title (the first 'G'). Used by Settings to surface the
+  /// debug-only Dev Tools sheet without a visible affordance.
+  final VoidCallback? _onTitleSecretHold;
+
   const AppTopBar.full({
     super.key,
     bool forceShowCoin = true,
   })  : _variant = _Variant.full,
         _title = null,
         _onClose = null,
+        _onTitleSecretHold = null,
         _forceShowCoin = forceShowCoin;
 
   const AppTopBar.close({
@@ -41,15 +48,18 @@ class AppTopBar extends StatelessWidget {
   })  : _variant = _Variant.close,
         _title = null,
         _onClose = onClose,
+        _onTitleSecretHold = null,
         _forceShowCoin = forceShowCoin;
 
   const AppTopBar.titleOnly({
     super.key,
     required String title,
     required VoidCallback onClose,
+    VoidCallback? onTitleSecretHold,
   })  : _variant = _Variant.titleOnly,
         _title = title,
         _onClose = onClose,
+        _onTitleSecretHold = onTitleSecretHold,
         _forceShowCoin = false;
 
   @override
@@ -62,23 +72,26 @@ class AppTopBar extends StatelessWidget {
   }
 
   Widget _buildTitleOnly(BuildContext context) {
+    const titleStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 16,
+      fontWeight: FontWeight.w500,
+      letterSpacing: 6,
+    );
+    final secretHold = _onTitleSecretHold;
+    final titleChild = secretHold == null
+        ? Text(_title!, textAlign: TextAlign.center, style: titleStyle)
+        : _SecretHoldTitle(
+            title: _title!,
+            style: titleStyle,
+            onSecretHold: secretHold,
+          );
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Row(
         children: [
           _CloseButton(onTap: _onClose!),
-          Expanded(
-            child: Text(
-              _title!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 6,
-              ),
-            ),
-          ),
+          Expanded(child: titleChild),
           // Mirror the close-button footprint on the right so the title
           // ends up visually centred in the full bar width.
           const SizedBox(width: 36),
@@ -220,6 +233,61 @@ class _CurrencyChip extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Renders the title as a RichText with a 5-second long-press recognizer
+/// attached to the first 'G'. The hit target is intentionally a single
+/// glyph — this is a dev-only hook, not a discoverable UI affordance.
+class _SecretHoldTitle extends StatefulWidget {
+  final String title;
+  final TextStyle style;
+  final VoidCallback onSecretHold;
+
+  const _SecretHoldTitle({
+    required this.title,
+    required this.style,
+    required this.onSecretHold,
+  });
+
+  @override
+  State<_SecretHoldTitle> createState() => _SecretHoldTitleState();
+}
+
+class _SecretHoldTitleState extends State<_SecretHoldTitle> {
+  late final LongPressGestureRecognizer _recognizer;
+
+  @override
+  void initState() {
+    super.initState();
+    _recognizer = LongPressGestureRecognizer(
+      duration: const Duration(seconds: 5),
+    )..onLongPress = widget.onSecretHold;
+  }
+
+  @override
+  void dispose() {
+    _recognizer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final secretIndex = widget.title.indexOf('G');
+    if (secretIndex < 0) {
+      return Text(widget.title, textAlign: TextAlign.center, style: widget.style);
+    }
+    return RichText(
+      textAlign: TextAlign.center,
+      text: TextSpan(
+        style: widget.style,
+        children: [
+          TextSpan(text: widget.title.substring(0, secretIndex)),
+          TextSpan(text: widget.title[secretIndex], recognizer: _recognizer),
+          TextSpan(text: widget.title.substring(secretIndex + 1)),
         ],
       ),
     );

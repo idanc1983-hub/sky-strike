@@ -882,6 +882,10 @@ class _GameScreenState extends State<GameScreen>
     final pts   = scorePerKill(_currentWave, combo);
     _totalScore += pts;
     _waveKilled++;
+    // Notify EconomyState so kill-metric challenges (Hunter / New Pilots)
+    // advance in real time and the home/popup bars reflect progress when
+    // the player returns to the lobby.
+    context.read<EconomyState>().onEnemyKilled();
 
     if (combo > _bestCombo) _bestCombo = combo.toInt();
     if (combo >= 3.0 && _screenShakeFrames <= 0) _screenShakeFrames = 18;

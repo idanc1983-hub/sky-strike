@@ -44,6 +44,9 @@ class EconomySnapshot {
   final DateTime? challengeStartedAt;
   final int challengeProgress;
   final int challengeTarget;
+  // 0-based index into the active cycle's RC stage ladder. Persisted so
+  // a player who quits mid-ladder resumes on the correct stage.
+  final int challengeStageIndex;
   // v2: 50% mid-cycle milestone removed; only the 100% completion claim
   // persists. Reads of legacy `challenge50Claimed` JSON are silently
   // dropped on load.
@@ -82,6 +85,7 @@ class EconomySnapshot {
     required this.challengeStartedAt,
     required this.challengeProgress,
     required this.challengeTarget,
+    this.challengeStageIndex = 0,
     required this.challenge100Claimed,
     required this.challengeRevealed,
     required this.firedFtueTriggers,
@@ -132,6 +136,7 @@ class EconomySnapshot {
       challengeStartedAt: null,
       challengeProgress: 0,
       challengeTarget: 0,
+      challengeStageIndex: 0,
       challenge100Claimed: false,
       challengeRevealed: false,
       firedFtueTriggers: <String>{},
@@ -335,6 +340,7 @@ class EconomyPersistence {
         challengeStartedAt: _readDate(decoded['challengeStartedAt']),
         challengeProgress: _readInt(decoded['challengeProgress']) ?? 0,
         challengeTarget: _readInt(decoded['challengeTarget']) ?? 0,
+        challengeStageIndex: _readInt(decoded['challengeStageIndex']) ?? 0,
         challenge100Claimed: decoded['challenge100Claimed'] == true,
         challengeRevealed: decoded['challengeRevealed'] == true,
         firedFtueTriggers:
@@ -445,6 +451,7 @@ class EconomyPersistence {
       'challengeStartedAt': s.challengeStartedAt?.toIso8601String(),
       'challengeProgress': s.challengeProgress,
       'challengeTarget': s.challengeTarget,
+      'challengeStageIndex': s.challengeStageIndex,
       'challenge100Claimed': s.challenge100Claimed,
       'challengeRevealed': s.challengeRevealed,
       'firedFtueTriggers': s.firedFtueTriggers.toList(),
@@ -516,6 +523,8 @@ class EconomyPersistence {
       challengeProgress:
           _clampInt(s.challengeProgress, 0, _Caps.challengeMax, 0),
       challengeTarget: _clampInt(s.challengeTarget, 0, _Caps.challengeMax, 0),
+      challengeStageIndex:
+          _clampInt(s.challengeStageIndex, 0, _Caps.challengeMax, 0),
       challenge100Claimed: s.challenge100Claimed,
       challengeRevealed: s.challengeRevealed,
       firedFtueTriggers: s.firedFtueTriggers,

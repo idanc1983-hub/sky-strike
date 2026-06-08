@@ -13,8 +13,21 @@ import '../services/offer_reward_parser.dart';
 class RewardChip extends StatelessWidget {
   final OfferRewardItem item;
   final double iconSize;
+  /// When non-null and [item] is a chest, the icon becomes tappable and
+  /// invokes this callback. Used by monetization popups to surface the
+  /// chest's drop table via [ChestContentsPopup], matching the
+  /// daily-reward and challenge-prizes screens.
+  final VoidCallback? onChestTap;
 
-  const RewardChip({super.key, required this.item, this.iconSize = 44});
+  const RewardChip({
+    super.key,
+    required this.item,
+    this.iconSize = 44,
+    this.onChestTap,
+  });
+
+  String get assetPath => _assetPath;
+  String get label => _label;
 
   String get _assetPath {
     switch (item.kind) {
@@ -69,21 +82,30 @@ class RewardChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final iconImage = SizedBox(
+      width: iconSize,
+      height: iconSize,
+      child: Image.asset(
+        _assetPath,
+        errorBuilder: AssetPlaceholder.image(
+          color: AppColors.amber,
+          label: item.raw,
+          borderRadius: 4,
+        ),
+      ),
+    );
+    final isChest = item.kind == OfferRewardKind.chest;
+    final tappable = isChest && onChestTap != null;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          width: iconSize,
-          height: iconSize,
-          child: Image.asset(
-            _assetPath,
-            errorBuilder: AssetPlaceholder.image(
-              color: AppColors.amber,
-              label: item.raw,
-              borderRadius: 4,
-            ),
-          ),
-        ),
+        tappable
+            ? GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onChestTap,
+                child: iconImage,
+              )
+            : iconImage,
         const SizedBox(height: 2),
         Text(
           _label,

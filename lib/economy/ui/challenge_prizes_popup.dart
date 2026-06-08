@@ -15,13 +15,15 @@ import 'chest_contents_popup.dart';
 ///
 /// Renders the active cycle's reward ladder over a full-bleed cycle
 /// background. The player sees the current stage (progress bar + prize +
-/// countdown) at the bottom and the next ≤5 locked stages stacked above
-/// it, sorted hardest-on-top to mirror "rising" toward the grand prize.
+/// countdown) at the bottom and 4 locked stages stacked above: the next 3
+/// sequential stages, with the cycle's final stage (the grand prize)
+/// always pinned at the top. This guarantees the grand prize is visible
+/// from stage 1 so players grasp what they're climbing toward.
 ///
-/// Backgrounds are resolved from the cycle's `popup_bg` field in
-/// `challenges_config` RC. The field accepts either a bundled asset path
-/// (default) or an absolute http(s) URL — LiveOps can swap art without a
-/// client release.
+/// Title + popup background are resolved from the cycle's entry in
+/// `challenges_config` RC (`display_name`, `popup_bg`). `popup_bg` accepts
+/// either a bundled asset path (default) or an absolute http(s) URL —
+/// LiveOps can swap title/art without a client release.
 class ChallengePrizesPopup extends StatefulWidget {
   const ChallengePrizesPopup({super.key});
 
@@ -61,11 +63,11 @@ class ChallengePrizesPopup extends StatefulWidget {
 class _ChallengePrizesPopupState extends State<ChallengePrizesPopup> {
   Timer? _ticker;
 
-  /// Maximum number of *locked* (future) stage rows rendered above the
-  /// active card. Cycles with longer ladders still only reveal the next
-  /// few — keeps the early-game prize close to the player and hides
-  /// late-cycle goals that aren't yet meaningful.
-  static const int _maxLockedRows = 5;
+  /// Number of *locked* (future) stage rows rendered above the active
+  /// card: 3 sequential next stages + 1 grand-prize row pinned on top
+  /// (4 total). Keeps the early-game prizes close to the player while
+  /// always showing the cycle's final reward as the visible end-goal.
+  static const int _sequentialNextRows = 3;
 
   static const String _placeholderCycleName = 'Iron Skies';
 
@@ -104,26 +106,25 @@ class _ChallengePrizesPopupState extends State<ChallengePrizesPopup> {
     final remaining =
         view?.remainingFrom(DateTime.now()) ?? const Duration(hours: 72);
     final progress = view?.progress ?? 0;
+    // Unit label swaps "pts" for the active cycle's RC metric so each
+    // type reads in its own currency (kills / survives / score / stars).
+    final metricLabel = view?.metricLabel ?? 'pts';
 
     final stages = _stagesFor(economy);
-    final currentIdx = _currentStageIndex(stages, progress);
+    // Trust EconomyState's persisted stage index — it advances exactly
+    // when the gameplay loop grants a stage prize, so the popup never
+    // has to derive it from `progress` alone (which the non-monotonic
+    // RC goals make impossible). Clamped here only to defend against a
+    // shorter ladder loaded after a save was written for a longer one.
+    final currentIdx =
+        (view?.stageIndex ?? 0).clamp(0, stages.length - 1).toInt();
     final activeStage = stages[currentIdx];
-    final lockedFuture = stages.sublist(currentIdx + 1);
-    // Defensive sort: RC ladders aren't always monotonically increasing
-    // (LiveOps can publish stages out of goal order), but the visual
-    // ladder must always rise — hardest goal at the top, easiest just
-    // above the active card.
-    final lockedSorted = [...lockedFuture]..sort((a, b) {
-      final ga = (a['goal'] as num?)?.toInt() ?? 0;
-      final gb = (b['goal'] as num?)?.toInt() ?? 0;
-      return gb.compareTo(ga);
-    });
-    final lockedToShow = lockedSorted.take(_maxLockedRows).toList();
+    final lockedToShow = _lockedRowsToShow(stages, currentIdx);
 
-    final bgPath = RemoteConfigService.I
-            .challengeById(type.jsonValue)
-            ?.popupBg ??
-        _fallbackBgFor(type);
+    final rcConfig = RemoteConfigService.I.challengeById(type.jsonValue);
+    final titleFromRc = rcConfig?.displayName ?? '';
+    final title = titleFromRc.isEmpty ? type.displayName : titleFromRc;
+    final bgPath = rcConfig?.popupBg ?? _fallbackBgFor(type);
 
     // The route's forward/reverse animation drives the staggered row
     // reveal. Falls back to a no-op completed animation if the popup is
@@ -159,7 +160,7 @@ class _ChallengePrizesPopupState extends State<ChallengePrizesPopup> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _HeaderRow(
-                    title: type.displayName,
+                    title: title,
                     onClose: () => Navigator.of(context).pop(),
                   ),
                   const Spacer(flex: 1),
@@ -181,24 +182,38 @@ class _ChallengePrizesPopupState extends State<ChallengePrizesPopup> {
                         animation: routeAnim,
                         fromBottom: lockedToShow.length - 1 - i,
                         total: lockedToShow.length,
-                        child: _LockedStageRow(stage: lockedToShow[i]),
+                        child: _LockedStageRow(
+                          stage: lockedToShow[i],
+                          unitLabel: metricLabel,
+                        ),
                       ),
                     ),
                   const SizedBox(height: 2),
+                  // Reserve 18pt at the bottom inside the Stack so the
+                  // info button's overhang sits within the Stack's hit-test
+                  // rect. Without this, taps in the overhanging area fall
+                  // through to whatever is painted below.
                   Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      _ActiveStageCard(
-                        title: type.displayName,
-                        stage: activeStage,
-                        progress: progress,
-                        fallbackTitle: _placeholderCycleName,
-                        remaining: remaining,
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 18),
+                        child: _ActiveStageCard(
+                          title: title,
+                          stage: activeStage,
+                          progress: progress,
+                          fallbackTitle: _placeholderCycleName,
+                          remaining: remaining,
+                          unitLabel: metricLabel,
+                        ),
                       ),
                       Positioned(
                         right: -2,
-                        bottom: -18,
-                        child: _GoalInfoButton(challengeType: type),
+                        bottom: 0,
+                        child: _GoalInfoButton(
+                          challengeType: type,
+                          title: title,
+                        ),
                       ),
                     ],
                   ),
@@ -233,15 +248,40 @@ class _ChallengePrizesPopupState extends State<ChallengePrizesPopup> {
     return rc.isEmpty ? _placeholderStages : rc;
   }
 
-  /// First stage whose goal hasn't been met yet — that's the one in
-  /// progress. Clamps to the last index so a fully-cleared cycle still
-  /// shows the final stage as "active" until the cycle resets.
-  int _currentStageIndex(List<Map<String, dynamic>> stages, int progress) {
-    for (int i = 0; i < stages.length; i++) {
-      final goal = (stages[i]['goal'] as num?)?.toInt() ?? 0;
-      if (progress < goal) return i;
+  /// Builds the locked-row list shown above the active card, ordered
+  /// top→bottom (grand prize first, nearest-next last):
+  ///
+  ///   • Up to `_sequentialNextRows` (3) of the next sequential stages
+  ///     immediately after `currentIdx` — the close-range goals.
+  ///   • The cycle's final stage as the grand prize, pinned on top.
+  ///     If the grand prize is already inside the sequential window
+  ///     (i.e. the player is near the end of the ladder), it isn't
+  ///     duplicated.
+  ///
+  /// When the player IS on the final stage, no locked rows render
+  /// (the active card already shows the grand prize).
+  List<Map<String, dynamic>> _lockedRowsToShow(
+    List<Map<String, dynamic>> stages,
+    int currentIdx,
+  ) {
+    if (stages.isEmpty || currentIdx >= stages.length - 1) {
+      return const [];
     }
-    return stages.length - 1;
+    final lastIdx = stages.length - 1;
+    final sequentialEnd =
+        (currentIdx + _sequentialNextRows).clamp(currentIdx, lastIdx - 1);
+    final sequentialAsc = stages.sublist(currentIdx + 1, sequentialEnd + 1);
+    final grandPrize = stages[lastIdx];
+    final grandInSequential = sequentialAsc.any(
+      (s) => (s['stage'] as num?)?.toInt() ==
+          (grandPrize['stage'] as num?)?.toInt(),
+    );
+    // Top → bottom: grand prize first, then sequential rows in reverse
+    // (so the row nearest to the active card is the next stage).
+    return [
+      if (!grandInSequential) grandPrize,
+      ...sequentialAsc.reversed,
+    ];
   }
 
   /// Used when RC has no `popup_bg` entry for the cycle — keeps the popup
@@ -441,7 +481,8 @@ class _CloseButton extends StatelessWidget {
 // ---------------------------------------------------------------------------
 class _LockedStageRow extends StatelessWidget {
   final Map<String, dynamic> stage;
-  const _LockedStageRow({required this.stage});
+  final String unitLabel;
+  const _LockedStageRow({required this.stage, required this.unitLabel});
 
   @override
   Widget build(BuildContext context) {
@@ -468,7 +509,7 @@ class _LockedStageRow extends StatelessWidget {
           Expanded(
             child: Center(
               child: Text(
-                '$goal pts',
+                '$goal $unitLabel',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -502,6 +543,7 @@ class _ActiveStageCard extends StatelessWidget {
   final int progress;
   final String fallbackTitle;
   final Duration remaining;
+  final String unitLabel;
 
   const _ActiveStageCard({
     required this.title,
@@ -509,6 +551,7 @@ class _ActiveStageCard extends StatelessWidget {
     required this.progress,
     required this.fallbackTitle,
     required this.remaining,
+    required this.unitLabel,
   });
 
   @override
@@ -544,7 +587,7 @@ class _ActiveStageCard extends StatelessWidget {
             const SizedBox(height: 10),
             _ProgressBarWithPrize(
               fraction: fraction,
-              label: '$shown/$goal pts',
+              label: '$shown/$goal $unitLabel',
               prize: prize,
             ),
             const SizedBox(height: 8),
@@ -682,10 +725,16 @@ class _BarTrack extends StatelessWidget {
         children: [
           Positioned.fill(child: Container(color: _trackColor)),
           LayoutBuilder(builder: (ctx, c) {
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 350),
-              width: c.maxWidth * fraction,
-              decoration: const BoxDecoration(color: AppColors.green),
+            // Animates 0 → fraction on popup open and tweens between
+            // values when progress updates while the popup is visible.
+            return TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: fraction),
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeOutCubic,
+              builder: (_, value, __) => Container(
+                width: c.maxWidth * value,
+                decoration: const BoxDecoration(color: AppColors.green),
+              ),
             );
           }),
           Align(
@@ -806,7 +855,8 @@ class _PrizeChip extends StatelessWidget {
 // ---------------------------------------------------------------------------
 class _GoalInfoButton extends StatelessWidget {
   final ChallengeType challengeType;
-  const _GoalInfoButton({required this.challengeType});
+  final String title;
+  const _GoalInfoButton({required this.challengeType, required this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -842,6 +892,8 @@ class _GoalInfoButton extends StatelessWidget {
   }
 
   void _showGoal(BuildContext context) {
+    final rc = RemoteConfigService.I.challengeById(challengeType.jsonValue);
+    final goalText = _goalDescription(rc?.metric, challengeType);
     showDialog<void>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.4),
@@ -857,7 +909,7 @@ class _GoalInfoButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                challengeType.displayName,
+                title,
                 style: const TextStyle(
                   color: AppColors.amberLight,
                   fontSize: 18,
@@ -866,7 +918,7 @@ class _GoalInfoButton extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                challengeType.description,
+                goalText,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: AppColors.greenPale,
@@ -891,5 +943,23 @@ class _GoalInfoButton extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Resolves the player-facing target line from the RC `metric` field.
+  /// Falls back to the enum's description if RC is unavailable or has an
+  /// unknown metric, so the dialog always renders something readable.
+  String _goalDescription(String? metric, ChallengeType type) {
+    switch (metric) {
+      case 'kills':
+        return 'Destroy enemies in your current biome to advance each stage.';
+      case 'survival':
+        return 'Clear stages without losing your jet.';
+      case 'score':
+        return 'Earn score across stages.';
+      case 'stars':
+        return 'Clear stages with 2★ or higher.';
+      default:
+        return type.description;
+    }
   }
 }

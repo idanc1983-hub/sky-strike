@@ -3,9 +3,11 @@ import '../constants/challenge_constants.dart';
 /// Challenge cycle types per the v2 economy plan.
 ///
 /// `newPlayers` is the **intro-only** cycle — runs exactly once per
-/// account when challenges first unlock (player reaches level 4), then
+/// account when challenges first unlock (player clears stage 3), then
 /// never appears in rotation again. The other four rotate randomly with
-/// the "no repeat back-to-back" rule.
+/// the "no repeat back-to-back" rule. The reveal flag is persisted, so
+/// the 72h timer continues across app launches and only resets when
+/// the app is reinstalled.
 enum ChallengeType {
   newPlayers,
   hunter,
@@ -130,13 +132,39 @@ class ChallengeView {
   final int target;
   final bool milestone100Claimed;
 
+  /// RC `metric` for the active cycle: 'kills', 'survival', 'score', or
+  /// 'stars'. Drives the unit label in the progress bar (e.g. "44/50
+  /// kills"). Falls back to 'kills' when RC is unavailable.
+  final String metric;
+
+  /// 0-based index of the current stage in the RC ladder.
+  final int stageIndex;
+
+  /// Total number of stages in the active cycle's RC ladder.
+  final int stageCount;
+
   const ChallengeView({
     required this.type,
     required this.startedAt,
     required this.progress,
     required this.target,
     required this.milestone100Claimed,
+    required this.metric,
+    required this.stageIndex,
+    required this.stageCount,
   });
+
+  /// True when the player is on the final stage of the ladder. Used by
+  /// the progression code to clamp progress and stop counting once the
+  /// last goal is met.
+  bool get isOnFinalStage =>
+      stageCount > 0 && stageIndex >= stageCount - 1;
+
+  /// True when every stage in the ladder has been cleared (i.e. progress
+  /// has reached the final stage's goal). Once true, gameplay events no
+  /// longer increment progress for this cycle.
+  bool get allStagesComplete =>
+      isOnFinalStage && target > 0 && progress >= target;
 
   /// `0.0..1.0` fraction of target reached. Capped at 1.0 so the UI
   /// progress bar never overshoots.
@@ -163,5 +191,29 @@ class ChallengeView {
   /// True when the cycle has elapsed (regardless of progress).
   bool isExpired(DateTime now) {
     return !now.isBefore(startedAt.add(ChallengeConstants.cycleDuration));
+  }
+
+  /// Player-facing unit label for the active metric. Used to swap the
+  /// generic "pts" suffix on the progress bar for something the player
+  /// recognises ("44/50 kills" reads better than "44/50 pts").
+  String get metricLabel => metricLabelFor(metric);
+}
+
+/// Returns the player-facing unit string for an RC `metric` value.
+/// Centralised so the popup, home card, and operation banner all show
+/// the same label. Unknown metrics fall back to 'pts' so a future RC
+/// addition never renders an empty unit.
+String metricLabelFor(String metric) {
+  switch (metric) {
+    case 'kills':
+      return 'kills';
+    case 'survival':
+      return 'survives';
+    case 'score':
+      return 'score';
+    case 'stars':
+      return 'stars';
+    default:
+      return 'pts';
   }
 }

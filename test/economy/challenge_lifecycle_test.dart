@@ -138,6 +138,9 @@ void main() {
         progress: progress,
         target: target,
         milestone100Claimed: m100,
+        metric: 'kills',
+        stageIndex: 0,
+        stageCount: 1,
       );
     }
 

@@ -10,12 +10,13 @@
   },
   {
     "challenge_id": "new_players",
-    "display_name": null,
+    "display_name": "First Strike",
     "metric": "kills",
     "target_enemy": "follow_biome",
     "duration_hours": 72,
     "popup_bg": "assets/ui/challenges/bg_new_players.png",
-    "active": true
+    "active": true,
+    "is_intro": true
   },
   {
     "challenge_id": "last_stand",

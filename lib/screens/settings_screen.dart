@@ -76,6 +76,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 AppTopBar.titleOnly(
                   title: 'SETTINGS',
                   onClose: () => Navigator.of(context).pop(),
+                  onTitleSecretHold:
+                      kDebugMode ? () => DevToolsSheet.show(context) : null,
                 ),
                 Expanded(
                   child: SingleChildScrollView(
@@ -280,23 +282,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Debug-only build footer — long-press opens the dev tools sheet.
-  // Hidden entirely in release builds.
+  // Debug-only build footer. Hidden entirely in release builds. The dev
+  // tools hook lives on a 5-second hold over the 'G' in the title.
   // ---------------------------------------------------------------------------
   Widget _buildDebugFooter() {
-    return GestureDetector(
-      onLongPress: () => DevToolsSheet.show(context),
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 24),
-        child: Text(
-          'Sky Strike  V.1.0.0  Build  Debug',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppColors.amber.withValues(alpha: 0.55),
-            fontSize: 11,
-            letterSpacing: 1.4,
-          ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 24),
+      child: Text(
+        'Sky Strike  V.1.0.0  Build  Debug',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: AppColors.amber.withValues(alpha: 0.55),
+          fontSize: 11,
+          letterSpacing: 1.4,
         ),
       ),
     );

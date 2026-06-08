@@ -5,28 +5,33 @@ import 'package:flutter/material.dart';
 import '../../config/remote_config_service.dart';
 import '../../shared/theme/app_colors.dart';
 import '../services/offer_reward_parser.dart';
+import '../services/offer_state_store.dart';
+import 'offer_popup_chrome.dart';
 import 'popup_bg_view.dart';
-import 'reward_chips.dart';
 
-/// "1+2" / "1+3" offer popup — single paid slot plus 2 free unlock slots.
+/// "1+2" offer popup — 3 vertical slots, sequential progression.
 ///
-/// Data-driven: reads `monetization__popup_config__v1.offers.<assetId>`
-/// for display_name / popup_bg / cycle, and
-/// `monetization__offers_1_3__v1.offers.<assetId>` for the 3 slots.
+/// One paid anchor (slot 1) + two free unlocks (slots 2, 3). The free
+/// slots stay dimmed until the paid slot is purchased; FTO and the four
+/// per-cycle `1+2_*` offers all use this template.
 ///
-/// Background art is resolved via [PopupBgView] — when the key has no
-/// registered asset yet, a rich dev placeholder renders so the popup is
-/// fully testable while art is pending.
+/// RC sources:
+///   - `monetization.configs.<asset>` — display_name, popup_bg,
+///     duration_hours
+///   - `monetization.templates.one_plus_two.<asset>.slots[].{reward,
+///     price}` — `reward` is a `+`-separated token list (up to 3
+///     rewards), `price` is a number or the literal `"free"`.
+///
+/// Class name is historical (was originally "1+3"). The public template
+/// is 1+2 — kept as-is to avoid churning existing call sites.
 class ThreePlusOneOfferPopup extends StatefulWidget {
-  /// Monetization asset id, e.g. `fto`, `first_purchase`, `1+2_ironsky`.
   final String assetId;
-
   const ThreePlusOneOfferPopup({super.key, required this.assetId});
 
   static Future<void> show(BuildContext context, {required String assetId}) {
     return showDialog<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.72),
+      barrierColor: Colors.black.withValues(alpha: 0.70),
       builder: (_) => ThreePlusOneOfferPopup(assetId: assetId),
     );
   }
@@ -36,57 +41,65 @@ class ThreePlusOneOfferPopup extends StatefulWidget {
 }
 
 class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
-  static const double _aspect = 862 / 1824; // portrait popup aspect
-
   Timer? _ticker;
-  Duration _remaining = const Duration(hours: 47, minutes: 59, seconds: 59);
+  Duration _remaining = const Duration(hours: 0);
+  int _claimed = 0;
 
   @override
   void initState() {
     super.initState();
-    final config =
-        RemoteConfigService.I.monetization.configByAssetName(widget.assetId);
-    final hours = config?.duration.hours;
-    if (hours != null) {
-      _remaining = Duration(seconds: hours * 3600);
+    final cfg = RemoteConfigService.I.monetization
+        .configByAssetName(widget.assetId);
+    final hours = cfg?.duration.hours;
+    if (hours != null && hours > 0) {
+      _remaining = Duration(hours: hours);
     }
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() {
-        if (_remaining.inSeconds > 0) {
-          _remaining = _remaining - const Duration(seconds: 1);
-        }
-      });
+      if (_remaining.inSeconds <= 0) return;
+      setState(() => _remaining -= const Duration(seconds: 1));
     });
+    _loadClaimed();
+  }
+
+  Future<void> _loadClaimed() async {
+    final n = await OfferStateStore.instance.claimedCount(widget.assetId);
+    if (!mounted) return;
+    setState(() => _claimed = n);
+  }
+
+  Future<void> _claimNext() async {
+    final n = await OfferStateStore.instance.incrementClaimed(widget.assetId);
+    if (!mounted) return;
+    setState(() => _claimed = n);
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
-    _ticker = null;
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final rcs = RemoteConfigService.I;
-    final config = rcs.monetization.configByAssetName(widget.assetId);
-    final OnePlusTwoOffer? offer = rcs.monetization.templates.onePlusTwo
+    final mc = RemoteConfigService.I.monetization;
+    final cfg = mc.configByAssetName(widget.assetId);
+    final displayName =
+        (cfg?.displayName.isNotEmpty ?? false) ? cfg!.displayName : widget.assetId;
+    final popupBg = cfg?.popupBg;
+    final cycle = cfg?.triggerChallengeId;
+
+    final offer = mc.templates.onePlusTwo
         .cast<OnePlusTwoOffer?>()
         .firstWhere((o) => o?.assetId == widget.assetId, orElse: () => null);
-    final slots = _readSlots(offer);
-
-    final displayName = config?.displayName ?? widget.assetId;
-    final popupBg = config?.popupBg;
-    final cycle = config?.triggerChallengeId;
-    final isIntro = config?.isIntro ?? false;
+    final slots = _parseSlots(offer?.slots);
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 24),
-      child: AspectRatio(
-        aspectRatio: _aspect,
+      insetPadding: const EdgeInsets.fromLTRB(14, 56, 14, 90),
+      child: SizedBox.expand(
         child: Stack(
+          clipBehavior: Clip.none,
           children: [
             Positioned.fill(
               child: PopupBgView(
@@ -95,33 +108,31 @@ class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
                 cycle: cycle,
               ),
             ),
-            // Body content
-            LayoutBuilder(builder: (ctx, constraints) {
-              return Positioned(
-                top: constraints.maxHeight * 0.17,
-                bottom: constraints.maxHeight * 0.04,
-                left: 16,
-                right: 16,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _Header(displayName: displayName, isIntro: isIntro),
-                    _SlotGrid(slots: slots),
-                    Column(
-                      children: [
-                        _BuyRow(slots: slots),
-                        const SizedBox(height: 10),
-                        _CountdownLabel(remaining: _remaining),
-                      ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 28, 16, 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Title(displayName: displayName),
+                  const SizedBox(height: 22),
+                  Expanded(
+                    child: _SlotsRow(
+                      slots: slots,
+                      claimed: _claimed,
+                      onTap: () => _claimNext(),
                     ),
-                  ],
-                ),
-              );
-            }),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(child: OfferCountdown(remaining: _remaining)),
+                ],
+              ),
+            ),
             Positioned(
-              top: 8,
-              right: 8,
-              child: _CloseButton(onTap: () => Navigator.of(context).pop()),
+              top: -44,
+              left: -2,
+              child: OfferCloseButton(
+                onTap: () => Navigator.of(context).pop(),
+              ),
             ),
           ],
         ),
@@ -129,14 +140,12 @@ class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
     );
   }
 
-  static List<_SlotData> _readSlots(OnePlusTwoOffer? offer) {
-    if (offer == null) return const [];
-    return offer.slots
-        .map<_SlotData>((s) => _SlotData(
+  static List<_SlotData> _parseSlots(List<OnePlusTwoSlot>? raw) {
+    if (raw == null) return const [];
+    return raw
+        .map((s) => _SlotData(
               rewards: OfferRewardParser.parse(s.reward),
               priceUsd: s.priceUsd,
-              isFree: s.isFree,
-              rawReward: s.reward ?? '',
             ))
         .toList(growable: false);
   }
@@ -145,27 +154,13 @@ class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
 class _SlotData {
   final List<OfferRewardItem> rewards;
   final double? priceUsd;
-  final bool isFree;
-  final String rawReward;
-  const _SlotData({
-    required this.rewards,
-    required this.priceUsd,
-    required this.isFree,
-    required this.rawReward,
-  });
-  factory _SlotData.empty() => const _SlotData(
-        rewards: [],
-        priceUsd: null,
-        isFree: false,
-        rawReward: '',
-      );
+  const _SlotData({required this.rewards, required this.priceUsd});
   bool get isPaid => priceUsd != null;
 }
 
-class _Header extends StatelessWidget {
+class _Title extends StatelessWidget {
   final String displayName;
-  final bool isIntro;
-  const _Header({required this.displayName, required this.isIntro});
+  const _Title({required this.displayName});
 
   @override
   Widget build(BuildContext context) {
@@ -175,35 +170,29 @@ class _Header extends StatelessWidget {
           displayName.toUpperCase(),
           textAlign: TextAlign.center,
           style: const TextStyle(
-            color: AppColors.amberLight,
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 2,
-            height: 1.1,
+            color: Colors.white,
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 2.5,
+            height: 1.05,
             shadows: [
               Shadow(
                 color: Color(0xCC000000),
                 offset: Offset(0, 2),
-                blurRadius: 4,
+                blurRadius: 6,
               ),
             ],
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          isIntro ? 'WELCOME PILOT' : 'BUY 1 & GET 2 FREE',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.6,
-            shadows: [
-              Shadow(
-                color: Color(0xCC000000),
-                offset: Offset(0, 1),
-                blurRadius: 3,
-              ),
-            ],
+        const SizedBox(height: 6),
+        const Text(
+          'Buy 1 & get 2 FREE',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 1.4,
           ),
         ),
       ],
@@ -211,197 +200,105 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _SlotGrid extends StatelessWidget {
+class _SlotsRow extends StatelessWidget {
   final List<_SlotData> slots;
-  const _SlotGrid({required this.slots});
+  final int claimed;
+  final VoidCallback onTap;
+
+  const _SlotsRow({
+    required this.slots,
+    required this.claimed,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (slots.isEmpty) {
-      return const Text(
-        'No offer slots configured',
-        style: TextStyle(color: Colors.white70, fontSize: 12),
+      return const Center(
+        child: Text(
+          'No offer slots configured',
+          style: TextStyle(color: Colors.white70, fontSize: 12),
+        ),
       );
     }
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (int i = 0; i < slots.length; i++) ...[
-            Expanded(child: _SlotColumn(slot: slots[i])),
-            if (i < slots.length - 1)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Icon(Icons.add, color: AppColors.amber, size: 18),
-              ),
-          ],
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (int i = 0; i < slots.length; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(
+            child: _SlotColumn(
+              slot: slots[i],
+              isClaimed: i < claimed,
+              isLocked: i > claimed,
+              onTap: i == claimed ? onTap : null,
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 }
 
 class _SlotColumn extends StatelessWidget {
   final _SlotData slot;
-  const _SlotColumn({required this.slot});
+  final bool isClaimed;
+  final bool isLocked;
+  final VoidCallback? onTap;
+
+  const _SlotColumn({
+    required this.slot,
+    required this.isClaimed,
+    required this.isLocked,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-      decoration: BoxDecoration(
-        color: slot.isPaid
-            ? const Color(0xFF173404).withValues(alpha: 0.85)
-            : AppColors.surfaceDark.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: slot.isPaid ? AppColors.greenLight : AppColors.amber,
-          width: 0.8,
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (slot.rewards.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(4),
-              child: Text(
-                slot.rawReward.isEmpty ? '—' : slot.rawReward,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 10),
-              ),
-            )
-          else
-            for (int i = 0; i < slot.rewards.length; i++) ...[
-              RewardChip(item: slot.rewards[i]),
-              if (i < slot.rewards.length - 1) const SizedBox(height: 6),
-            ],
-        ],
-      ),
-    );
-  }
-}
-
-class _BuyRow extends StatelessWidget {
-  final List<_SlotData> slots;
-  const _BuyRow({required this.slots});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
+    final label = isClaimed
+        ? 'CLAIMED'
+        : (slot.isPaid ? '\$${slot.priceUsd!.toStringAsFixed(2)}' : 'FREE');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (int i = 0; i < slots.length; i++) ...[
-          if (i > 0) const SizedBox(width: 6),
-          Expanded(child: _SlotButton(slot: slots[i])),
-        ],
-      ],
-    );
-  }
-}
-
-class _SlotButton extends StatelessWidget {
-  final _SlotData slot;
-  const _SlotButton({required this.slot});
-
-  @override
-  Widget build(BuildContext context) {
-    if (slot.isPaid) {
-      return Container(
-        height: 36,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF6FAD1F), AppColors.green],
-          ),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.greenLight, width: 0.8),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          '\$${slot.priceUsd!.toStringAsFixed(2)}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      );
-    }
-    return Container(
-      height: 36,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.amber, width: 0.6),
-      ),
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'FREE',
-            style: TextStyle(
-              color: AppColors.amber,
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1,
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceBlack.withValues(alpha: 0.88),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.amber, width: 0.8),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                if (slot.rewards.isEmpty)
+                  const Text(
+                    '—',
+                    style: TextStyle(color: Colors.white70, fontSize: 11),
+                  )
+                else
+                  for (int j = 0; j < slot.rewards.length; j++) ...[
+                    Flexible(
+                      child: OfferRewardChip(
+                        item: slot.rewards[j],
+                        iconSize: slot.rewards.length >= 3 ? 36 : 44,
+                      ),
+                    ),
+                  ],
+              ],
             ),
           ),
-          SizedBox(width: 4),
-          Icon(Icons.lock, color: AppColors.amber, size: 14),
-        ],
-      ),
-    );
-  }
-}
-
-class _CountdownLabel extends StatelessWidget {
-  final Duration remaining;
-  const _CountdownLabel({required this.remaining});
-
-  String _format(Duration d) {
-    final h = d.inHours.toString().padLeft(2, '0');
-    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$h:$m:$s';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isPersistent = remaining.inSeconds <= 0;
-    return Text(
-      isPersistent ? 'Limited time' : 'Ends in ${_format(remaining)}',
-      style: const TextStyle(
-        color: AppColors.greenPale,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
-}
-
-class _CloseButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _CloseButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.surfaceDark,
-          border: Border.all(color: AppColors.amber, width: 0.8),
         ),
-        child: const Icon(
-          Icons.close,
-          color: AppColors.amberLight,
-          size: 16,
+        const SizedBox(height: 12),
+        OfferCta(
+          label: label,
+          claimed: isClaimed,
+          locked: isLocked,
+          height: 42,
+          onTap: onTap,
         ),
-      ),
+      ],
     );
   }
 }

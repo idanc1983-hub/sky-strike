@@ -24,8 +24,16 @@ class PopupBgRegistry {
 
   /// Returns the asset path for a popup_bg key, or `null` if the key is
   /// unregistered or art has not yet been uploaded for it.
+  ///
+  /// As of June 2026 each monetization offer ships its own bg PNG and
+  /// `popup_bg` in Remote Config holds the bundled asset path directly
+  /// (e.g. `assets/ui/home/monetization/fto_bg.png`). Values that look
+  /// like an asset path short-circuit the registry — legacy alias keys
+  /// (`bg_ironsky_metal` etc.) still resolve via [_registry] for back
+  /// compat with old LiveOps payloads.
   static String? lookup(String? popupBgKey) {
     if (popupBgKey == null) return null;
+    if (popupBgKey.startsWith('assets/')) return popupBgKey;
     return _registry[popupBgKey];
   }
 

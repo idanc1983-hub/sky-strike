@@ -92,6 +92,11 @@ class EconomyState extends ChangeNotifier {
   DateTime? _challengeStartedAt;
   int _challengeProgress = 0;
   int _challengeTarget = 0;
+  // Per-stage ladder: 0-based index into the RC stage list. Each cycle
+  // walks 0..lastStage. When `_challengeProgress` hits the current
+  // stage's goal, its prize auto-grants and the index advances. On the
+  // final stage, progress is clamped at the goal (no further counting).
+  int _challengeStageIndex = 0;
   // v2: only the 100% completion milestone exists. The old 50% mid-cycle
   // claim was removed — players see a single end-of-cycle reward.
   bool _challenge100ClaimedThisCycle = false;
@@ -188,6 +193,7 @@ class EconomyState extends ChangeNotifier {
   ChallengeType? get activeChallengeType => _activeChallengeType;
   int get challengeProgress => _challengeProgress;
   int get challengeTarget => _challengeTarget;
+  int get challengeStageIndex => _challengeStageIndex;
   DateTime? get challengeStartedAt => _challengeStartedAt;
   bool get challenge100Claimed => _challenge100ClaimedThisCycle;
   String? get pendingMilestoneToast => _pendingMilestoneToast;
@@ -198,12 +204,18 @@ class EconomyState extends ChangeNotifier {
     final type = _activeChallengeType;
     final start = _challengeStartedAt;
     if (type == null || start == null) return null;
+    final stages = RemoteConfigService.I.stagesFor(type.jsonValue);
+    final metric =
+        RemoteConfigService.I.challengeById(type.jsonValue)?.metric ?? 'kills';
     return ChallengeView(
       type: type,
       startedAt: start,
       progress: _challengeProgress,
       target: _challengeTarget,
       milestone100Claimed: _challenge100ClaimedThisCycle,
+      metric: metric,
+      stageIndex: _challengeStageIndex,
+      stageCount: stages.length,
     );
   }
 
@@ -327,6 +339,7 @@ class EconomyState extends ChangeNotifier {
     _challengeStartedAt = snap.challengeStartedAt;
     _challengeProgress = snap.challengeProgress;
     _challengeTarget = snap.challengeTarget;
+    _challengeStageIndex = snap.challengeStageIndex;
     _challenge100ClaimedThisCycle = snap.challenge100Claimed;
     _challengeRevealed = snap.challengeRevealed;
     _firedFtueTriggers
@@ -364,13 +377,26 @@ class EconomyState extends ChangeNotifier {
         .toList();
   }
 
-  /// Reads the first stage's `goal` from the RC stage ladder for [type].
-  /// Returns null if RC has no ladder entry for this cycle so the caller
-  /// can fall back to [ChallengeFormulas.targetFor].
-  int? _ladderTargetFor(ChallengeType type) {
+  /// Reads the goal of the stage at [stageIndex] in the RC ladder for
+  /// [type]. Returns null if RC has no ladder entry or the index is out
+  /// of range so the caller can fall back to [ChallengeFormulas.targetFor].
+  int? _ladderGoalAt(ChallengeType type, int stageIndex) {
     final stages = RemoteConfigService.I.stagesFor(type.jsonValue);
-    if (stages.isEmpty) return null;
-    return stages.first.goal;
+    if (stages.isEmpty || stageIndex < 0 || stageIndex >= stages.length) {
+      return null;
+    }
+    return stages[stageIndex].goal;
+  }
+
+  /// Reads the prize string of the stage at [stageIndex] in the RC
+  /// ladder for [type]. Returns an empty string when the index is out
+  /// of range so callers can short-circuit cleanly.
+  String _ladderPrizeAt(ChallengeType type, int stageIndex) {
+    final stages = RemoteConfigService.I.stagesFor(type.jsonValue);
+    if (stages.isEmpty || stageIndex < 0 || stageIndex >= stages.length) {
+      return '';
+    }
+    return stages[stageIndex].prize;
   }
 
   /// Starts a brand-new challenge cycle. The first-ever cycle is locked
@@ -387,25 +413,35 @@ class EconomyState extends ChangeNotifier {
     _activeChallengeType = type;
     _challengeStartedAt = _now();
     _challengeProgress = 0;
-    _challengeTarget = _ladderTargetFor(type) ??
+    _challengeStageIndex = 0;
+    _challengeTarget = _ladderGoalAt(type, 0) ??
         ChallengeFormulas.targetFor(type: type, playerLevel: _level);
     _challenge100ClaimedThisCycle = false;
     _scheduleSync();
     notifyListeners();
   }
 
-  /// Marks the challenge as revealed (player crossed level 4) and starts
-  /// the very first cycle — the one-time `newPlayers` intro. No-op if
-  /// [_challengeRevealed] is already true.
+  /// Marks the challenge as revealed (player just cleared stage 3) and
+  /// starts the very first cycle — the one-time `newPlayers` intro. The
+  /// `_challengeRevealed` flag persists in SharedPreferences, so the
+  /// 72h timer keeps running across app launches and only "resets to
+  /// new_players" on a clean install (which wipes prefs).
+  ///
+  /// No-op if [_challengeRevealed] is already true.
   void markChallengeRevealed() {
     if (_challengeRevealed) return;
     _challengeRevealed = true;
     startNewChallengeCycle();
   }
 
-  /// Player-level gate for challenge unlock per the v2 economy plan.
-  /// Challenges are locked until the player reaches this level; at that
-  /// point the first cycle (always `newPlayers`) starts.
+  /// Stage-progression gate for the new_players challenge. The first
+  /// cycle starts when the player crosses *into* this stage — i.e.
+  /// after clearing stage `challengeUnlockLevel - 1` (stage 3 today).
+  ///
+  /// Only [setCurrentStage] consults this — XP gains alone never
+  /// reveal the challenge, since XP grants from FTUE/daily-reward etc.
+  /// could otherwise burn the 72h window before the player has even
+  /// engaged with the game loop.
   static const int challengeUnlockLevel = 4;
 
   /// Auto-claims the 100% completion reward if reached during an expired
@@ -499,11 +535,109 @@ class EconomyState extends ChangeNotifier {
       if (diedThisStage) {
         _challengeProgress = 0;
       } else {
-        _challengeProgress += 1;
+        _addChallengeProgress(1);
       }
     } else if (_activeChallengeType == ChallengeType.conqueror) {
-      if (stars >= 2) _challengeProgress += 1;
+      if (stars >= 2) _addChallengeProgress(1);
     }
+  }
+
+  /// Single entry point for every metric (kills / survives / score /
+  /// stars). Adds [amount] to `_challengeProgress`, then runs the
+  /// ladder-advance loop:
+  ///
+  ///   • If the current stage's goal is met, grant its RC prize, reset
+  ///     progress to 0, and advance `_challengeStageIndex` to the next
+  ///     stage's goal — repeat in case a big single increment (e.g. a
+  ///     score-metric coin haul) clears multiple stages at once.
+  ///   • On the final stage, clamp progress at the goal so counting
+  ///     stops (no more grants, no further +1 reads).
+  ///
+  /// A single increment can clear several stages in one call (only
+  /// realistic for the Treasure `score` metric, which adds run coin
+  /// totals), hence the while-loop. Callers should pass non-positive
+  /// amounts (no-op) only when the metric explicitly resets — Survivor
+  /// resets directly via `_challengeProgress = 0` to bypass this path.
+  void _addChallengeProgress(int amount) {
+    if (amount <= 0) return;
+    if (_activeChallengeType == null) return;
+    if (_challengeTarget <= 0) {
+      // No RC ladder loaded — keep the legacy single-target behaviour
+      // (just accumulate) so the cycle still records progress on a
+      // misconfigured RC instead of silently swallowing kills.
+      _challengeProgress += amount;
+      return;
+    }
+    final type = _activeChallengeType!;
+    final stages = RemoteConfigService.I.stagesFor(type.jsonValue);
+    if (stages.isEmpty) {
+      _challengeProgress += amount;
+      return;
+    }
+    final lastIdx = stages.length - 1;
+    _challengeProgress += amount;
+    while (_challengeProgress >= _challengeTarget) {
+      // Grant this stage's prize before advancing — the player earned
+      // it the moment they crossed the goal.
+      _grantChallengeStagePrize(_ladderPrizeAt(type, _challengeStageIndex));
+      if (_challengeStageIndex >= lastIdx) {
+        // Final stage cleared — clamp at goal and stop counting.
+        _challengeProgress = _challengeTarget;
+        _challenge100ClaimedThisCycle = true;
+        break;
+      }
+      final overflow = _challengeProgress - _challengeTarget;
+      _challengeStageIndex += 1;
+      _challengeTarget = _ladderGoalAt(type, _challengeStageIndex) ?? 0;
+      _challengeProgress = overflow;
+      if (_challengeTarget <= 0) break;
+    }
+  }
+
+  /// Applies an RC challenge stage prize string (e.g. "70coin",
+  /// "epic_chest", "200coin + epic_chest", "biome_chest_match + 50gem
+  /// + 500coin") to the player's wallet. Chest tokens are rolled via
+  /// the standard chest resolver so the player receives the chest's
+  /// rolled contents rather than a placeholder token; coin/gem tokens
+  /// add directly. Unknown tokens are ignored.
+  void _grantChallengeStagePrize(String raw) {
+    if (raw.isEmpty) return;
+    final parts = raw.split(RegExp(r'\s*\+\s*'));
+    var reward = Reward.empty;
+    for (final partRaw in parts) {
+      final part = partRaw.trim();
+      if (part.isEmpty) continue;
+      final coinMatch = RegExp(r'^(\d+)\s*coin$').firstMatch(part);
+      if (coinMatch != null) {
+        reward = reward.plus(Reward(coins: int.parse(coinMatch.group(1)!)));
+        continue;
+      }
+      final gemMatch = RegExp(r'^(\d+)\s*gem$').firstMatch(part);
+      if (gemMatch != null) {
+        reward = reward.plus(Reward(gems: int.parse(gemMatch.group(1)!)));
+        continue;
+      }
+      if (part.endsWith('_chest') || part == 'biome_chest_match') {
+        final chestId = part == 'biome_chest_match'
+            ? '${_biomeChestKeyForWorld(_currentWorld)}_chest'
+            : part;
+        try {
+          final def = RemoteConfigService.I.chests.byId(chestId);
+          if (def != null) {
+            final roll = ChestRewardResolver.resolve(
+              definition: _chestDefAsLegacyMap(def),
+              rng: _rng,
+            );
+            reward = reward.plus(roll.reward);
+          }
+        } catch (_) {
+          // RC unavailable in test/early-boot — skip the chest roll
+          // rather than crash the grant. The coin/gem portion of a
+          // compound prize still applies.
+        }
+      }
+    }
+    if (!reward.isEmpty) _applyReward(reward);
   }
 
   // ---------------------------------------------------------------------------
@@ -599,13 +733,11 @@ class EconomyState extends ChangeNotifier {
     }
     if (_level > priorLevel) {
       _maybeFireLevelMilestonesCrossed(priorLevel, _level);
-      // v2 challenge gate: crossing the challenge-unlock level fires the
-      // first-ever cycle (newPlayers). markChallengeRevealed is a no-op
-      // if already revealed, so this is safe to call unconditionally.
-      if (priorLevel < challengeUnlockLevel &&
-          _level >= challengeUnlockLevel) {
-        markChallengeRevealed();
-      }
+      // NOTE: challenge unlock is intentionally NOT fired here. Per the
+      // current design the new_players timer only starts when the player
+      // clears stage 3 (see [setCurrentStage]). XP-only growth (e.g.
+      // FTUE coin grants pushing XP across the threshold) must not
+      // trigger the cycle and burn its 72h window.
     }
     notifyListeners();
   }
@@ -716,7 +848,7 @@ class EconomyState extends ChangeNotifier {
 
     // Drive Treasure Hunter challenge counter (gameplay coins only).
     if (_activeChallengeType == ChallengeType.treasure && coins > 0) {
-      _challengeProgress += coins;
+      _addChallengeProgress(coins);
     }
 
     // Drive Survivor + Conqueror challenge counters.
@@ -1109,7 +1241,7 @@ class EconomyState extends ChangeNotifier {
   void onEnemyKilled() {
     if (_activeChallengeType == ChallengeType.hunter ||
         _activeChallengeType == ChallengeType.newPlayers) {
-      _challengeProgress += 1;
+      _addChallengeProgress(1);
     }
     _scheduleSync();
     notifyListeners();
@@ -1159,10 +1291,14 @@ class EconomyState extends ChangeNotifier {
     final priorGlobalLevel = (_currentWorld - 1) * 10 + _currentStage;
     _currentStage = stage;
     final newGlobalLevel = (_currentWorld - 1) * 10 + _currentStage;
-    // Challenge unlock gate. The player progresses one stage = one level
-    // (with 10 stages per biome), so crossing global level
-    // [challengeUnlockLevel] is what triggers the first-ever cycle.
-    // markChallengeRevealed is a no-op if already revealed.
+    // Challenge unlock gate — the *only* path that starts the 72h
+    // new_players timer. Fires when the player crosses *into*
+    // [challengeUnlockLevel] (stage 4), i.e. immediately after clearing
+    // stage 3. The XP-level path intentionally does not unlock so the
+    // timer can only burn after the player engages with stage gameplay.
+    // markChallengeRevealed is a no-op if already revealed, so this is
+    // safe to call unconditionally; the flag persists across app
+    // sessions and only resets on reinstall.
     if (priorGlobalLevel < challengeUnlockLevel &&
         newGlobalLevel >= challengeUnlockLevel) {
       markChallengeRevealed();
@@ -1383,6 +1519,7 @@ class EconomyState extends ChangeNotifier {
       challengeStartedAt: _challengeStartedAt,
       challengeProgress: _challengeProgress,
       challengeTarget: _challengeTarget,
+      challengeStageIndex: _challengeStageIndex,
       challenge100Claimed: _challenge100ClaimedThisCycle,
       challengeRevealed: _challengeRevealed,
       firedFtueTriggers: Set<String>.from(_firedFtueTriggers),
@@ -1452,6 +1589,7 @@ class EconomyState extends ChangeNotifier {
     _challengeStartedAt = null;
     _challengeProgress = 0;
     _challengeTarget = 0;
+    _challengeStageIndex = 0;
     _challenge100ClaimedThisCycle = false;
     _pendingMilestoneToast = null;
     _scheduleSync();
@@ -1519,6 +1657,7 @@ class EconomyState extends ChangeNotifier {
     _challengeStartedAt = null;
     _challengeProgress = 0;
     _challengeTarget = 0;
+    _challengeStageIndex = 0;
     _challenge100ClaimedThisCycle = false;
     _scheduleSync();
     notifyListeners();
@@ -1569,6 +1708,7 @@ class EconomyState extends ChangeNotifier {
     _challengeStartedAt = null;
     _challengeProgress = 0;
     _challengeTarget = 0;
+    _challengeStageIndex = 0;
     _challenge100ClaimedThisCycle = false;
     _challengeRevealed = false;
     _firedFtueTriggers.clear();
@@ -1601,3 +1741,13 @@ Map<String, dynamic> _chestDefAsLegacyMap(ChestDefinition def) => {
       'jet_drop_chance': def.jetDropChance,
       'jet_id': def.jetId,
     };
+
+/// Resolves the chest-id prefix for the player's current world when a
+/// challenge stage prize is `biome_chest_match`. Worlds 1–6 map to
+/// jungle / desert / sea / ice / volcano / city, matching the chest
+/// ids in `economy__chests__v1` (e.g. `jungle_chest`).
+String _biomeChestKeyForWorld(int world) {
+  const keys = ['jungle', 'desert', 'sea', 'ice', 'volcano', 'city'];
+  final clamped = world.clamp(1, 6) - 1;
+  return keys[clamped];
+}
