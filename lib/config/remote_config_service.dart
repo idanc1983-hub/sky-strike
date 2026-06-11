@@ -21,6 +21,8 @@ import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
+import 'enemy_glow_config.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Parameter keys
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,7 +55,25 @@ class RcKeys {
     challengeStages,
     monetization,
   ];
+
+  // Enemy glow — primitive-typed keys, defaults registered in code (not assets).
+  static const enemyGlowEnabled = 'enemy_glow__enabled__v1';
+  static const enemyGlowBlurSigma = 'enemy_glow__blur_sigma__v1';
+  static const enemyGlowBaseOpacity = 'enemy_glow__base_opacity__v1';
+  static const enemyGlowPulseAmplitude = 'enemy_glow__pulse_amplitude__v1';
+  static const enemyGlowPulsePeriodMs = 'enemy_glow__pulse_period_ms__v1';
+  static const enemyGlowColors = 'enemy_glow__colors__v1';
 }
+
+const Map<String, Object> _enemyGlowPrimitiveDefaults = <String, Object>{
+  RcKeys.enemyGlowEnabled: true,
+  RcKeys.enemyGlowBlurSigma: 8.0,
+  RcKeys.enemyGlowBaseOpacity: 0.55,
+  RcKeys.enemyGlowPulseAmplitude: 0.15,
+  RcKeys.enemyGlowPulsePeriodMs: 1200,
+  RcKeys.enemyGlowColors:
+      '{"1":"#EF9F27","2":"#EF9F27","3":"#EF9F27","4":"#45C4F0","5":"#EF9F27","6":"#EF9F27"}',
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -788,6 +808,7 @@ class RemoteConfigService {
   List<ChallengeConfig>? _challenges;
   Map<String, List<StageConfig>>? _stages;
   MonetizationConfig? _monetization;
+  EnemyGlowConfig? _enemyGlow;
 
   /// Initialize with sensible polling intervals.
   /// In debug builds we allow frequent fetches; in release we cache for 1h.
@@ -833,6 +854,7 @@ class RemoteConfigService {
         debugPrint('RemoteConfigService: missing default asset for "$key" ($e)');
       }
     }
+    defaults.addAll(_enemyGlowPrimitiveDefaults);
     if (defaults.isNotEmpty) {
       await _rc.setDefaults(defaults);
     }
@@ -850,6 +872,7 @@ class RemoteConfigService {
     _challenges = null;
     _stages = null;
     _monetization = null;
+    _enemyGlow = null;
   }
 
   // ── Raw access (for debugging / passthrough) ──────────────────────────────
@@ -920,6 +943,25 @@ class RemoteConfigService {
 
   MonetizationConfig get monetization => _monetization ??=
       MonetizationConfig.fromJson(_asMap(rawJson(RcKeys.monetization)));
+
+  /// Cached enemy-glow config. Rebuilt once per successful fetch
+  /// (cleared in [_clearCaches]); never rebuild per frame.
+  EnemyGlowConfig get enemyGlow {
+    final cached = _enemyGlow;
+    if (cached != null) return cached;
+    try {
+      return _enemyGlow = EnemyGlowConfig.fromRemote(
+        enabled: _rc.getBool(RcKeys.enemyGlowEnabled),
+        blurSigma: _rc.getDouble(RcKeys.enemyGlowBlurSigma),
+        baseOpacity: _rc.getDouble(RcKeys.enemyGlowBaseOpacity),
+        pulseAmplitude: _rc.getDouble(RcKeys.enemyGlowPulseAmplitude),
+        pulsePeriodMs: _rc.getInt(RcKeys.enemyGlowPulsePeriodMs),
+        colorsJson: _rc.getString(RcKeys.enemyGlowColors),
+      );
+    } catch (_) {
+      return _enemyGlow = EnemyGlowConfig.fallback;
+    }
+  }
 
   // ── Convenience helpers ───────────────────────────────────────────────────
 

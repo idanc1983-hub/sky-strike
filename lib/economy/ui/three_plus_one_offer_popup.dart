@@ -42,7 +42,7 @@ class ThreePlusOneOfferPopup extends StatefulWidget {
 
 class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
   Timer? _ticker;
-  Duration _remaining = const Duration(hours: 0);
+  Duration _remaining = Duration.zero;
   int _claimed = 0;
 
   @override
@@ -53,12 +53,16 @@ class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
     final hours = cfg?.duration.hours;
     if (hours != null && hours > 0) {
       _remaining = Duration(hours: hours);
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        if (_remaining.inSeconds <= 0) {
+          _ticker?.cancel();
+          _ticker = null;
+          return;
+        }
+        setState(() => _remaining -= const Duration(seconds: 1));
+      });
     }
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      if (_remaining.inSeconds <= 0) return;
-      setState(() => _remaining -= const Duration(seconds: 1));
-    });
     _loadClaimed();
   }
 
@@ -123,7 +127,8 @@ class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Center(child: OfferCountdown(remaining: _remaining)),
+                  if (_remaining > Duration.zero)
+                    Center(child: OfferCountdown(remaining: _remaining)),
                 ],
               ),
             ),

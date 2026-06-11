@@ -14,7 +14,10 @@ import '../economy/services/ftue_triggers.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/power_up_unlock_popup.dart';
 import '../economy/ui/pre_mission_popup.dart';
+import '../config/enemy_glow_config.dart';
+import '../config/remote_config_service.dart';
 import '../game/models.dart';
+import '../render/enemy_glow_painter.dart';
 import '../shared/theme/app_colors.dart';
 import '../shared/widgets/app_buttons.dart';
 import '../shared/widgets/result_overlay.dart';
@@ -56,6 +59,7 @@ class _GameEnemy {
   final double renderSize;
   final double hitRadius;
   final bool isElite;
+  final double phaseOffset;
 
   bool flashing = false;
   int flashFrames = 0;
@@ -81,6 +85,7 @@ class _GameEnemy {
     required this.renderSize,
     required this.hitRadius,
     required this.isElite,
+    required this.phaseOffset,
   }) : hp = maxHp;
 }
 
@@ -732,6 +737,8 @@ class _GameScreenState extends State<GameScreen>
     final size   = elite ? cfg.renderSize * 1.3 : cfg.renderSize;
     final radius = elite ? cfg.hitRadius  * 1.3 : cfg.hitRadius.toDouble();
 
+    final glowPeriodSec =
+        RemoteConfigService.I.enemyGlow.pulsePeriodMs / 1000.0;
     final e = _GameEnemy(
       x: _rng.nextDouble() * (_screenW - 80) + 40,
       y: -size,
@@ -742,6 +749,7 @@ class _GameScreenState extends State<GameScreen>
       renderSize: size,
       hitRadius: radius,
       isElite: elite,
+      phaseOffset: _rng.nextDouble() * glowPeriodSec,
     );
     e.entryDelay = entryDelay;
     e.spawnFrame = _frame;
@@ -1524,6 +1532,8 @@ class _GameScreenState extends State<GameScreen>
                     laserFrames: _laserFrames,
                     droneActive: _droneActive,
                     ghostActive: _ghostActive,
+                    worldIndex: _world,
+                    glowConfig: RemoteConfigService.I.enemyGlow,
                   ),
                 ),
               ),
@@ -2284,6 +2294,8 @@ class _GamePainter extends CustomPainter {
   final int laserFrames;
   final bool droneActive;
   final bool ghostActive;
+  final int worldIndex;
+  final EnemyGlowConfig glowConfig;
 
   _GamePainter({
     required this.bgImage, required this.jetImage,
@@ -2301,6 +2313,7 @@ class _GamePainter extends CustomPainter {
     required this.screenW, required this.screenH, required this.frame,
     required this.laserActive, required this.laserFrames,
     required this.droneActive, required this.ghostActive,
+    required this.worldIndex, required this.glowConfig,
   });
 
   @override
@@ -2560,6 +2573,17 @@ class _GamePainter extends CustomPainter {
             center: Offset(e.x, e.y),
             width: e.renderSize,
             height: e.renderSize);
+        if (!e.flashing) {
+          paintEnemyGlow(
+            canvas,
+            img,
+            dst,
+            glowConfig,
+            worldIndex,
+            frame / 60.0,
+            phaseOffset: e.phaseOffset,
+          );
+        }
         canvas.save();
         canvas.translate(e.x, e.y);
         canvas.rotate(pi);

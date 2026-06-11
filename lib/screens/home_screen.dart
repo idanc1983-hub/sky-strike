@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
+import '../config/enemy_glow_config.dart';
 import '../config/remote_config_service.dart';
 import '../economy/constants/challenge_constants.dart';
 import '../economy/services/challenge_prize_parser.dart';
@@ -16,6 +17,7 @@ import '../economy/ui/pre_mission_popup.dart';
 import '../economy/ui/snake_offer_popup.dart';
 import '../economy/ui/three_plus_one_offer_popup.dart';
 import '../game/models.dart';
+import '../render/enemy_glow_painter.dart';
 import '../shared/widgets/app_top_bar.dart';
 import '../shared/widgets/asset_placeholder.dart';
 
@@ -158,6 +160,7 @@ class _EnemyState {
   double speed;
   double driftPhase;
   EnemyTier tier;
+  final double phaseOffset;
   bool flashing = false;
   int flashFrames = 0;
   bool exploding = false;
@@ -170,6 +173,7 @@ class _EnemyState {
     required this.speed,
     required this.driftPhase,
     required this.tier,
+    required this.phaseOffset,
   });
 }
 
@@ -341,6 +345,8 @@ class _HomeScreenState extends State<HomeScreen>
   void _initEnemies(double screenWidth) {
     if (_enemies.isNotEmpty) return;
     final tiers = activeEnemyTiers(_economy?.currentStage ?? 1);
+    final glowPeriodSec =
+        RemoteConfigService.I.enemyGlow.pulsePeriodMs / 1000.0;
     for (int i = 0; i < 7; i++) {
       final tier = tiers[_rng.nextInt(tiers.length)];
       final cfg = kEnemyConfigs[tier]!;
@@ -350,6 +356,7 @@ class _HomeScreenState extends State<HomeScreen>
         speed: cfg.baseSpeed * (0.8 + _rng.nextDouble() * 0.4),
         driftPhase: _rng.nextDouble() * pi * 2,
         tier: tier,
+        phaseOffset: _rng.nextDouble() * glowPeriodSec,
       ));
     }
     _jetX = screenWidth / 2;
@@ -493,6 +500,9 @@ class _HomeScreenState extends State<HomeScreen>
                 biomePlaceholder: biome.placeholderColor,
                 screenW: screenW,
                 screenH: screenH,
+                frame: _frame,
+                worldIndex: economy.currentWorld,
+                glowConfig: RemoteConfigService.I.enemyGlow,
               ),
             ),
           ),
@@ -789,6 +799,9 @@ class _BackgroundPainter extends CustomPainter {
   final Color biomePlaceholder;
   final double screenW;
   final double screenH;
+  final int frame;
+  final int worldIndex;
+  final EnemyGlowConfig glowConfig;
 
   _BackgroundPainter({
     required this.bgImage,
@@ -804,6 +817,9 @@ class _BackgroundPainter extends CustomPainter {
     required this.biomePlaceholder,
     required this.screenW,
     required this.screenH,
+    required this.frame,
+    required this.worldIndex,
+    required this.glowConfig,
   });
 
   @override
@@ -868,6 +884,17 @@ class _BackgroundPainter extends CustomPainter {
             0, 0, enemyImage!.width.toDouble(), enemyImage!.height.toDouble());
         final dst =
             Rect.fromCenter(center: Offset(e.x, e.y), width: sz, height: sz);
+        if (!e.flashing) {
+          paintEnemyGlow(
+            canvas,
+            enemyImage!,
+            dst,
+            glowConfig,
+            worldIndex,
+            frame / 60.0,
+            phaseOffset: e.phaseOffset,
+          );
+        }
         canvas.save();
         canvas.translate(e.x, e.y);
         canvas.rotate(pi);
