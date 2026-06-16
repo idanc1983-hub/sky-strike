@@ -61,8 +61,6 @@ class _PreMissionPopupState extends State<PreMissionPopup> {
             ),
             const SizedBox(height: 12),
             _LoadoutSummary(),
-            const SizedBox(height: 12),
-            _LoadoutSwitcher(),
             const SizedBox(height: 16),
             const Text('Quick add', style: AppTypography.label),
             const SizedBox(height: 8),
@@ -280,46 +278,6 @@ class _InventoryCell extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _LoadoutSwitcher extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final economy = context.watch<EconomyState>();
-    return SizedBox(
-      height: 32,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: economy.unlockedLoadoutSlots,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (ctx, i) {
-          final selected = economy.activeLoadoutIndex == i;
-          return GestureDetector(
-            onTap: () => economy.selectLoadout(i),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: selected ? AppColors.green : AppColors.surfaceDark,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: selected ? AppColors.greenLight : AppColors.greenTrack,
-                  width: 0.8,
-                ),
-              ),
-              child: Text(
-                economy.loadouts[i].name,
-                style: TextStyle(
-                  color: selected ? Colors.white : AppColors.greenLabel,
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }

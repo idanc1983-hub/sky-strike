@@ -83,9 +83,9 @@ class IapCatalog {
 
   /// Coins granted by each contextual coin pack.
   static const Map<String, int> coinPackCoins = <String, int>{
-    'coin_stockup': 5000,
-    'coin_surge': 18000,
-    'coin_tycoon': 35000,
+    'coin_stockup': 2000,
+    'coin_surge': 7500,
+    'coin_tycoon': 15000,
     'coin_essentials': 10000,
   };
 

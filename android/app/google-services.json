@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "621882795121",
+    "project_id": "sky-strike-2f8aa",
+    "storage_bucket": "sky-strike-2f8aa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:621882795121:android:9d73689424e9df418da7d0",
+        "android_client_info": {
+          "package_name": "com.skystrike.skystrike"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCTS3Yxlu1-H0SRg55AovtoTUF7c9ISRRQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

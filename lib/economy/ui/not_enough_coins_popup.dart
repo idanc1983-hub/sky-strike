@@ -119,8 +119,6 @@ class _FullExperiencePackState extends State<_FullExperiencePack> {
   @override
   Widget build(BuildContext context) {
     final coins = IapCatalog.coinPackCoins[_id] ?? 0;
-    final gems = IapCatalog.coinPackGems[_id] ?? 0;
-    final powerUps = IapCatalog.coinPackPowerUps[_id] ?? 0;
     final price = IapCatalog.usdPrice[_id] ?? 0;
     final name = IapCatalog.displayName[_id] ?? _id;
 
@@ -161,9 +159,7 @@ class _FullExperiencePackState extends State<_FullExperiencePack> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$coins coins'
-                  '${powerUps > 0 ? " · $powerUps power-ups" : ""}'
-                  '${gems > 0 ? " · $gems gems" : ""}',
+                  '$coins coins',
                   style: AppTypography.bodyPale.copyWith(fontSize: 12),
                 ),
               ],

@@ -32,32 +32,16 @@ class CoinsOfferPopup extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AspectRatio(
-            aspectRatio: 7.5,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.asset(
-                  'assets/ui/popup_coins_offer_banner.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: AssetPlaceholder.image(
-                    color: AppColors.amber,
-                    label: 'coins_offer_banner',
-                    borderRadius: 8,
-                  ),
-                ),
-                const Center(
-                  child: Text(
-                    'COINS LOW — STOCK UP?',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ),
-              ],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/ui/popup_coins_offer_banner.png',
+              fit: BoxFit.cover,
+              errorBuilder: AssetPlaceholder.image(
+                color: AppColors.amber,
+                label: 'coins_offer_banner',
+                borderRadius: 8,
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -114,8 +98,6 @@ class _CoinPackCardState extends State<_CoinPackCard> {
   @override
   Widget build(BuildContext context) {
     final coins = IapCatalog.coinPackCoins[widget.productId] ?? 0;
-    final extraGems = IapCatalog.coinPackGems[widget.productId] ?? 0;
-    final powerUps = IapCatalog.coinPackPowerUps[widget.productId] ?? 0;
     final price = IapCatalog.usdPrice[widget.productId] ?? 0;
 
     return Container(
@@ -155,7 +137,7 @@ class _CoinPackCardState extends State<_CoinPackCard> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$coins coins · $powerUps random power-ups${extraGems > 0 ? " · $extraGems gems" : ""}',
+                  '$coins coins',
                   style: AppTypography.bodyPale,
                 ),
               ],

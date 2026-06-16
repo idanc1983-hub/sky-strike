@@ -17,10 +17,17 @@ class SplashScreen extends StatefulWidget {
   /// How long the fake-loading bar takes to fill.
   final Duration duration;
 
+  /// Fires once, right before navigating to [nextRoute]. Used to boot
+  /// flows that must wait until the app is interactive — e.g. the iOS
+  /// ATT prompt, which we defer past the splash so the system dialog
+  /// doesn't land on a still-loading screen.
+  final VoidCallback? onDismiss;
+
   const SplashScreen({
     super.key,
     this.nextRoute = '/home',
     this.duration = const Duration(milliseconds: 2400),
+    this.onDismiss,
   });
 
   @override
@@ -43,6 +50,7 @@ class _SplashScreenState extends State<SplashScreen>
           // we navigate away.
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
+            widget.onDismiss?.call();
             Navigator.of(context).pushReplacementNamed(widget.nextRoute);
           });
         }

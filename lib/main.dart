@@ -92,18 +92,12 @@ Future<void> main() async {
       debugPrint('[IAP_INIT_FAIL] $e\n$st');
     }));
     iap = storeIap;
-    // Boot the consent → ATT → MobileAds chain in the background. We
-    // don't block `runApp` on it (so a slow network can't stall the
-    // splash screen), but `preloadRewarded` is gated on `isReady` so no
-    // ad request can fire before the chain resolves. When it does
-    // resolve, re-apply the analytics consent signals so Firebase /
-    // Amplitude flip from the pessimistic pre-consent defaults to the
-    // user's actual choice.
-    unawaited(platform_ads.AdsService.instance.initialize().then((_) {
-      _applyConsentToAnalytics();
-    }).catchError((Object e, StackTrace st) {
-      debugPrint('[ADS_INIT_FAIL] $e\n$st');
-    }));
+    // The consent → ATT → MobileAds chain is deferred until the splash
+    // screen dismisses — the iOS ATT system prompt should land on an
+    // interactive screen, not over the still-loading splash artwork.
+    // See `_bootAdStack` and the `/splash` route below. `preloadRewarded`
+    // gates on `isReady`, so any preload call from gameplay safely waits
+    // for the chain to resolve.
     ads = GoogleMobileAdsEconomyService();
   } else {
     iap = MockIapService();
@@ -128,6 +122,23 @@ Future<void> main() async {
   }
 
   runApp(SkyStrikeApp(economy: economy));
+}
+
+/// Boots the platform ads stack: UMP consent → iOS ATT prompt →
+/// MobileAds SDK init. Fired from the splash screen the moment it
+/// dismisses, so the ATT system dialog lands on an interactive surface
+/// rather than over the still-loading splash artwork.
+///
+/// Idempotent — `AdsService.initialize()` caches its in-flight future,
+/// so repeated calls (hot reload, splash re-entry) are no-ops. Errors
+/// are logged and swallowed; a consent or network failure must not
+/// block gameplay.
+void _bootAdStack() {
+  unawaited(platform_ads.AdsService.instance.initialize().then((_) {
+    _applyConsentToAnalytics();
+  }).catchError((Object e, StackTrace st) {
+    debugPrint('[ADS_INIT_FAIL] $e\n$st');
+  }));
 }
 
 /// Applies the resolved UMP / ATT state to every data-collecting SDK.
@@ -241,7 +252,11 @@ class _SkyStrikeAppState extends State<SkyStrikeApp>
         ),
         initialRoute: '/splash',
         routes: {
-          '/splash': (_) => const SplashScreen(),
+          // Release-only callback: debug/profile builds use MockAdsService
+          // and the platform stack is never wired in.
+          '/splash': (_) => const SplashScreen(
+                onDismiss: kReleaseMode ? _bootAdStack : null,
+              ),
           '/home': (_) => const MainShell(),
           '/game': (_) => const GameScreen(),
           '/daily-rewards': (_) => const DailyRewardScreen(),
