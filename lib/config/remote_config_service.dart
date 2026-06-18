@@ -341,12 +341,23 @@ class CurrencyPack {
   final int amount;
   final double price;
 
-  const CurrencyPack({required this.id, required this.amount, required this.price});
+  /// Platform store product id (App Store Connect / Play Console). Null
+  /// when the pack hasn't been mapped to a store SKU yet — the shop CTA
+  /// stays disabled in that case rather than granting for free.
+  final String? iapProductId;
+
+  const CurrencyPack({
+    required this.id,
+    required this.amount,
+    required this.price,
+    this.iapProductId,
+  });
 
   factory CurrencyPack.fromJson(Map<String, dynamic> j) => CurrencyPack(
         id: _asString(j['id']) ?? '',
         amount: _asInt(j['amount']) ?? 0,
         price: _asDouble(j['price']) ?? 0,
+        iapProductId: _asString(j['iap_product_id']),
       );
 }
 
@@ -589,6 +600,11 @@ class OfferConfig {
   final int unlockLevel;
   final String? dismissTrigger; // 'duration_expire_or_purchase', etc.
 
+  /// Platform store product id backing this offer's paid CTA. Null when
+  /// the offer hasn't been mapped to a store SKU yet — the CTA stays
+  /// disabled in that case rather than granting for free.
+  final String? productId;
+
   const OfferConfig({
     required this.assetName,
     required this.displayName,
@@ -601,6 +617,7 @@ class OfferConfig {
     required this.triggerChallengeId,
     required this.unlockLevel,
     required this.dismissTrigger,
+    this.productId,
   });
 
   factory OfferConfig.fromJson(Map<String, dynamic> j) => OfferConfig(
@@ -615,6 +632,7 @@ class OfferConfig {
         triggerChallengeId: _asString(j['trigger_challenge_id']),
         unlockLevel: _asInt(j['unlock_level']) ?? 0,
         dismissTrigger: _asString(j['dismiss_trigger']),
+        productId: _asString(j['product_id']),
       );
 }
 

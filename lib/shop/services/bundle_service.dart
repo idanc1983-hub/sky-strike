@@ -140,9 +140,13 @@ class BundleService extends ChangeNotifier {
     }
   }
 
-  /// Attempts to purchase [bundleId]. Returns true on success. Records the
-  /// purchase via the repository and re-runs the segment filter so any
-  /// single-purchase bundles drop out of the list.
+  /// Records a *confirmed* purchase of [bundleId] and re-runs the segment
+  /// filter so single-purchase bundles drop out of the list.
+  ///
+  /// This does NOT start the store/IAP flow or grant the reward — the
+  /// caller is responsible for completing the actual purchase (StoreKit/
+  /// Play via [EconomyState.purchaseIap], or a gem debit) and only calling
+  /// this once the store confirms. See `ShopShell._purchaseBundle`.
   Future<bool> attemptPurchase(String bundleId) async {
     try {
       await repository.recordPurchase(bundleId);

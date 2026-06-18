@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../config/remote_config_service.dart';
+import '../economy/services/iap_service.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/dev_tools_sheet.dart';
 import '../services/ads/consent_manager.dart';
@@ -269,16 +271,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _onSupportTap() async {
-    final p = await SharedPreferences.getInstance();
-    await p.setBool('support_ad_free', true);
+    final messenger = ScaffoldMessenger.of(context);
+    final productId = RemoteConfigService.I.monetization
+        .configByAssetName('support_us')
+        ?.productId;
+    if (productId == null || productId.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Support is unavailable right now.')),
+      );
+      return;
+    }
+    final economy = context.read<EconomyState>();
+    // Support is a pure tip — no in-game reward — so the success callback
+    // grants nothing; the StoreKit/Play transaction itself is the whole
+    // flow. The thank-you only shows after the store confirms.
+    final outcome =
+        await economy.purchaseProduct(productId, onConfirmed: () {});
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Thank you for your support!'),
-        backgroundColor: Color(0xFF0d1f0d),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    switch (outcome.result) {
+      case IapPurchaseResult.success:
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Thank you for your support!'),
+            backgroundColor: Color(0xFF0d1f0d),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        break;
+      case IapPurchaseResult.cancelled:
+        break;
+      case IapPurchaseResult.failed:
+      case IapPurchaseResult.productUnknown:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Purchase failed: ${outcome.errorMessage ?? outcome.result.name}',
+            ),
+          ),
+        );
+        break;
+    }
   }
 
   // ---------------------------------------------------------------------------

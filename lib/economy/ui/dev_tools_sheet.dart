@@ -896,7 +896,8 @@ class _MonetizationLauncherState extends State<_MonetizationLauncher> {
   /// active asset by name — this just gives the dropdown its options.
   static const List<_MonetizationEntry> _entries = [
     _MonetizationEntry('fto',                'ThreePlusOne'),
-    _MonetizationEntry('first_purchase',     'ThreePlusOne'),
+    // first_purchase is an any-purchase bonus (no own SKU) — surfaced via
+    // a different flow, intentionally not a launchable offer here.
     _MonetizationEntry('1+2_ironsky',        'ThreePlusOne'),
     _MonetizationEntry('1+2_laststand',      'ThreePlusOne'),
     _MonetizationEntry('1+2_goldensky',      'ThreePlusOne'),

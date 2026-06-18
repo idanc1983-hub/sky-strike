@@ -1,11 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../config/remote_config_service.dart';
 import '../../shared/theme/app_colors.dart';
+import '../services/iap_service.dart';
 import '../services/offer_reward_parser.dart';
 import '../services/offer_state_store.dart';
+import '../state/economy_state.dart';
+import 'offer_grant.dart';
 import 'offer_popup_chrome.dart';
 import 'popup_bg_view.dart';
 
@@ -78,6 +82,65 @@ class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
     setState(() => _claimed = n);
   }
 
+  /// Acts on the next-in-line slot. The paid anchor (slot 1) runs the
+  /// platform purchase and grants only on a confirmed transaction; the two
+  /// free unlocks grant immediately. The slot is recorded as claimed only
+  /// after its reward is granted — never on tap alone.
+  Future<void> _handleSlot(
+    BuildContext context,
+    String? productId,
+    List<_SlotData> slots,
+  ) async {
+    if (_claimed >= slots.length) return;
+    final slot = slots[_claimed];
+    final economy = context.read<EconomyState?>();
+    if (economy == null) return;
+
+    if (slot.isPaid) {
+      final messenger = ScaffoldMessenger.of(context);
+      if (productId == null || productId.isEmpty) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('No store product configured for ${widget.assetId}'),
+          ),
+        );
+        return;
+      }
+      final outcome = await economy.purchaseProduct(
+        productId,
+        onConfirmed: () => _grant(economy, slot),
+      );
+      if (!mounted) return;
+      switch (outcome.result) {
+        case IapPurchaseResult.success:
+          break;
+        case IapPurchaseResult.cancelled:
+          return;
+        case IapPurchaseResult.failed:
+        case IapPurchaseResult.productUnknown:
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                'Purchase failed: '
+                '${outcome.errorMessage ?? outcome.result.name}',
+              ),
+            ),
+          );
+          return;
+      }
+    } else {
+      _grant(economy, slot);
+    }
+    await _claimNext();
+  }
+
+  void _grant(EconomyState economy, _SlotData slot) {
+    final ungranted = OfferGrant.apply(economy, slot.rewards);
+    if (ungranted.isNotEmpty) {
+      debugPrint('[offer] ${widget.assetId}: ungranted reward tokens $ungranted');
+    }
+  }
+
   @override
   void dispose() {
     _ticker?.cancel();
@@ -123,7 +186,7 @@ class _ThreePlusOneOfferPopupState extends State<ThreePlusOneOfferPopup> {
                     child: _SlotsRow(
                       slots: slots,
                       claimed: _claimed,
-                      onTap: () => _claimNext(),
+                      onTap: () => _handleSlot(context, cfg?.productId, slots),
                     ),
                   ),
                   const SizedBox(height: 16),

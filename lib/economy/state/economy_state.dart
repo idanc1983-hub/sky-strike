@@ -19,6 +19,7 @@ import '../services/economy_api.dart';
 import '../services/economy_persistence.dart';
 import '../services/ftue_triggers.dart';
 import '../services/iap_service.dart';
+import '../services/offer_reward_parser.dart';
 import '../services/pack_pricing.dart';
 import '../services/power_up_picker.dart';
 import '../services/revive_pricing.dart';
@@ -119,6 +120,7 @@ class EconomyState extends ChangeNotifier {
   bool _adsRemoved = false;
   final Set<String> _packsPurchased = <String>{};
   final Set<String> _ownedJets = <String>{'jet_player'};
+  final Set<String> _ownedJetSkins = <String>{};
   DateTime? _installDate;
   int _pendingNextJetDiscountPct = 0;
 
@@ -244,6 +246,9 @@ class EconomyState extends ChangeNotifier {
   Set<String> get packsPurchased => Set<String>.unmodifiable(_packsPurchased);
   Set<String> get ownedJets => Set<String>.unmodifiable(_ownedJets);
   bool ownsJet(String jetId) => _ownedJets.contains(jetId);
+
+  Set<String> get ownedJetSkins => Set<String>.unmodifiable(_ownedJetSkins);
+  bool ownsJetSkin(String skinId) => _ownedJetSkins.contains(skinId);
   int get pendingNextJetDiscountPct => _pendingNextJetDiscountPct;
 
   // FTUE surface
@@ -332,6 +337,9 @@ class EconomyState extends ChangeNotifier {
       ..clear()
       ..addAll(snap.ownedJets)
       ..add('jet_player');
+    _ownedJetSkins
+      ..clear()
+      ..addAll(snap.ownedJetSkins);
     _installDate = snap.installDate ?? _now();
 
     // Challenge / FTUE / Ace fields (added in v1.3)
@@ -967,6 +975,26 @@ class EconomyState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Records ownership of a cosmetic jet skin. Idempotent — re-granting an
+  /// owned skin is a no-op. Call only after a purchase is confirmed.
+  void grantJetSkin(String skinId) {
+    if (skinId.isEmpty) return;
+    if (_ownedJetSkins.add(skinId)) {
+      _scheduleSync();
+      notifyListeners();
+    }
+  }
+
+  /// Applies a chest payout that the caller has already resolved (coins /
+  /// gems / an optional jet) from Remote Config. Kept here so chest grants
+  /// from offers and bundles run through the same wallet path as every
+  /// other reward; resolution itself stays in the UI/config layer.
+  void grantChest({int coins = 0, int gems = 0, String? jetId}) {
+    if (coins > 0) addCoins(coins, source: 'chest');
+    if (gems > 0) addGems(gems, source: 'chest');
+    if (jetId != null && jetId.isNotEmpty) buyJet(jetId, 0);
+  }
+
   /// Removes [count] copies of [powerUpId] from the inventory. Returns
   /// true if the inventory had enough to deduct; false (no mutation) if
   /// not. Used when the player consumes a stockpiled power-up.
@@ -1336,6 +1364,29 @@ class EconomyState extends ChangeNotifier {
     return outcome;
   }
 
+  /// Runs an IAP purchase for [productId] and applies the caller-supplied
+  /// [onConfirmed] grant **only** when the store reports a successful,
+  /// completed transaction.
+  ///
+  /// Use this for products whose reward is data-driven and therefore NOT
+  /// derivable from [IapCatalog] — shop currency packs, data-driven shop
+  /// bundles, and live-ops offers, where the same store SKU can back many
+  /// different in-game rewards. (Catalog-mapped packs still go through
+  /// [purchaseIap].) Returns the raw store outcome so the CTA can render
+  /// success or shake on cancel/failure.
+  Future<IapPurchaseOutcome> purchaseProduct(
+    String productId, {
+    required void Function() onConfirmed,
+  }) async {
+    final outcome = await _iap.requestPurchase(productId);
+    if (outcome.result == IapPurchaseResult.success) {
+      // The grant helpers (addCoins/addGems/grantPowerUp/buyJet) each
+      // schedule a sync and notify, so no extra bookkeeping is needed here.
+      onConfirmed();
+    }
+    return outcome;
+  }
+
   /// Asks the platform store to re-deliver previously purchased
   /// non-consumables (Remove Ads). Re-delivered purchases flow through
   /// the same purchase stream as fresh ones, so any matching reward is
@@ -1365,6 +1416,49 @@ class EconomyState extends ChangeNotifier {
       _applyAdReward(placement);
     }
     return outcome;
+  }
+
+  /// Applies a parsed list of monetization-offer reward [items] to the
+  /// wallet/inventory. Call only after the backing purchase is confirmed
+  /// (see [purchaseProduct]).
+  ///
+  /// Handles `coin`, `gem`, and `powerupPack` (random pick via
+  /// [PowerUpPicker], matching the coin-pack grant path). `chest` and
+  /// `unknown` items are NOT granted here — chest payouts need Remote
+  /// Config definitions + biome context that live in the UI layer — and
+  /// are returned to the caller so it can resolve them or surface a gap.
+  /// Returns the raw tokens of any items left ungranted.
+  List<String> applyOfferRewards(List<OfferRewardItem> items) {
+    final ungranted = <String>[];
+    for (final item in items) {
+      switch (item.kind) {
+        case OfferRewardKind.coin:
+          addCoins(item.amount, source: 'offer');
+          break;
+        case OfferRewardKind.gem:
+          addGems(item.amount, source: 'offer');
+          break;
+        case OfferRewardKind.powerupPack:
+          final picks = PowerUpPicker.pickMany(
+            count: item.amount,
+            maxWorldReached: _maxWorldReached,
+            rng: _rng,
+          );
+          for (final id in picks) {
+            _powerUpInventory[id] = (_powerUpInventory[id] ?? 0) + 1;
+          }
+          if (picks.isNotEmpty) {
+            _scheduleSync();
+            notifyListeners();
+          }
+          break;
+        case OfferRewardKind.chest:
+        case OfferRewardKind.unknown:
+          ungranted.add(item.raw);
+          break;
+      }
+    }
+    return ungranted;
   }
 
   void _applyIapReward(String productId) {
@@ -1513,6 +1607,7 @@ class EconomyState extends ChangeNotifier {
       adsRemoved: _adsRemoved,
       packsPurchased: Set<String>.from(_packsPurchased),
       ownedJets: Set<String>.from(_ownedJets),
+      ownedJetSkins: Set<String>.from(_ownedJetSkins),
       installDate: _installDate,
       pendingNextJetDiscountPct: _pendingNextJetDiscountPct,
       activeChallengeType: _activeChallengeType,
@@ -1702,6 +1797,7 @@ class EconomyState extends ChangeNotifier {
     _ownedJets
       ..clear()
       ..add('jet_player');
+    _ownedJetSkins.clear();
     _pendingNextJetDiscountPct = 0;
     _installDate = _now();
     _activeChallengeType = null;

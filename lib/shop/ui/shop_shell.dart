@@ -5,9 +5,11 @@ import 'package:provider/provider.dart';
 
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_typography.dart';
+import '../../economy/services/iap_service.dart';
 import '../../economy/state/economy_state.dart';
 import '../../shared/widgets/asset_placeholder.dart';
 import '../models/bundle_content.dart';
+import '../models/bundle_price.dart';
 import '../models/player_segment.dart';
 import '../models/shop_bundle.dart';
 import '../services/bundle_service.dart';
@@ -66,6 +68,95 @@ class _ShopShellState extends State<ShopShell> {
     });
   }
 
+  /// Runs the *real* purchase for [bundleId] when its CTA is tapped.
+  ///
+  /// For IAP-priced bundles this hands off to `package:in_app_purchase`
+  /// via [EconomyState.purchaseIap] — which starts the device purchase
+  /// flow and only applies the reward inside the success callback once
+  /// StoreKit/Play confirms a completed transaction. For gem-priced
+  /// bundles it debits the wallet. Either way the bundle is only
+  /// *recorded* (so segment/purchase-limit tracking updates and
+  /// single-purchase bundles drop out) after the purchase is confirmed —
+  /// never on tap alone.
+  ///
+  /// Returns true only when the purchase succeeds, so [BundlePriceButton]
+  /// shows its success state for real purchases and shakes on
+  /// cancel/failure.
+  Future<bool> _purchaseBundle(
+    BuildContext context,
+    BundleService service,
+    List<ShopBundle> bundles,
+    String bundleId,
+  ) async {
+    final economy = context.read<EconomyState?>();
+    if (economy == null) return false;
+
+    ShopBundle? bundle;
+    for (final b in bundles) {
+      if (b.id == bundleId) {
+        bundle = b;
+        break;
+      }
+    }
+    if (bundle == null) return false;
+
+    final price = bundle.price;
+    if (price.type == BundlePriceType.iap) {
+      final productId = price.iapProductId;
+      if (productId == null) return false;
+      // The same store SKU can back several different bundles, so the
+      // reward is granted from this bundle's own contents — not from a
+      // productId→reward map — and only after StoreKit/Play confirms.
+      final captured = bundle;
+      final outcome = await economy.purchaseProduct(
+        productId,
+        onConfirmed: () => _grantBundleContents(economy, captured),
+      );
+      if (outcome.result != IapPurchaseResult.success) return false;
+    } else {
+      // Gem-priced bundle — debit the wallet; a player who can't afford
+      // it gets a shake on the CTA via the false return.
+      if (!economy.spendGems(price.gemCost ?? 0)) return false;
+      _grantBundleContents(economy, bundle);
+    }
+
+    // Purchase confirmed and reward granted — now record it for segment /
+    // purchase-limit tracking. A recording hiccup must not surface to the
+    // player as a failed purchase, so its result is intentionally ignored.
+    await service.attemptPurchase(bundleId);
+    return true;
+  }
+
+  /// Applies every reward line in [bundle].contents to the wallet/inventory.
+  /// Call only after the purchase (store or gem) is confirmed.
+  void _grantBundleContents(EconomyState economy, ShopBundle bundle) {
+    for (final c in bundle.contents) {
+      switch (c.type) {
+        case BundleContentType.gems:
+          economy.addGems(c.count, source: 'bundle_${bundle.id}');
+          break;
+        case BundleContentType.coins:
+          economy.addCoins(c.count, source: 'bundle_${bundle.id}');
+          break;
+        case BundleContentType.powerup:
+          if (c.itemId != null) {
+            economy.grantPowerUp(c.itemId!, count: c.count <= 0 ? 1 : c.count);
+          }
+          break;
+        case BundleContentType.jet:
+          if (c.itemId != null) economy.buyJet(c.itemId!, 0);
+          break;
+        case BundleContentType.jetSkin:
+          if (c.itemId != null) economy.grantJetSkin(c.itemId!);
+          break;
+        case BundleContentType.xpBoost:
+          // xp_boost grants its `count` as XP (cascading any level-ups).
+          economy.addXP(c.count);
+          break;
+      }
+    }
+  }
+
   List<ShopBundle> _filteredForTab(List<ShopBundle> all, ShopTab tab) {
     switch (tab) {
       case ShopTab.bundles:
@@ -122,9 +213,7 @@ class _ShopShellState extends State<ShopShell> {
                   featured: featured,
                   compact: compactList,
                   pageController: _pageController!,
-                  onPurchase: (id) async {
-                    return service.attemptPurchase(id);
-                  },
+                  onPurchase: (id) => _purchaseBundle(context, service, all, id),
                   onCarouselPage: (i) =>
                       context.read<ShopState>().setCarouselPage(i),
                   onRefresh: () => service.refresh(),

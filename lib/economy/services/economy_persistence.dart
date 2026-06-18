@@ -36,6 +36,7 @@ class EconomySnapshot {
   final bool adsRemoved;
   final Set<String> packsPurchased;
   final Set<String> ownedJets;
+  final Set<String> ownedJetSkins;
   final DateTime? installDate;
   final int pendingNextJetDiscountPct;
 
@@ -79,6 +80,7 @@ class EconomySnapshot {
     required this.adsRemoved,
     required this.packsPurchased,
     required this.ownedJets,
+    this.ownedJetSkins = const <String>{},
     required this.installDate,
     required this.pendingNextJetDiscountPct,
     required this.activeChallengeType,
@@ -331,6 +333,7 @@ class EconomyPersistence {
         packsPurchased: _decodeStringSetDynamic(decoded['packsPurchased']),
         ownedJets: _decodeStringSetDynamic(decoded['ownedJets'])
           ..add('jet_player'),
+        ownedJetSkins: _decodeStringSetDynamic(decoded['ownedJetSkins']),
         installDate: _readDate(decoded['installDate']),
         pendingNextJetDiscountPct:
             _readInt(decoded['pendingNextJetDiscountPct']) ?? 0,
@@ -445,6 +448,7 @@ class EconomyPersistence {
       'adsRemoved': s.adsRemoved,
       'packsPurchased': s.packsPurchased.toList(),
       'ownedJets': s.ownedJets.toList(),
+      'ownedJetSkins': s.ownedJetSkins.toList(),
       'installDate': s.installDate?.toIso8601String(),
       'pendingNextJetDiscountPct': s.pendingNextJetDiscountPct,
       'activeChallengeType': s.activeChallengeType?.jsonValue,
@@ -511,6 +515,7 @@ class EconomyPersistence {
       ownedJets: s.ownedJets.isEmpty
           ? <String>{'jet_player'}
           : (Set<String>.from(s.ownedJets)..add('jet_player')),
+      ownedJetSkins: s.ownedJetSkins,
       installDate: s.installDate,
       pendingNextJetDiscountPct: _clampInt(
         s.pendingNextJetDiscountPct,

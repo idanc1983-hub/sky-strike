@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../config/remote_config_service.dart';
 import '../economy/services/chest_reward_resolver.dart';
+import '../economy/services/iap_service.dart';
 import '../economy/state/economy_state.dart';
 import '../economy/ui/not_enough_coins_popup.dart';
 import '../shared/theme/app_colors.dart';
@@ -209,8 +210,12 @@ class _GemPacksSection extends StatelessWidget {
   static List<_PackEntry> _readGemPacks() {
     final packs = RemoteConfigService.I.shop.gemPacks;
     return packs
-        .map((p) =>
-            _PackEntry(id: p.id, amount: p.amount, priceUsd: p.price))
+        .map((p) => _PackEntry(
+              id: p.id,
+              amount: p.amount,
+              priceUsd: p.price,
+              productId: p.iapProductId,
+            ))
         .toList()
       ..sort((a, b) => a.priceUsd.compareTo(b.priceUsd));
   }
@@ -323,8 +328,12 @@ class _CoinPacksSection extends StatelessWidget {
   static List<_PackEntry> _readCoinPacks() {
     final packs = RemoteConfigService.I.shop.coinPacks;
     return packs
-        .map((p) =>
-            _PackEntry(id: p.id, amount: p.amount, priceUsd: p.price))
+        .map((p) => _PackEntry(
+              id: p.id,
+              amount: p.amount,
+              priceUsd: p.price,
+              productId: p.iapProductId,
+            ))
         .toList()
       ..sort((a, b) => a.priceUsd.compareTo(b.priceUsd));
   }
@@ -782,7 +791,7 @@ class _PackCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
             child: GestureDetector(
-              onTap: () => _showSnack(context),
+              onTap: () => _buy(context),
               child: Container(
                 width: double.infinity,
                 height: 36,
@@ -808,10 +817,54 @@ class _PackCard extends StatelessWidget {
     );
   }
 
-  void _showSnack(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('IAP flow for ${pack.id} not yet wired')),
+  /// Starts the platform purchase flow for this pack. The coins/gems are
+  /// granted only inside [EconomyState.purchaseProduct]'s success callback,
+  /// after StoreKit/Play confirms a completed transaction — never on tap.
+  Future<void> _buy(BuildContext context) async {
+    final productId = pack.productId;
+    final messenger = ScaffoldMessenger.of(context);
+    if (productId == null || productId.isEmpty) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('No store product configured for ${pack.id}')),
+      );
+      return;
+    }
+    final economy = context.read<EconomyState>();
+    final outcome = await economy.purchaseProduct(
+      productId,
+      onConfirmed: () {
+        if (isGem) {
+          economy.addGems(pack.amount, source: 'iap_$productId');
+        } else {
+          economy.addCoins(pack.amount, source: 'iap_$productId');
+        }
+      },
     );
+    if (!context.mounted) return;
+    switch (outcome.result) {
+      case IapPurchaseResult.success:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '+${_formatNumber(pack.amount)} ${isGem ? 'gems' : 'coins'}',
+            ),
+          ),
+        );
+        break;
+      case IapPurchaseResult.cancelled:
+        // Player backed out of the store sheet — stay silent.
+        break;
+      case IapPurchaseResult.failed:
+      case IapPurchaseResult.productUnknown:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Purchase failed: ${outcome.errorMessage ?? outcome.result.name}',
+            ),
+          ),
+        );
+        break;
+    }
   }
 }
 
@@ -1370,10 +1423,16 @@ class _PackEntry {
   final String id;
   final int amount;
   final double priceUsd;
+
+  /// Platform store product id for this pack; null when unmapped (CTA
+  /// disabled rather than granting for free).
+  final String? productId;
+
   const _PackEntry({
     required this.id,
     required this.amount,
     required this.priceUsd,
+    this.productId,
   });
   factory _PackEntry.empty(String id) =>
       _PackEntry(id: id, amount: 0, priceUsd: 0.0);

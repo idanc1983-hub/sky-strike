@@ -3,64 +3,76 @@
     {
       "id": "coin_1",
       "amount": 500,
-      "price": 0.99
+      "price": 0.99,
+      "iap_product_id": "com.idancohen.skystrike.coins.t1"
     },
     {
       "id": "coin_2",
       "amount": 1800,
-      "price": 2.99
+      "price": 2.99,
+      "iap_product_id": "com.idancohen.skystrike.coins.t2"
     },
     {
       "id": "coin_3",
       "amount": 3500,
-      "price": 4.99
+      "price": 4.99,
+      "iap_product_id": "com.idancohen.skystrike.coins.t3"
     },
     {
       "id": "coin_4",
       "amount": 8000,
-      "price": 9.99
+      "price": 9.99,
+      "iap_product_id": "com.idancohen.skystrike.coins.t4"
     },
     {
       "id": "coin_5",
       "amount": 18000,
-      "price": 19.99
+      "price": 19.99,
+      "iap_product_id": "com.idancohen.skystrike.coins.t5"
     },
     {
       "id": "coin_6",
       "amount": 50000,
-      "price": 49.99
+      "price": 49.99,
+      "iap_product_id": "com.idancohen.skystrike.coins.t6"
     }
   ],
   "gem_packs": [
     {
       "id": "gem_1",
       "amount": 25,
-      "price": 0.99
+      "price": 0.99,
+      "iap_product_id": "com.idancohen.skystrike.gems.t1"
     },
     {
       "id": "gem_2",
       "amount": 90,
-      "price": 2.99
+      "price": 2.99,
+      "iap_product_id": "com.idancohen.skystrike.gems.t2"
     },
     {
       "id": "gem_3",
       "amount": 175,
-      "price": 4.99
+      "price": 4.99,
+      "iap_product_id": "com.idancohen.skystrike.gems.t3"
     },
     {
       "id": "gem_4",
       "amount": 400,
-      "price": 9.99
+      "price": 9.99,
+      "iap_product_id": "com.idancohen.skystrike.gems.t_4"
     },
     {
       "id": "gem_5",
       "amount": 900,
-      "price": 19.99
+      "price": 19.99,
+      "iap_product_id": "com.idancohen.skystrike.gems.t_5"
     },
     {
       "id": "gem_6",
       "amount": 2500,
-      "price": 49.99
+      "price": 49.99,
+      "iap_product_id": "com.idancohen.skystrike.gems.t6"
     }
   ],
   "chest_deals": [

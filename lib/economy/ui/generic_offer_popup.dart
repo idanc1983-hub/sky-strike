@@ -1,11 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../config/remote_config_service.dart';
 import '../../shared/theme/app_colors.dart';
+import '../services/iap_service.dart';
 import '../services/offer_reward_parser.dart';
 import '../services/offer_state_store.dart';
+import '../state/economy_state.dart';
+import 'offer_grant.dart';
 import 'offer_popup_chrome.dart';
 import 'popup_bg_view.dart';
 
@@ -123,9 +127,9 @@ class _GenericOfferPopupState extends State<GenericOfferPopup> {
                             : '\$\$\$'),
                     claimed: _purchased,
                     height: 54,
-                    onTap: priceUsd <= 0
+                    onTap: (priceUsd <= 0 || _purchased)
                         ? null
-                        : () => setState(() => _purchased = true),
+                        : () => _handlePurchase(context, cfg?.productId, rewards),
                   ),
                   const SizedBox(height: 16),
                   if (_remaining > Duration.zero)
@@ -144,6 +148,59 @@ class _GenericOfferPopupState extends State<GenericOfferPopup> {
         ),
       ),
     );
+  }
+
+  /// Starts the platform purchase for this offer. The rewards are applied
+  /// only inside [EconomyState.purchaseProduct]'s success callback, after
+  /// StoreKit/Play confirms a completed transaction — never on tap.
+  Future<void> _handlePurchase(
+    BuildContext context,
+    String? productId,
+    List<OfferRewardItem> rewards,
+  ) async {
+    if (_purchased) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (productId == null || productId.isEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('No store product configured for ${widget.assetId}'),
+        ),
+      );
+      return;
+    }
+    final economy = context.read<EconomyState?>();
+    if (economy == null) return;
+    final outcome = await economy.purchaseProduct(
+      productId,
+      onConfirmed: () {
+        final ungranted = OfferGrant.apply(economy, rewards);
+        if (ungranted.isNotEmpty) {
+          // Unresolved tokens (unknown / biome_chest_match) — surface the
+          // gap rather than silently dropping them.
+          debugPrint(
+            '[offer] ${widget.assetId}: ungranted reward tokens $ungranted',
+          );
+        }
+      },
+    );
+    if (!mounted) return;
+    switch (outcome.result) {
+      case IapPurchaseResult.success:
+        setState(() => _purchased = true);
+        break;
+      case IapPurchaseResult.cancelled:
+        break;
+      case IapPurchaseResult.failed:
+      case IapPurchaseResult.productUnknown:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Purchase failed: ${outcome.errorMessage ?? outcome.result.name}',
+            ),
+          ),
+        );
+        break;
+    }
   }
 
   static List<OfferRewardItem> _parseRewards(List<String>? raw) {
