@@ -447,9 +447,13 @@ class _RewardRow extends StatelessWidget {
     // Center the row when there's exactly one icon with no amount text
     // (chest-only and jet-only tiles). Currency tiles stay left-aligned.
     final hasOnlyIcon = items.length == 1 && items[0].amountLabel == null;
-    // Match Day-7 icon size for solo chest/jet tiles so they don't appear
-    // shrunken relative to the climax reward.
-    final iconSize = (large || hasOnlyIcon) ? 64.0 : 44.0;
+    // Solo chest/jet tiles render larger than currency tiles so they don't
+    // appear shrunken. On the full-width Day-7 row there's vertical room for
+    // the full 64px; in the cramped 3-col grid that overflows the cell, so
+    // cap solo icons at 56px there.
+    final iconSize = large
+        ? 64.0
+        : (hasOnlyIcon ? 56.0 : 44.0);
     final textStyle = TextStyle(
       color: AppColors.amber,
       fontSize: large ? 20 : 15,
@@ -476,7 +480,15 @@ class _RewardRow extends StatelessWidget {
           _RewardIcon(item: items[i], size: iconSize),
           if (items[i].amountLabel != null) ...[
             const SizedBox(width: 5),
-            Text(items[i].amountLabel!, style: textStyle),
+            Flexible(
+              child: Text(
+                items[i].amountLabel!,
+                style: textStyle,
+                maxLines: 1,
+                overflow: TextOverflow.visible,
+                softWrap: false,
+              ),
+            ),
           ],
         ],
       ],
