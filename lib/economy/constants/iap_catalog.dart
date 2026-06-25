@@ -18,15 +18,16 @@ class IapCatalog {
   /// Stable id of the three contextual coin packs (NOT shown in the main
   /// shop — only triggered by the insufficient-coins event).
   static const List<String> contextualCoinPackIds = <String>[
-    'coin_stockup',
-    'coin_surge',
-    'coin_tycoon',
+    'com.idancohen.skystrike.outofcoinslaunch1',
+    'com.idancohen.skystrike.outofcoinslaunch2',
+    'com.idancohen.skystrike.outofcoinslaunch3',
   ];
 
   /// One-shot "full experience" contextual offer fired by the shop when
   /// the player can't afford a purchase. Sized at 10k coins to match a
   /// realistic mid-game spend (epic chest + a couple of power-ups).
-  static const String fullExperienceCoinPackId = 'coin_essentials';
+  static const String fullExperienceCoinPackId =
+      'com.idancohen.skystrike.outofcoinsstore';
 
   /// Combined product id list — the IAP SDK queries platform stores using
   /// this whole set on app launch.
@@ -40,10 +41,10 @@ class IapCatalog {
     'pilot_bundle': 4.99,
     'squadron_bundle': 9.99,
     'whale_pack': 49.99,
-    'coin_stockup': 0.99,
-    'coin_surge': 2.99,
-    'coin_tycoon': 4.99,
-    'coin_essentials': 0.99,
+    'com.idancohen.skystrike.outofcoinslaunch1': 0.99,
+    'com.idancohen.skystrike.outofcoinslaunch2': 2.99,
+    'com.idancohen.skystrike.outofcoinslaunch3': 4.99,
+    'com.idancohen.skystrike.outofcoinsstore': 0.99,
   };
 
   /// Player-facing display name.
@@ -52,10 +53,10 @@ class IapCatalog {
     'pilot_bundle': 'Pilot Bundle',
     'squadron_bundle': 'Squadron Bundle',
     'whale_pack': 'Whale Pack',
-    'coin_stockup': 'Coin Stock-Up',
-    'coin_surge': 'Coin Surge',
-    'coin_tycoon': 'Coin Tycoon',
-    'coin_essentials': 'Coin Essentials',
+    'com.idancohen.skystrike.outofcoinslaunch1': 'Coin Stock-Up',
+    'com.idancohen.skystrike.outofcoinslaunch2': 'Coin Surge',
+    'com.idancohen.skystrike.outofcoinslaunch3': 'Coin Tycoon',
+    'com.idancohen.skystrike.outofcoinsstore': 'Coin Essentials',
   };
 
   // ---------------------------------------------------------------------------
@@ -83,26 +84,26 @@ class IapCatalog {
 
   /// Coins granted by each contextual coin pack.
   static const Map<String, int> coinPackCoins = <String, int>{
-    'coin_stockup': 2000,
-    'coin_surge': 7500,
-    'coin_tycoon': 15000,
-    'coin_essentials': 10000,
+    'com.idancohen.skystrike.outofcoinslaunch1': 750,
+    'com.idancohen.skystrike.outofcoinslaunch2': 2000,
+    'com.idancohen.skystrike.outofcoinslaunch3': 4000,
+    'com.idancohen.skystrike.outofcoinsstore': 750,
   };
 
   /// Random power-up grants per coin pack.
   static const Map<String, int> coinPackPowerUps = <String, int>{
-    'coin_stockup': 2,
-    'coin_surge': 5,
-    'coin_tycoon': 10,
-    'coin_essentials': 3,
+    'com.idancohen.skystrike.outofcoinslaunch1': 2,
+    'com.idancohen.skystrike.outofcoinslaunch2': 5,
+    'com.idancohen.skystrike.outofcoinslaunch3': 10,
+    'com.idancohen.skystrike.outofcoinsstore': 3,
   };
 
   /// Gems bundled with the larger coin packs.
   static const Map<String, int> coinPackGems = <String, int>{
-    'coin_stockup': 0,
-    'coin_surge': 10,
-    'coin_tycoon': 25,
-    'coin_essentials': 5,
+    'com.idancohen.skystrike.outofcoinslaunch1': 0,
+    'com.idancohen.skystrike.outofcoinslaunch2': 10,
+    'com.idancohen.skystrike.outofcoinslaunch3': 25,
+    'com.idancohen.skystrike.outofcoinsstore': 5,
   };
 
   // ---------------------------------------------------------------------------

@@ -47,9 +47,17 @@ class StoreIapService implements IapService {
   StoreIapService({InAppPurchase? store})
       : _store = store ?? InAppPurchase.instance;
 
-  /// Queries the store for every catalog id and subscribes to the
+  /// Queries the store for every catalog id (plus any [extraProductIds]
+  /// the caller supplies — e.g. the Remote-Config-driven shop pack / offer
+  /// SKUs that aren't hard-coded in [IapCatalog]) and subscribes to the
   /// purchase stream. Idempotent.
-  Future<void> initialize() async {
+  ///
+  /// IMPORTANT: a productId that isn't queried here can never be purchased
+  /// — `requestPurchase` returns [IapPurchaseResult.productUnknown] for it.
+  /// So every SKU the app can sell must be in this set.
+  Future<void> initialize({
+    Set<String> extraProductIds = const <String>{},
+  }) async {
     if (_initialized) return;
     _initialized = true;
 
@@ -66,8 +74,11 @@ class StoreIapService implements IapService {
       },
     );
 
-    final ids = IapCatalog.allIds().toSet()
-      ..add(IapCatalog.removeAdsProductId);
+    final ids = <String>{
+      ...IapCatalog.allIds(),
+      IapCatalog.removeAdsProductId,
+      ...extraProductIds,
+    };
     final response = await _store.queryProductDetails(ids);
     if (response.error != null) {
       debugPrint('[iap] queryProductDetails error: ${response.error}');

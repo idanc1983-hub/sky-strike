@@ -315,7 +315,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ---------------------------------------------------------------------------
   // Debug-only build footer. Hidden entirely in release builds. The dev
-  // tools hook lives on a 5-second hold over the 'G' in the title.
+  // tools hook lives on a long press of the title word.
   // ---------------------------------------------------------------------------
   Widget _buildDebugFooter() {
     return Padding(

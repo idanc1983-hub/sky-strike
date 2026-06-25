@@ -133,5 +133,47 @@
       "power_up_id": "drone_wingman",
       "coin_price": 400
     }
+  ],
+  "coin_offers": [
+    {
+      "id": "coin_essentials",
+      "display_name": "Coin Essentials",
+      "context": "full_experience",
+      "price": 0.99,
+      "coins": 750,
+      "gems": 5,
+      "power_ups": 3,
+      "iap_product_id": "com.idancohen.skystrike.outofcoinsstore"
+    },
+    {
+      "id": "coin_stockup",
+      "display_name": "Coin Stock-Up",
+      "context": "out_of_coins",
+      "price": 0.99,
+      "coins": 750,
+      "gems": 0,
+      "power_ups": 2,
+      "iap_product_id": "com.idancohen.skystrike.outofcoinslaunch1"
+    },
+    {
+      "id": "coin_surge",
+      "display_name": "Coin Surge",
+      "context": "out_of_coins",
+      "price": 2.99,
+      "coins": 2000,
+      "gems": 10,
+      "power_ups": 5,
+      "iap_product_id": "com.idancohen.skystrike.outofcoinslaunch2"
+    },
+    {
+      "id": "coin_tycoon",
+      "display_name": "Coin Tycoon",
+      "context": "out_of_coins",
+      "price": 4.99,
+      "coins": 4000,
+      "gems": 25,
+      "power_ups": 10,
+      "iap_product_id": "com.idancohen.skystrike.outofcoinslaunch3"
+    }
   ]
 }

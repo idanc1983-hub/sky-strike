@@ -130,13 +130,17 @@ class _ShopShellState extends State<ShopShell> {
   /// Applies every reward line in [bundle].contents to the wallet/inventory.
   /// Call only after the purchase (store or gem) is confirmed.
   void _grantBundleContents(EconomyState economy, ShopBundle bundle) {
+    // Coins/gems are collected and flown into the holder via one
+    // celebration; everything else applies immediately.
+    var bundleCoins = 0;
+    var bundleGems = 0;
     for (final c in bundle.contents) {
       switch (c.type) {
         case BundleContentType.gems:
-          economy.addGems(c.count, source: 'bundle_${bundle.id}');
+          bundleGems += c.count;
           break;
         case BundleContentType.coins:
-          economy.addCoins(c.count, source: 'bundle_${bundle.id}');
+          bundleCoins += c.count;
           break;
         case BundleContentType.powerup:
           if (c.itemId != null) {
@@ -154,6 +158,9 @@ class _ShopShellState extends State<ShopShell> {
           economy.addXP(c.count);
           break;
       }
+    }
+    if (bundleCoins > 0 || bundleGems > 0) {
+      economy.beginCurrencyCelebration(coins: bundleCoins, gems: bundleGems);
     }
   }
 

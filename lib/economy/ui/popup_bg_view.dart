@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import '../../shared/theme/app_colors.dart';
@@ -53,12 +54,47 @@ class PopupBgView extends StatelessWidget {
         ),
       );
     }
-    // No art registered yet: rich dev placeholder.
-    return DevPopupBgPlaceholder(
-      popupBgKey: popupBgKey ?? 'unknown_bg',
-      displayName: displayName,
-      cycle: cycle,
-      borderRadius: borderRadius,
+    // No art registered yet. In debug, show the rich diagnostic
+    // placeholder; in release, fall back to a clean cycle-tinted gradient
+    // so players never see dev text / the "DEV" badge while art is pending.
+    if (kDebugMode) {
+      return DevPopupBgPlaceholder(
+        popupBgKey: popupBgKey ?? 'unknown_bg',
+        displayName: displayName,
+        cycle: cycle,
+        borderRadius: borderRadius,
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [_releaseTint(cycle), AppColors.cardBg],
+          ),
+        ),
+      ),
     );
+  }
+
+  /// Solid top colour for the release fallback gradient, tinted per cycle
+  /// so offers stay visually distinct even without bespoke art.
+  static Color _releaseTint(String? cycle) {
+    switch (cycle) {
+      case 'iron_skies':
+        return const Color(0xFF3A4350);
+      case 'last_stand':
+        return const Color(0xFF4A2F3A);
+      case 'golden_sky':
+        return const Color(0xFF5A4012);
+      case 'star_ascent':
+        return const Color(0xFF26224A);
+      case 'new_players':
+        return const Color(0xFF234A2E);
+      default:
+        return AppColors.greenDeep;
+    }
   }
 }

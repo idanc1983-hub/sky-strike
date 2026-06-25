@@ -7,6 +7,8 @@ import '../../config/remote_config_service.dart';
 import '../../game/models.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_typography.dart';
+import '../../widgets/chest_open_overlay.dart';
+import '../../widgets/coins_burst_overlay.dart';
 import '../state/economy_state.dart';
 import 'generic_offer_popup.dart';
 import 'snake_offer_popup.dart';
@@ -115,6 +117,8 @@ class DevToolsSheet extends StatelessWidget {
               const SizedBox(height: 10),
               const _MonetizationLauncher(),
               const SizedBox(height: 10),
+              const _AnimationLab(),
+              const SizedBox(height: 10),
               const _WalletEditor(),
               const SizedBox(height: 16),
               _DevAction(
@@ -134,6 +138,17 @@ class DevToolsSheet extends StatelessWidget {
                 onConfirmed: (economy) async =>
                     economy.debugResetChallengeCycle(),
                 confirmLabel: 'RESET',
+              ),
+              const SizedBox(height: 10),
+              _DevAction(
+                title: 'Force-activate challenge',
+                subtitle:
+                    'Reveals + starts a challenge cycle seeded to ~50% so the '
+                    'home card shows an unlocked bar. Pair with "WIN CHALLENGE '
+                    'PRIZE" to watch the fill + prize collection on the card.',
+                onConfirmed: (economy) async =>
+                    economy.debugActivateChallengeCycle(),
+                confirmLabel: 'ACTIVATE',
               ),
               const SizedBox(height: 10),
               _DevAction(
@@ -869,6 +884,113 @@ class _DevPasscodePromptState extends State<_DevPasscodePrompt>
             ),
             onPressed: _submit,
             child: const Text('UNLOCK'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Animation lab — preview in-progress motion/FX over a dimmed screen.
+// =============================================================================
+class _AnimationLab extends StatelessWidget {
+  const _AnimationLab();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.amber, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Animation lab',
+            style: TextStyle(
+              color: AppColors.amber,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Preview WIP motion over a dimmed screen. Coins burst replays '
+            'the uploaded arrows motion with coin sprites. Chest open runs '
+            'the full win-a-chest flow. Tap to dismiss.',
+            style: AppTypography.label,
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.amber,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () {
+              // Close the dev sheet first so the burst plays over the
+              // screen behind it, then darken + play.
+              final rootNav =
+                  Navigator.of(context, rootNavigator: true);
+              Navigator.of(context).pop();
+              CoinsBurstOverlay.show(rootNav.context);
+            },
+            child: const Text('PLAY COINS BURST'),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.amber,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () {
+              // Close the dev sheet first so the chest plays over the
+              // screen behind it, then darken + run the flow. Test grant
+              // of 100 coins / 50 gems (already-credited semantics — the
+              // overlay only releases the display, a no-op in the lab).
+              final rootNav =
+                  Navigator.of(context, rootNavigator: true);
+              Navigator.of(context).pop();
+              ChestOpenOverlay.show(rootNav.context, coins: 100, gems: 50);
+            },
+            child: const Text('PLAY CHEST OPEN'),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.amber,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () {
+              final rootNav =
+                  Navigator.of(context, rootNavigator: true);
+              Navigator.of(context).pop();
+              RewardFlyOverlay.show(rootNav.context, coins: 100, gems: 50);
+            },
+            child: const Text('PLAY CURRENCY FLY'),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.amber,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () {
+              // Queue a real challenge prize; the home challenge card fills
+              // its bar and flies the prize in place when Home is shown.
+              context.read<EconomyState>().debugWinChallengePrize();
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Challenge prize queued — open Home to watch.'),
+                ),
+              );
+            },
+            child: const Text('WIN CHALLENGE PRIZE'),
           ),
         ],
       ),

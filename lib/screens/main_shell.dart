@@ -28,11 +28,11 @@ class _MainShellState extends State<MainShell> {
     return Scaffold(
       body: IndexedStack(
         index: _index,
-        children: const [
-          HomeScreen(),
-          ShopScreen(),
-          JetsScreen(),
-          SocialScreen(),
+        children: [
+          HomeScreen(active: _index == 0),
+          const ShopScreen(),
+          const JetsScreen(),
+          const SocialScreen(),
         ],
       ),
       bottomNavigationBar: ColoredBox(

@@ -26,6 +26,7 @@ import '../services/revive_pricing.dart';
 import '../services/streak_clock.dart';
 import 'challenge_state.dart';
 import 'loadout.dart';
+import 'pending_celebration.dart';
 import 'reward.dart';
 
 /// Outcome of a stage-clear event. Carries the granted [Reward] plus
@@ -60,6 +61,18 @@ class EconomyState extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   int _coins = 0;
   int _gems = 0;
+  // Portion of the real balance whose arrival is still being celebrated:
+  // it has been credited to [_coins]/[_gems] but the displayed holder value
+  // (see [displayCoins]/[displayGems]) holds it back until the flying
+  // coins land. Transient — never persisted.
+  int _withheldCoins = 0;
+  int _withheldGems = 0;
+  // Currency/chest celebrations played by the route-level host overlay.
+  final List<PendingCelebration> _pendingCelebrations = <PendingCelebration>[];
+  // Challenge celebrations are drained by the home screen so the bar fills
+  // in place on the challenge card (not via a separate overlay).
+  final List<PendingCelebration> _pendingChallengeCelebrations =
+      <PendingCelebration>[];
   int _xp = 0;
   int _xpMax = 1000;
   int _level = 1;
@@ -169,6 +182,17 @@ class EconomyState extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   int get coins => _coins;
   int get gems => _gems;
+
+  /// Balance shown in the top-bar holder. Equals the real balance except
+  /// while a reward celebration is in flight, when the just-won amount is
+  /// withheld until the flying coins land (then [releaseCelebration] lets
+  /// it tick up). All spend/gating logic uses the real [coins]/[gems].
+  int get displayCoins => _coins - _withheldCoins;
+  int get displayGems => _gems - _withheldGems;
+
+  /// True when there are queued reward celebrations waiting to play.
+  bool get hasPendingCelebration => _pendingCelebrations.isNotEmpty;
+
   int get xp => _xp;
   int get xpMax => _xpMax;
   int get level => _level;
@@ -583,11 +607,24 @@ class EconomyState extends ChangeNotifier {
       return;
     }
     final lastIdx = stages.length - 1;
+    // Bar fill animation start: where the bar sat before this increment.
+    final preTarget = _challengeTarget;
+    final preProgress = _challengeProgress;
+    var firstGrant = true;
     _challengeProgress += amount;
     while (_challengeProgress >= _challengeTarget) {
       // Grant this stage's prize before advancing — the player earned
-      // it the moment they crossed the goal.
-      _grantChallengeStagePrize(_ladderPrizeAt(type, _challengeStageIndex));
+      // it the moment they crossed the goal. The first prize fills the bar
+      // from where it was; any further stages cleared in one go fill from 0.
+      final fromFraction = firstGrant && preTarget > 0
+          ? (preProgress / preTarget).clamp(0.0, 1.0)
+          : 0.0;
+      firstGrant = false;
+      _grantChallengeStagePrize(
+        _ladderPrizeAt(type, _challengeStageIndex),
+        fromFraction: fromFraction,
+        label: type.displayName,
+      );
       if (_challengeStageIndex >= lastIdx) {
         // Final stage cleared — clamp at goal and stop counting.
         _challengeProgress = _challengeTarget;
@@ -608,10 +645,15 @@ class EconomyState extends ChangeNotifier {
   /// the standard chest resolver so the player receives the chest's
   /// rolled contents rather than a placeholder token; coin/gem tokens
   /// add directly. Unknown tokens are ignored.
-  void _grantChallengeStagePrize(String raw) {
+  void _grantChallengeStagePrize(
+    String raw, {
+    double fromFraction = 0,
+    String label = '',
+  }) {
     if (raw.isEmpty) return;
     final parts = raw.split(RegExp(r'\s*\+\s*'));
     var reward = Reward.empty;
+    var hadChest = false;
     for (final partRaw in parts) {
       final part = partRaw.trim();
       if (part.isEmpty) continue;
@@ -626,6 +668,7 @@ class EconomyState extends ChangeNotifier {
         continue;
       }
       if (part.endsWith('_chest') || part == 'biome_chest_match') {
+        hadChest = true;
         final chestId = part == 'biome_chest_match'
             ? '${_biomeChestKeyForWorld(_currentWorld)}_chest'
             : part;
@@ -645,7 +688,18 @@ class EconomyState extends ChangeNotifier {
         }
       }
     }
-    if (!reward.isEmpty) _applyReward(reward);
+    // Credit now, but celebrate on the next safe screen: the challenge bar
+    // fills to 100%, then the prize is collected (chest open, or fly).
+    if (!reward.isEmpty || hadChest) {
+      _grantCelebrated(
+        coins: reward.coins,
+        gems: reward.gems,
+        kind: CelebrationKind.challenge,
+        isChest: hadChest,
+        fromFraction: fromFraction,
+        label: label,
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -665,6 +719,129 @@ class EconomyState extends ChangeNotifier {
     if (amount <= 0) return;
     _gems += amount;
     _scheduleSync();
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reward celebrations (display-lag): credit the real balance now, but hold
+  // the displayed holder value back until the flying coins land.
+  // ---------------------------------------------------------------------------
+
+  /// Credits [coins]/[gems] to the real balance and queues a celebration
+  /// whose displayed value is withheld until the fly animation lands. Credit
+  /// and withhold happen together so the holder never flickers. [kind]
+  /// chooses the presentation (plain fly, challenge-bar+prize, chest-open).
+  void _grantCelebrated({
+    int coins = 0,
+    int gems = 0,
+    CelebrationKind kind = CelebrationKind.currency,
+    bool isChest = false,
+    double fromFraction = 0,
+    String label = '',
+  }) {
+    final c = coins > 0 ? coins : 0;
+    final g = gems > 0 ? gems : 0;
+    final chest = isChest || kind == CelebrationKind.chest;
+    if (c == 0 && g == 0 && !chest) return;
+    _coins += c;
+    _gems += g;
+    _withheldCoins += c;
+    _withheldGems += g;
+    final celebration = PendingCelebration(
+      kind: kind,
+      coins: c,
+      gems: g,
+      isChest: chest,
+      fromFraction: fromFraction,
+      label: label,
+    );
+    // Challenge prizes animate on the home challenge card; everything else
+    // plays through the route-level host overlay.
+    if (kind == CelebrationKind.challenge) {
+      _pendingChallengeCelebrations.add(celebration);
+    } else {
+      _pendingCelebrations.add(celebration);
+    }
+    if (c > 0 || g > 0) _scheduleSync();
+    notifyListeners();
+  }
+
+  /// Debug-only: force an active challenge cycle (reveals + starts one) and
+  /// seeds ~50% progress so the home card shows an unlocked, partly-filled
+  /// bar to celebrate onto.
+  void debugActivateChallengeCycle() {
+    assert(kDebugMode, 'debugActivateChallengeCycle is debug-only');
+    _challengeRevealed = true;
+    startNewChallengeCycle();
+    if (_challengeTarget > 0) {
+      _challengeProgress = (_challengeTarget * 0.5).round();
+    }
+    _scheduleSync();
+    notifyListeners();
+  }
+
+  /// Debug-only: queue a challenge-prize celebration (credits + withholds)
+  /// so the home challenge-card animation can be previewed. Ensures a cycle
+  /// is active first so the card is unlocked and can fly the prize.
+  void debugWinChallengePrize({
+    int coins = 200,
+    int gems = 50,
+    double fromFraction = 0.55,
+    String label = 'Treasure Hunter',
+    bool isChest = false,
+  }) {
+    assert(kDebugMode, 'debugWinChallengePrize is debug-only');
+    if (challengeView == null) debugActivateChallengeCycle();
+    _grantCelebrated(
+      coins: coins,
+      gems: gems,
+      kind: CelebrationKind.challenge,
+      isChest: isChest,
+      fromFraction: fromFraction,
+      label: label,
+    );
+  }
+
+  /// Public entry for currency won/bought outside the economy layer (e.g.
+  /// shop bundles): credits now, celebrates on the next safe screen.
+  void beginCurrencyCelebration({int coins = 0, int gems = 0}) =>
+      _grantCelebrated(coins: coins, gems: gems);
+
+  /// First queued celebration without removing it (lets the host decide
+  /// whether to play a chest individually or aggregate a run of currency).
+  PendingCelebration? peekCelebration() =>
+      _pendingCelebrations.isEmpty ? null : _pendingCelebrations.first;
+
+  /// Removes and returns the next queued celebration. Does not notify — the
+  /// queue doesn't affect the displayed balance (that follows the withheld
+  /// amount, released as the coins land via [releaseCelebration]).
+  PendingCelebration? takeCelebration() =>
+      _pendingCelebrations.isEmpty ? null : _pendingCelebrations.removeAt(0);
+
+  /// Challenge-prize celebrations, drained by the home challenge card.
+  bool get hasPendingChallengeCelebration =>
+      _pendingChallengeCelebrations.isNotEmpty;
+
+  PendingCelebration? peekChallengeCelebration() =>
+      _pendingChallengeCelebrations.isEmpty
+          ? null
+          : _pendingChallengeCelebrations.first;
+
+  PendingCelebration? takeChallengeCelebration() =>
+      _pendingChallengeCelebrations.isEmpty
+          ? null
+          : _pendingChallengeCelebrations.removeAt(0);
+
+  /// Lets the previously-withheld [coins]/[gems] show in the holder — called
+  /// as the flying coins land so the counter ticks up.
+  void releaseCelebration({int coins = 0, int gems = 0}) {
+    final c = coins > 0 ? coins : 0;
+    final g = gems > 0 ? gems : 0;
+    if (c == 0 && g == 0) return;
+    _withheldCoins -= c;
+    if (_withheldCoins < 0) _withheldCoins = 0;
+    _withheldGems -= g;
+    if (_withheldGems < 0) _withheldGems = 0;
     notifyListeners();
   }
 
@@ -773,6 +950,15 @@ class EconomyState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Banks coins collected during a run (enemy drops, HP-at-max
+  /// conversions) into the run accumulator instead of crediting them live.
+  /// They are realized — and fly to the holder — on stage clear (full) or
+  /// death (40% salvage). No-op for non-positive amounts.
+  void recordRunCoins(int amount) {
+    if (amount <= 0) return;
+    _accumulatedRunCoins += amount;
+  }
+
   /// Records a wave clear. Adds the per-wave coin reward to the run
   /// accumulator (those coins become persistent on stage clear or via
   /// 40% salvage on death).
@@ -805,7 +991,9 @@ class EconomyState extends ChangeNotifier {
   /// when the player declines revive (or runs out of revives).
   void commitDeathAndEndStage() {
     final salvage = salvageOnDeath();
-    _coins += salvage.coins;
+    // Credit now; the salvage coins fly into the holder on the next menu
+    // screen (aggregated with any stage-clear coins from the same session).
+    _grantCelebrated(coins: salvage.coins);
     _accumulatedRunCoins = 0;
     _stageRevivesUsed = 0;
     _playerDiedThisStage = true;
@@ -851,8 +1039,9 @@ class EconomyState extends ChangeNotifier {
     if (isFirstThreeStar) gems += EconomyConstants.gemFirstThreeStarClear;
     if (isFirstBoss) gems += EconomyConstants.gemFirstBossDefeat;
 
-    _coins += coins;
-    _gems += gems;
+    // Credit now, but fly the stage-clear coins/gems into the holder on the
+    // next menu screen (Home).
+    _grantCelebrated(coins: coins, gems: gems);
 
     // Drive Treasure Hunter challenge counter (gameplay coins only).
     if (_activeChallengeType == ChallengeType.treasure && coins > 0) {
@@ -990,9 +1179,11 @@ class EconomyState extends ChangeNotifier {
   /// from offers and bundles run through the same wallet path as every
   /// other reward; resolution itself stays in the UI/config layer.
   void grantChest({int coins = 0, int gems = 0, String? jetId}) {
-    if (coins > 0) addCoins(coins, source: 'chest');
-    if (gems > 0) addGems(gems, source: 'chest');
+    // Jets are granted outright (they don't fly to a currency holder); the
+    // coins/gems are credited now but celebrated via the chest-open
+    // sequence, ticking up the holder as they land.
     if (jetId != null && jetId.isNotEmpty) buyJet(jetId, 0);
+    _grantCelebrated(coins: coins, gems: gems, kind: CelebrationKind.chest);
   }
 
   /// Removes [count] copies of [powerUpId] from the inventory. Returns
@@ -1089,7 +1280,8 @@ class EconomyState extends ChangeNotifier {
   /// missing RC payload). A `chest` entry on the day is rolled here via
   /// [ChestRewardResolver] so the player receives the chest contents at
   /// claim time.
-  Reward _ladderRewardFromRc({required int week, required int day}) {
+  ({Reward reward, bool fromChest}) _ladderRewardFromRc(
+      {required int week, required int day}) {
     // RC accessors throw when Firebase isn't initialized (test envs, very
     // early boot). Fall back to the constants ladder in that case so a
     // claim never crashes the app — the displayed amount may differ from
@@ -1108,12 +1300,15 @@ class EconomyState extends ChangeNotifier {
         if (def != null) chestDefinition = _chestDefAsLegacyMap(def);
       }
     } catch (_) {
-      return StreakClock.baseLadderReward(day);
+      return (reward: StreakClock.baseLadderReward(day), fromChest: false);
     }
-    if (rc == null) return StreakClock.baseLadderReward(day);
+    if (rc == null) {
+      return (reward: StreakClock.baseLadderReward(day), fromChest: false);
+    }
     final coin = rc.coinPrize;
     final gem = rc.gemPrize;
     var reward = Reward(coins: coin, gems: gem);
+    final fromChest = chestDefinition != null;
     if (chestDefinition != null) {
       final roll = ChestRewardResolver.resolve(
         definition: chestDefinition,
@@ -1121,14 +1316,14 @@ class EconomyState extends ChangeNotifier {
       );
       reward = reward.plus(roll.reward);
     }
-    return reward;
+    return (reward: reward, fromChest: fromChest);
   }
 
   /// Resolves the Day-7 reward from the same `dailyReward(week, 7)` RC
   /// entry the calendar tile renders. Falls back to [Day7ChestFormula]
   /// when RC isn't available (test envs, very early boot) so the claim
   /// path never crashes.
-  Reward _resolveDay7Reward() {
+  ({Reward reward, bool fromChest}) _resolveDay7Reward() {
     try {
       final rcs = RemoteConfigService.I;
       final requestedWeek = _streakWeeksCompleted + 1;
@@ -1136,10 +1331,13 @@ class EconomyState extends ChangeNotifier {
       final cappedWeek = requestedWeek > cap ? cap : requestedWeek;
       final rcEntry = rcs.dailyReward.dayFor(week: cappedWeek, dayOfWeek: 7);
       if (rcEntry == null) {
-        return Day7ChestFormula.compute(
-          playerLevel: _level,
-          maxWorldReached: _maxWorldReached,
-          rng: _rng,
+        return (
+          reward: Day7ChestFormula.compute(
+            playerLevel: _level,
+            maxWorldReached: _maxWorldReached,
+            rng: _rng,
+          ),
+          fromChest: true,
         );
       }
       final chestsConfig = rcs.chests;
@@ -1159,14 +1357,21 @@ class EconomyState extends ChangeNotifier {
         },
         rng: _rng,
       );
-      return resolved.reward;
+      // Day 7 is the weekly chest tile — reveal coins/gems through the
+      // chest-open sequence whenever the entry actually carries a chest.
+      final chestType = rcEntry.chestType;
+      final hadChest = chestType != null && chestType.isNotEmpty;
+      return (reward: resolved.reward, fromChest: hadChest);
     } catch (_) {
       // RC accessors throw when Firebase isn't initialized — fall back
       // to the constants-based formula so the claim still succeeds.
-      return Day7ChestFormula.compute(
-        playerLevel: _level,
-        maxWorldReached: _maxWorldReached,
-        rng: _rng,
+      return (
+        reward: Day7ChestFormula.compute(
+          playerLevel: _level,
+          maxWorldReached: _maxWorldReached,
+          rng: _rng,
+        ),
+        fromChest: true,
       );
     }
   }
@@ -1192,23 +1397,28 @@ class EconomyState extends ChangeNotifier {
 
     try {
       Reward reward;
+      bool fromChest;
       if (_streakDay == 7) {
         // Drive Day 7 from the same RC entry the calendar tile renders
         // so the grant matches what the player sees — jet on unowned
         // biome jet, parsed fallback bundle (e.g. epic_chest + 50gem)
         // when already owned. Falls back to [Day7ChestFormula] when RC
         // has no entry (test env / degraded RC).
-        reward = _resolveDay7Reward();
+        final r = _resolveDay7Reward();
+        reward = r.reward;
+        fromChest = r.fromChest;
       } else {
         // Source the base coin/gem grant from Remote Config so the player
         // gets exactly the amounts shown on the reward calendar tile (the
         // screen reads from the same `dailyReward(week, day)` entry).
         // Falls back to constants when RC has no entry — keeps tests that
         // run without an RC payload working.
-        var base = _ladderRewardFromRc(
+        final r = _ladderRewardFromRc(
           week: _streakWeeksCompleted + 1,
           day: _streakDay,
         );
+        var base = r.reward;
+        fromChest = r.fromChest;
         // Layer in random power-ups (counts come from constants).
         final powerUpCount =
             EconomyConstants.streakDailyPowerUps[_streakDay - 1];
@@ -1225,7 +1435,7 @@ class EconomyState extends ChangeNotifier {
         reward = loyalty > 0 ? base.scaled(1 + loyalty) : base;
       }
 
-      _applyReward(reward);
+      _applyReward(reward, fromChest: fromChest);
 
       // Record longest-streak BEFORE advancing the cycle so we capture
       // the correct day count (a Day-7 claim is 7 days, not 8).
@@ -1430,13 +1640,15 @@ class EconomyState extends ChangeNotifier {
   /// Returns the raw tokens of any items left ungranted.
   List<String> applyOfferRewards(List<OfferRewardItem> items) {
     final ungranted = <String>[];
+    var offerCoins = 0;
+    var offerGems = 0;
     for (final item in items) {
       switch (item.kind) {
         case OfferRewardKind.coin:
-          addCoins(item.amount, source: 'offer');
+          offerCoins += item.amount;
           break;
         case OfferRewardKind.gem:
-          addGems(item.amount, source: 'offer');
+          offerGems += item.amount;
           break;
         case OfferRewardKind.powerupPack:
           final picks = PowerUpPicker.pickMany(
@@ -1458,13 +1670,22 @@ class EconomyState extends ChangeNotifier {
           break;
       }
     }
+    // Coins/gems are credited now and flown into the holder via a single
+    // celebration; chest tokens are resolved + celebrated by the caller.
+    if (offerCoins > 0 || offerGems > 0) {
+      _grantCelebrated(coins: offerCoins, gems: offerGems);
+    }
     return ungranted;
   }
 
   void _applyIapReward(String productId) {
+    // Coins/gems are accumulated and credited via a single celebration so
+    // they fly into the holder; non-currency rewards apply immediately.
+    var grantedCoins = 0;
+    var grantedGems = 0;
     final mainGems = IapCatalog.mainPackGems[productId];
     if (mainGems != null) {
-      _gems += mainGems;
+      grantedGems += mainGems;
       final disc = IapCatalog.mainPackNextJetDiscount[productId];
       if (disc != null) {
         // Take the larger of the existing pending discount and the new
@@ -1478,8 +1699,8 @@ class EconomyState extends ChangeNotifier {
     }
     final coinPack = IapCatalog.coinPackCoins[productId];
     if (coinPack != null) {
-      _coins += coinPack;
-      _gems += IapCatalog.coinPackGems[productId] ?? 0;
+      grantedCoins += coinPack;
+      grantedGems += IapCatalog.coinPackGems[productId] ?? 0;
       final picks = PowerUpPicker.pickMany(
         count: IapCatalog.coinPackPowerUps[productId] ?? 0,
         maxWorldReached: _maxWorldReached,
@@ -1501,6 +1722,10 @@ class EconomyState extends ChangeNotifier {
       }
     }
     _packsPurchased.add(productId);
+    // Credits coins/gems (if any) + queues the fly celebration, and also
+    // schedules sync + notifies; the explicit calls below cover the
+    // non-currency mutations (removeAds, packs, power-ups).
+    _grantCelebrated(coins: grantedCoins, gems: grantedGems);
     _scheduleSync();
     notifyListeners();
   }
@@ -1522,7 +1747,9 @@ class EconomyState extends ChangeNotifier {
             _rng.nextInt(AdPlacementCatalog.extraGemsMax -
                 AdPlacementCatalog.extraGemsMin +
                 1);
-        _gems += (gems * mult).floor();
+        // Credit + queue a currency fly so the gems collect the same way as
+        // every other reward (plays on the next celebration host screen).
+        _grantCelebrated(gems: (gems * mult).floor());
         _dailyAdWatchCount += 1;
         // Monotonic stamp — never let the watch date move backward.
         // Combined with [_resetDailyAdWatchIfNewDay] below, this defeats
@@ -1638,9 +1865,12 @@ class EconomyState extends ChangeNotifier {
     // EconomyApi debounce smoke-tests are observable in dev.
   }
 
-  void _applyReward(Reward reward) {
-    _coins += reward.coins;
-    _gems += reward.gems;
+  void _applyReward(Reward reward, {bool fromChest = false}) {
+    // Power-ups / jet / XP apply immediately; coins & gems are credited now
+    // but flown into the holder via a celebration (daily reward, challenge
+    // 100% milestone, etc.). When the reward was won from a chest, the
+    // coins/gems are revealed through the chest-open sequence instead of the
+    // plain currency fly.
     for (final id in reward.powerUps) {
       _powerUpInventory[id] = (_powerUpInventory[id] ?? 0) + 1;
     }
@@ -1649,6 +1879,13 @@ class EconomyState extends ChangeNotifier {
       _ownedJets.add(jet);
     }
     if (reward.xp > 0) addXP(reward.xp);
+    if (reward.coins > 0 || reward.gems > 0) {
+      _grantCelebrated(
+        coins: reward.coins,
+        gems: reward.gems,
+        kind: fromChest ? CelebrationKind.chest : CelebrationKind.currency,
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------

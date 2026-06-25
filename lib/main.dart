@@ -27,6 +27,7 @@ import 'screens/game_screen.dart';
 import 'screens/loading_screen.dart';
 import 'screens/main_shell.dart';
 import 'screens/splash_screen.dart';
+import 'shared/widgets/reward_celebration_host.dart';
 import 'services/ads/ads_service.dart' as platform_ads;
 import 'services/ads/consent_manager.dart';
 import 'shop/services/bundle_cache.dart';
@@ -88,7 +89,14 @@ Future<void> main() async {
     // Best-effort init — if the platform store is unavailable, the
     // service returns `productUnknown` for every purchase rather than
     // crash. Surface the failure in logs so QA notices.
-    unawaited(storeIap.initialize().catchError((Object e, StackTrace st) {
+    //
+    // RemoteConfigService is already initialized above, so the shop-pack
+    // and monetization-offer SKUs it carries are passed in here — without
+    // this the store never queries them and every purchase of an
+    // RC-driven product fails with `productUnknown`.
+    unawaited(storeIap
+        .initialize(extraProductIds: _collectStoreProductIds())
+        .catchError((Object e, StackTrace st) {
       debugPrint('[IAP_INIT_FAIL] $e\n$st');
     }));
     iap = storeIap;
@@ -122,6 +130,29 @@ Future<void> main() async {
   }
 
   runApp(SkyStrikeApp(economy: economy));
+}
+
+/// Collects every store SKU declared in Remote Config — shop coin/gem pack
+/// `iap_product_id`s and monetization offer `product_id`s — so
+/// [StoreIapService.initialize] can query them all. A SKU missing from this
+/// set can't be purchased ([IapPurchaseResult.productUnknown]). Reads the
+/// already-initialized [RemoteConfigService] singleton.
+Set<String> _collectStoreProductIds() {
+  final rc = RemoteConfigService.I;
+  final ids = <String>{};
+  for (final p in rc.shop.coinPacks) {
+    final id = p.iapProductId;
+    if (id != null && id.isNotEmpty) ids.add(id);
+  }
+  for (final p in rc.shop.gemPacks) {
+    final id = p.iapProductId;
+    if (id != null && id.isNotEmpty) ids.add(id);
+  }
+  for (final c in rc.monetization.configs) {
+    final id = c.productId;
+    if (id != null && id.isNotEmpty) ids.add(id);
+  }
+  return ids;
 }
 
 /// Boots the platform ads stack: UMP consent → iOS ATT prompt →
@@ -251,13 +282,15 @@ class _SkyStrikeAppState extends State<SkyStrikeApp>
           ),
         ),
         initialRoute: '/splash',
+        navigatorObservers: [rewardRouteObserver],
         routes: {
           // Release-only callback: debug/profile builds use MockAdsService
           // and the platform stack is never wired in.
           '/splash': (_) => const SplashScreen(
                 onDismiss: kReleaseMode ? _bootAdStack : null,
               ),
-          '/home': (_) => const MainShell(),
+          // Menu screens are wrapped so won/bought rewards celebrate here.
+          '/home': (_) => const RewardCelebrationHost(child: MainShell()),
           '/game': (_) => const GameScreen(),
           '/daily-rewards': (_) => const DailyRewardScreen(),
           '/shop': (_) => MultiProvider(
@@ -274,7 +307,7 @@ class _SkyStrikeAppState extends State<SkyStrikeApp>
                     create: (_) => ShopState(),
                   ),
                 ],
-                child: const ShopShell(),
+                child: const RewardCelebrationHost(child: ShopShell()),
               ),
         },
         onGenerateRoute: (settings) {

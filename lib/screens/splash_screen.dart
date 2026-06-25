@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../shared/widgets/asset_placeholder.dart';
 
 /// Boot splash shown before the home screen. Displays the
-/// `Game_splash.png` artwork full-bleed with a fake-loading progress bar
+/// `Splash_screen.jpg` artwork full-bleed with a fake-loading progress bar
 /// pinned to the bottom. Auto-advances to `/home` when the bar fills.
 ///
 /// The fake-loading duration is intentionally short and the animation
@@ -76,11 +76,11 @@ class _SplashScreenState extends State<SplashScreen>
           // the splash itself a cold decode is acceptable — the
           // placeholder shows for a couple of frames at worst.
           Image.asset(
-            'assets/backgrounds/Game_splash.png',
+            'assets/backgrounds/Splash_screen.jpg',
             fit: BoxFit.cover,
             errorBuilder: AssetPlaceholder.image(
               color: const Color(0xFF0a1a0a),
-              label: 'Game_splash',
+              label: 'Splash_screen',
               borderRadius: 0,
             ),
           ),

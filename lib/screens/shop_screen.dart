@@ -7,6 +7,7 @@ import '../config/remote_config_service.dart';
 import '../economy/services/chest_reward_resolver.dart';
 import '../economy/services/iap_service.dart';
 import '../economy/state/economy_state.dart';
+import '../economy/ui/chest_info_badge.dart';
 import '../economy/ui/not_enough_coins_popup.dart';
 import '../shared/theme/app_colors.dart';
 import '../shared/widgets/app_buttons.dart';
@@ -945,15 +946,17 @@ class _ChestCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
         child: Column(
           children: [
-            SizedBox(
-              height: 78,
-              child: Image.asset(
-                'assets/ui/icon_${chest.id}.png',
-                fit: BoxFit.contain,
-                errorBuilder: AssetPlaceholder.image(
-                  color: AppColors.amber,
-                  label: chest.id,
-                  borderRadius: 6,
+            ChestInfoBadge.wrap(
+              SizedBox(
+                height: 78,
+                child: Image.asset(
+                  'assets/ui/icon_${chest.id}.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: AssetPlaceholder.image(
+                    color: AppColors.amber,
+                    label: chest.id,
+                    borderRadius: 6,
+                  ),
                 ),
               ),
             ),
@@ -1301,17 +1304,15 @@ class _ChestRowActions {
       },
       rng: _rng,
     );
-    if (result.reward.coins > 0) {
-      economy.addCoins(result.reward.coins, source: 'chest_$chest.id');
-    }
-    if (result.reward.gems > 0) {
-      economy.addGems(result.reward.gems, source: 'chest_$chest.id');
-    }
-    if (result.hasJet) {
-      // buyJet at price 0 records ownership without spending; the
-      // pendingNextJetDiscount slot is not consumed for chest grants.
-      economy.buyJet(result.jetId!, 0);
-    }
+    // Won from a chest → reveal it with the chest-open animation, which then
+    // flies the coins/gems into the holder. grantChest also records the jet
+    // (if any) at price 0 without consuming the pendingNextJetDiscount slot.
+    // Plays through RewardCelebrationHost (the Shop is wrapped in one).
+    economy.grantChest(
+      coins: result.reward.coins,
+      gems: result.reward.gems,
+      jetId: result.hasJet ? result.jetId : null,
+    );
   }
 }
 

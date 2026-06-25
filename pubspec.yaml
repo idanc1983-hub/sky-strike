@@ -1,7 +1,7 @@
 name: skystrike
 description: Sky Strike — Aerial Combat Mobile Game
 publish_to: 'none'
-version: 2.0.0+1
+version: 2.0.0+13
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -50,6 +50,9 @@ flutter:
     - assets/config/
     - assets/remote_config_defaults/
     - assets/map/
+    - assets/animations/
+    # Basic chest open frame sequence (close → open1..4)
+    - assets/animations/chest/
     # Power-up drop orbs (256×256 source → rendered 56×56 on canvas)
     - assets/ui/pu_bomb_drop.png
     - assets/ui/pu_laser_drop.png

@@ -10,6 +10,7 @@ import '../economy/constants/challenge_constants.dart';
 import '../economy/services/challenge_prize_parser.dart';
 import '../economy/state/challenge_state.dart';
 import '../economy/state/economy_state.dart';
+import '../economy/state/pending_celebration.dart';
 import '../economy/ui/challenge_prizes_popup.dart';
 import '../economy/ui/coming_soon_popup.dart';
 import '../economy/ui/generic_offer_popup.dart';
@@ -20,6 +21,8 @@ import '../game/models.dart';
 import '../render/enemy_glow_painter.dart';
 import '../shared/widgets/app_top_bar.dart';
 import '../shared/widgets/asset_placeholder.dart';
+import '../shared/widgets/currency_anchors.dart';
+import '../widgets/chest_open_overlay.dart';
 
 // ---------------------------------------------------------------------------
 // Biome config
@@ -191,14 +194,17 @@ class _Bullet {
 // HomeScreen
 // ---------------------------------------------------------------------------
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  /// True when Home is the selected tab in [MainShell]. Gates the in-place
+  /// challenge-prize celebration so it only plays while the card is visible.
+  final bool active;
+  const HomeScreen({super.key, this.active = true});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   // Animation — started after all images resolve (prevents square-enemy bug on home screen)
   Ticker? _ticker;
   int _frame = 0;
@@ -253,6 +259,17 @@ class _HomeScreenState extends State<HomeScreen>
   /// without burning frames.
   Timer? _countdownTimer;
 
+  // --- Challenge-prize celebration (in place on the challenge card) ---
+  /// Drives the bar fill from the prize's start fraction up to 100%.
+  late final AnimationController _challengeFill;
+  /// The prize currently being celebrated (null when idle).
+  PendingCelebration? _celebChallenge;
+  /// Phase guard so we don't restart mid-animation.
+  bool _celebrating = false;
+  /// Marks the bar-end prize icon on the challenge card (used for layout;
+  /// the reward itself collects through the shared [RewardFlyOverlay]).
+  final GlobalKey _prizeKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -263,15 +280,43 @@ class _HomeScreenState extends State<HomeScreen>
         if (mounted) setState(() {});
       },
     );
+    _challengeFill = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 950),
+    )
+      ..addListener(() {
+        if (mounted) setState(() {});
+      })
+      ..addStatusListener((s) {
+        if (s == AnimationStatus.completed) _onBarFilled();
+      });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _economy ??= context.read<EconomyState>();
+    final eco = context.read<EconomyState>();
+    if (!identical(eco, _economy)) {
+      _economy?.removeListener(_onEconomyChanged);
+      _economy = eco..addListener(_onEconomyChanged);
+    }
     _loadBiomeAssets();
     _loadExplosionSheet();
+    // Catch a challenge prize queued before Home was shown.
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _maybeStartChallengeCelebration());
   }
+
+  @override
+  void didUpdateWidget(HomeScreen old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) {
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _maybeStartChallengeCelebration());
+    }
+  }
+
+  void _onEconomyChanged() => _maybeStartChallengeCelebration();
 
   void _loadBiomeAssets() {
     final world = _economy?.currentWorld ?? 1;
@@ -457,7 +502,70 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     _ticker?.dispose();
     _countdownTimer?.cancel();
+    _economy?.removeListener(_onEconomyChanged);
+    _challengeFill.dispose();
     super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Challenge-prize celebration: fill the card bar from where the player was
+  // up to 100%, then fly the prize from the bar into the top-right holder.
+  // ---------------------------------------------------------------------------
+
+  /// Starts the next queued challenge celebration if the card is visible and
+  /// nothing is already playing. Called post-frame from [build].
+  void _maybeStartChallengeCelebration() {
+    if (_celebrating || !mounted || !widget.active) return;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) return;
+    final economy = _economy;
+    if (economy == null || !economy.hasPendingChallengeCelebration) return;
+    final next = economy.takeChallengeCelebration();
+    if (next == null) return;
+    setState(() {
+      _celebrating = true;
+      _celebChallenge = next;
+    });
+    _challengeFill.forward(from: 0);
+  }
+
+  void _onBarFilled() {
+    final celeb = _celebChallenge;
+    // Hold at 100% briefly, then collect the prize.
+    Future.delayed(const Duration(milliseconds: 450), () async {
+      if (!mounted) return;
+      if (celeb != null && celeb.isChest) {
+        // A chest prize opens with the full chest sequence.
+        await ChestOpenOverlay.show(
+          context,
+          coins: celeb.coins,
+          gems: celeb.gems,
+        );
+      } else if (celeb != null) {
+        // Currency prize: hand off to the shared "Tap to collect" fly so
+        // every reward collects the same way (the bar fill above is the
+        // challenge-specific lead-in). Both overlays release the withheld
+        // holder value on land, so nothing is double-counted here.
+        CurrencyAnchors.requestRefresh();
+        await RewardFlyOverlay.show(
+          context,
+          coins: celeb.coins,
+          gems: celeb.gems,
+        );
+      }
+      _finishCelebration();
+    });
+  }
+
+  void _finishCelebration() {
+    if (!mounted) return;
+    setState(() {
+      _celebrating = false;
+      _celebChallenge = null;
+    });
+    // Another prize queued? Play it next frame.
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _maybeStartChallengeCelebration());
   }
 
 
@@ -655,9 +763,18 @@ class _HomeScreenState extends State<HomeScreen>
     final locked = view == null;
     final progress = view?.progress ?? 0;
     final target = view?.target ?? 0;
-    final fraction = target > 0
+    final liveFraction = target > 0
         ? (progress / target).clamp(0.0, 1.0).toDouble()
         : 0.0;
+    // During a prize celebration, drive the bar from where the player was
+    // up to 100% instead of showing the (already reset) live fraction.
+    final celeb = _celebChallenge;
+    final celebrating = _celebrating && celeb != null;
+    final fraction = celebrating
+        ? celeb.fromFraction +
+            (1.0 - celeb.fromFraction) *
+                Curves.easeOut.transform(_challengeFill.value)
+        : liveFraction;
     final remaining = view?.remainingFrom(DateTime.now());
     // Pull the *current* stage's prize from the active cycle's RC
     // ladder so the bar-end reward stays in sync as the player advances
@@ -702,6 +819,8 @@ class _HomeScreenState extends State<HomeScreen>
             unlockLabel:
                 'Unlock after stage ${EconomyState.challengeUnlockLevel - 1}',
             onTap: () => ChallengePrizesPopup.show(context),
+            directFill: celebrating,
+            prizeKey: _prizeKey,
             // Cycle bg + bar colour are dynamic via remote config. Until
             // the cycle plumbing lands, render the styled fallback.
             bgAsset: null,
@@ -1028,6 +1147,13 @@ class _ChallengeCard extends StatelessWidget {
   final bool locked;
   final String unlockLabel;
 
+  /// When true the bar fills directly to [fraction] (driven frame-by-frame
+  /// during a prize celebration) instead of the default 0→fraction tween.
+  final bool directFill;
+
+  /// Attached to the bar-end prize icon so a won prize can fly from it.
+  final Key? prizeKey;
+
   const _ChallengeCard({
     required this.displayName,
     required this.progress,
@@ -1042,6 +1168,8 @@ class _ChallengeCard extends StatelessWidget {
     this.barColor = _cGreen,
     this.locked = false,
     this.unlockLabel = '',
+    this.directFill = false,
+    this.prizeKey,
   });
 
   @override
@@ -1102,6 +1230,8 @@ class _ChallengeCard extends StatelessWidget {
                 barColor: barColor,
                 locked: locked,
                 lockedLabel: unlockLabel,
+                directFill: directFill,
+                prizeKey: prizeKey,
               ),
               const SizedBox(height: 8),
               // Countdown row — same space-preserving treatment as the
@@ -1203,6 +1333,8 @@ class _ChallengeBar extends StatelessWidget {
   final Color barColor;
   final bool locked;
   final String lockedLabel;
+  final bool directFill;
+  final Key? prizeKey;
 
   const _ChallengeBar({
     required this.fraction,
@@ -1214,6 +1346,8 @@ class _ChallengeBar extends StatelessWidget {
     required this.barColor,
     this.locked = false,
     this.lockedLabel = '',
+    this.directFill = false,
+    this.prizeKey,
   });
 
   @override
@@ -1237,6 +1371,7 @@ class _ChallengeBar extends StatelessWidget {
             child: _BarTrack(
               fraction: fraction,
               barColor: barColor,
+              directFill: directFill,
               // Locked: same green fill as the unlocked state — only
               // the centre label swaps to "Unlock at stage N". The
               // shown progress clamps at the goal so a stale save
@@ -1245,7 +1380,9 @@ class _ChallengeBar extends StatelessWidget {
               // the same clamp.
               progressText: locked
                   ? lockedLabel
-                  : '${progress > target ? target : progress}/$target $unitLabel',
+                  : (directFill
+                      ? '${(fraction * 100).round()}%'
+                      : '${progress > target ? target : progress}/$target $unitLabel'),
             ),
           ),
           Positioned(
@@ -1267,6 +1404,7 @@ class _ChallengeBar extends StatelessWidget {
                   )
                 : Image.asset(
                     prizeAsset,
+                    key: prizeKey,
                     errorBuilder: AssetPlaceholder.image(
                       color: _cAmber,
                       label: 'prize',
@@ -1322,11 +1460,13 @@ class _BarTrack extends StatelessWidget {
   final double fraction;
   final Color barColor;
   final String progressText;
+  final bool directFill;
 
   const _BarTrack({
     required this.fraction,
     required this.barColor,
     required this.progressText,
+    this.directFill = false,
   });
 
   @override
@@ -1342,6 +1482,15 @@ class _BarTrack extends StatelessWidget {
             child: Container(color: _cChallengeBarTrack),
           ),
           LayoutBuilder(builder: (ctx, constraints) {
+            // During a prize celebration the parent drives [fraction]
+            // frame-by-frame, so render it directly (the 0→fraction tween
+            // would otherwise fight the per-frame updates).
+            if (directFill) {
+              return Container(
+                width: constraints.maxWidth * fraction,
+                decoration: BoxDecoration(color: barColor),
+              );
+            }
             // TweenAnimationBuilder animates from 0 → fraction on the
             // first build (visible fill on lobby entry) and from the
             // previous end → new end whenever the player earns more

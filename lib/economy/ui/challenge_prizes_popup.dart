@@ -10,6 +10,7 @@ import '../services/challenge_prize_parser.dart';
 import '../state/challenge_state.dart';
 import '../state/economy_state.dart';
 import 'chest_contents_popup.dart';
+import 'chest_info_badge.dart';
 
 /// Popup launched by tapping the home-screen challenge card.
 ///
@@ -655,7 +656,7 @@ class _ProgressBarWithPrize extends StatelessWidget {
               chestAsset: prize.asset,
               chestLabel: prize.label,
             ),
-            child: iconWidget,
+            child: ChestInfoBadge.wrap(iconWidget),
           );
 
     return SizedBox(
@@ -820,6 +821,7 @@ class _PrizeChip extends StatelessWidget {
         ),
       ),
     );
+    final id = prize.chestId;
     final body = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -832,10 +834,9 @@ class _PrizeChip extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        icon,
+        id == null ? icon : ChestInfoBadge.wrap(icon, diameter: 13),
       ],
     );
-    final id = prize.chestId;
     if (id == null) return body;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,

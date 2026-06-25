@@ -6,8 +6,10 @@ import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/app_buttons.dart';
 import '../../shared/widgets/app_top_bar.dart';
 import '../../shared/widgets/asset_placeholder.dart';
+import '../../shared/widgets/reward_celebration_host.dart';
 import '../services/day7_reward_resolver.dart';
 import '../state/economy_state.dart';
+import 'chest_info_badge.dart';
 
 /// 7-day login ladder — full-screen route launched from the home menu.
 /// Layout: 3 columns × 2 rows for D1–D6, then a full-width D7 tile.
@@ -31,7 +33,10 @@ class DailyRewardScreen extends StatelessWidget {
     final today = economy.streakDay;
     final canClaimToday = economy.canClaimStreakToday;
 
-    return Scaffold(
+    // Hosted so the claimed reward flies into the holder while this window
+    // is still open (rather than deferring to the home screen).
+    return RewardCelebrationHost(
+      child: Scaffold(
       backgroundColor: AppColors.greenDeep,
       body: Stack(
         children: [
@@ -100,6 +105,7 @@ class DailyRewardScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -503,7 +509,7 @@ class _RewardIcon extends StatelessWidget {
     if (item.chestId == null) return image;
     return GestureDetector(
       onTap: () => _ChestProbabilityDialog.show(context, item.chestId!),
-      child: image,
+      child: ChestInfoBadge.wrap(image, diameter: size * 0.34),
     );
   }
 }

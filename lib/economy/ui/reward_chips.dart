@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/asset_placeholder.dart';
 import '../services/offer_reward_parser.dart';
+import 'chest_info_badge.dart';
 
 /// Renders a single parsed [OfferRewardItem] as a 44x44 icon + amount
 /// label. Used across all monetization popups so rewards display the
@@ -103,7 +104,7 @@ class RewardChip extends StatelessWidget {
             ? GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: onChestTap,
-                child: iconImage,
+                child: ChestInfoBadge.wrap(iconImage),
               )
             : iconImage,
         const SizedBox(height: 2),

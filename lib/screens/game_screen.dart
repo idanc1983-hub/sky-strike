@@ -314,6 +314,15 @@ class _GameScreenState extends State<GameScreen>
   bool _adInFlight = false;
   bool _rewardDoubled = false;
 
+  // ── Stage-clear reward ───────────────────────────────────────────────────
+  // Granted once through [EconomyState.onStageCleared] the moment the stage
+  // clears (the run's accumulated coins + clear/star bonuses). The overlay
+  // displays these figures and the coins/gems fly into the holder on Home.
+  // [_clearCommitted] guards the one-time grant against repaint re-entry.
+  bool _clearCommitted = false;
+  int _clearCoins = 0;
+  int _clearStars = 1;
+
   // ── Visual FX ────────────────────────────────────────────────────────────
   double _vignetteOpacity = 0;
   int _vignetteFrames = 0;
@@ -467,6 +476,40 @@ class _GameScreenState extends State<GameScreen>
       final prev = prefs.getInt(key) ?? 0;
       if (_totalScore > prev) await prefs.setInt(key, _totalScore);
     }
+  }
+
+  /// Commits the stage-clear reward exactly once, then enters the
+  /// stage-clear phase. The reward — the run's banked coins plus the
+  /// clear/star bonuses — is granted through [EconomyState.onStageCleared],
+  /// the single source of truth; its coins/gems are withheld from the
+  /// holder and fly in when the player reaches Home. The overlay renders
+  /// [_clearCoins]/[_clearGems]/[_clearStars].
+  void _enterStageClear({required bool isBossDefeat}) {
+    if (_clearCommitted) return;
+    _clearCommitted = true;
+
+    final economy = context.read<EconomyState>();
+
+    // 1★ clear · 2★ HP ≥ 50% · 3★ no damage (and no revive). Stage 1 always
+    // pays 3★ (FTUE) — mirrored here so the displayed stars match the grant.
+    final hpFrac = _maxHp > 0 ? _hp / _maxHp : 0.0;
+    final hp50 = hpFrac >= 0.5;
+    final noDamage = _hp >= _maxHp && !_reviveUsed;
+    var stars = noDamage ? 3 : hp50 ? 2 : 1;
+    if (FtueRules.shouldForceThreeStar(
+      currentWorld: economy.currentWorld,
+      currentStage: economy.currentStage,
+    )) {
+      stars = 3;
+    }
+
+    final outcome =
+        economy.onStageCleared(stars: stars, isBossDefeat: isBossDefeat);
+    _clearStars = stars;
+    _clearCoins = outcome.reward.coins;
+
+    _saveStageResult(cleared: true);
+    _phase = _Phase.stageClear;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -997,10 +1040,10 @@ class _GameScreenState extends State<GameScreen>
           ));
         } else {
           // Player at full HP — convert pickup to coins per GDD §2.9.
+          // Banked into the run total; it flies to the holder on stage
+          // clear (or 40% on death) rather than crediting live.
           final amount = EconomyConfig.hpDropAtMaxHpCoinValue();
-          context
-              .read<EconomyState>()
-              .addCoins(amount, source: 'in_game_hp_at_max');
+          context.read<EconomyState>().recordRunCoins(amount);
           _floatTexts.add(_FloatText(
             x: _playerX, y: _playerY - 20,
             text: '+$amount',
@@ -1009,8 +1052,10 @@ class _GameScreenState extends State<GameScreen>
           ));
         }
       case PowerUpType.coins:
+        // Banked into the run total; flies to the holder on stage clear
+        // (or 40% on death) rather than crediting live.
         final amount = p.coinValue ?? EconomyConfig.coinPickupRegular();
-        context.read<EconomyState>().addCoins(amount, source: 'in_game_pickup');
+        context.read<EconomyState>().recordRunCoins(amount);
         _floatTexts.add(_FloatText(
           x: _playerX, y: _playerY - 20,
           text: '+$amount',
@@ -1142,8 +1187,7 @@ class _GameScreenState extends State<GameScreen>
       // directly without spawning a boss. (Boss stages never reach this
       // branch because the boss wave starts at _currentWave == _maxWave
       // and exits via the boss explosion → stageClear path.)
-      _saveStageResult(cleared: true);
-      _phase = _Phase.stageClear;
+      _enterStageClear(isBossDefeat: false);
     } else if (_currentWave >= _maxWave && _isBossStage) {
       // Boss transition still does a hard reset — boss entry has its own
       // fly-in/red-flash sequence.
@@ -1193,8 +1237,7 @@ class _GameScreenState extends State<GameScreen>
       _bossExplosionFrame++;
       if (_bossExplosionFrame >= 16) {
         _totalScore += kEnemyConfigs[EnemyTier.boss]!.scoreValue;
-        _saveStageResult(cleared: true);
-        _phase = _Phase.stageClear;
+        _enterStageClear(isBossDefeat: true);
       }
       return;
     }
@@ -1347,6 +1390,9 @@ class _GameScreenState extends State<GameScreen>
     _reviveUsed = false;
     _adInFlight = false;
     _rewardDoubled = false;
+    _clearCommitted = false;
+    _clearCoins = 0;
+    _clearStars = 1;
     _vignetteOpacity = 0;
     _vignetteFrames  = 0;
     _waveClearPending = false;
@@ -1406,6 +1452,14 @@ class _GameScreenState extends State<GameScreen>
         .showRewardedAd(AdPlacement.doubleBiomeEnd);
     if (!mounted) return;
     if (outcome.result == AdShowResult.rewardEarned) {
+      // Grant the doubled portion (another full coin reward) so it flies to
+      // the holder on Home alongside the base reward. Gems are milestone
+      // one-offs and are not doubled.
+      if (_clearCoins > 0) {
+        context.read<EconomyState>().beginCurrencyCelebration(
+              coins: _clearCoins,
+            );
+      }
       setState(() {
         _adInFlight = false;
         _rewardDoubled = true;
@@ -1820,19 +1874,14 @@ class _GameScreenState extends State<GameScreen>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildStageClearOverlay() {
-    final hpFrac = _hp / _maxHp;
-    // Per redesign decisions, star thresholds are hard-coded:
-    //   1★ = clear the stage
-    //   2★ = clear with HP ≥ 50%
-    //   3★ = clear without taking damage (HP == max)
-    final hp50 = hpFrac >= 0.5;
-    final noDamage = _hp >= _maxHp && !_reviveUsed;
-    final stars = noDamage ? 3 : hp50 ? 2 : 1;
-    final mult = _rewardDoubled ? 2 : 1;
-    final baseReward = 500 * mult;
-    final starBonus = (50 + (hp50 ? 100 : 0) + (noDamage ? 200 : 0)) * mult;
-    final coinsEarned = baseReward + starBonus;
+    final hpFrac = _maxHp > 0 ? _hp / _maxHp : 0.0;
     final hpPct = (hpFrac * 100).round();
+    // Reward + stars come from EconomyState.onStageCleared (committed once in
+    // _enterStageClear) — the single source of truth. The 2x-ad CTA doubles
+    // only the coins (the extra is granted as a bonus when the ad is watched;
+    // gems are first-time milestones and never doubled).
+    final stars = _clearStars;
+    final coinsEarned = _rewardDoubled ? _clearCoins * 2 : _clearCoins;
 
     // Biome complete = LAST stage of the biome cleared (stage 10).
     // v2 has multiple boss stages per biome (e.g. levels 3, 6, 9, 10),
@@ -1966,6 +2015,20 @@ class _GameScreenState extends State<GameScreen>
   // Game over overlay
   // ─────────────────────────────────────────────────────────────────────────
 
+  /// Leaves a failed run for Home: bank the 40% salvage of the run's coins
+  /// (it flies into the holder when Home appears), then pop.
+  void _onHomeAfterDeath() {
+    context.read<EconomyState>().commitDeathAndEndStage();
+    Navigator.pop(context);
+  }
+
+  /// Restarts a failed stage: bank the 40% salvage for the abandoned run
+  /// (flies in on the next visit to Home), then reset to wave 1.
+  void _onRestartAfterDeath() {
+    context.read<EconomyState>().commitDeathAndEndStage();
+    setState(_fullReset);
+  }
+
   Widget _buildGameOverOverlay() {
     final price = revivePrice(_waveAtDeath);
     final canRevive = !_reviveUsed && !_reviveExpired;
@@ -1985,11 +2048,11 @@ class _GameScreenState extends State<GameScreen>
           ),
         AppButton.secondary(
           label: 'Home',
-          onPressed: () => Navigator.pop(context),
+          onPressed: _onHomeAfterDeath,
         ),
         AppButton.primary(
           label: 'Restart',
-          onPressed: () => setState(_fullReset),
+          onPressed: _onRestartAfterDeath,
         ),
         if (canRevive && hasGems)
           AppButton.gem(
