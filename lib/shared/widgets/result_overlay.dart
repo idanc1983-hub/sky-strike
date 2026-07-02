@@ -70,7 +70,10 @@ class ResultOverlay extends StatelessWidget {
         SafeArea(
           child: Column(
             children: [
-              const AppTopBar.full(forceShowCoin: true),
+              // In-game chrome — don't publish currency anchors, or the
+              // bar's (different) position would mis-aim the post-clear
+              // reward fly once the player is back on a menu screen.
+              const AppTopBar.full(forceShowCoin: true, publishAnchor: false),
               const Spacer(),
               if (stars != null) ...[
                 _StarsRow(filled: stars!),

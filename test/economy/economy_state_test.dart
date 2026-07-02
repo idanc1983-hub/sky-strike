@@ -10,6 +10,7 @@ import 'package:skystrike/economy/constants/economy_constants.dart';
 import 'package:skystrike/economy/services/mock_iap_service.dart';
 import 'package:skystrike/economy/state/challenge_state.dart';
 import 'package:skystrike/economy/state/economy_state.dart';
+import 'package:skystrike/config/remote_config_service.dart';
 
 EconomyState _buildState({DateTime Function()? now, Random? rng}) {
   return EconomyState(
@@ -27,14 +28,23 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    // Seed empty challenge config so the challenge state machine uses its
+    // formula fallbacks instead of reaching into FirebaseRemoteConfig, which
+    // has no app in the test harness. See RemoteConfigService.debugSeed…
+    RemoteConfigService.I.debugSeedChallengeConfig();
+  });
+
+  tearDown(() {
+    RemoteConfigService.I.debugResetForTest();
   });
 
   group('EconomyState', () {
     test('initial state matches default snapshot', () async {
       final s = _buildState();
       await s.initialize();
-      expect(s.coins, 0);
-      expect(s.gems, 0);
+      // Brand-new player starter grant per Game Economy GDD v1.1 §3.
+      expect(s.coins, 100);
+      expect(s.gems, 10);
       expect(s.level, 1);
       expect(s.unlockedLoadoutSlots, 3);
       expect(s.unlockedPowerUps,
@@ -45,12 +55,14 @@ void main() {
     test('addCoins / spendCoins enforces non-negative balance', () async {
       final s = _buildState();
       await s.initialize();
+      // Starts at the 100-coin GDD default wallet.
       s.addCoins(100);
-      expect(s.coins, 100);
+      expect(s.coins, 200);
       expect(s.spendCoins(40), isTrue);
-      expect(s.coins, 60);
-      expect(s.spendCoins(200), isFalse);
-      expect(s.coins, 60);
+      expect(s.coins, 160);
+      // Overspend is rejected and leaves the balance untouched.
+      expect(s.spendCoins(500), isFalse);
+      expect(s.coins, 160);
       s.dispose();
     });
 
@@ -101,7 +113,8 @@ void main() {
       await s.initialize();
       final outcome = await s.purchaseIap('starter_pack');
       expect(outcome.result.toString(), contains('success'));
-      expect(s.gems, 12);
+      // 10-gem starter wallet (GDD v1.1 §3) + 12 gems from starter_pack.
+      expect(s.gems, 22);
       expect(s.packsPurchased.contains('starter_pack'), isTrue);
       s.dispose();
     });
@@ -114,9 +127,10 @@ void main() {
       s.onWaveCleared(1);
       s.onWaveCleared(2);
       final salvage = s.salvageOnDeath();
-      expect(salvage.coins, 16); // floor(42 × 0.40)
+      expect(salvage.coins, 16); // floor(42 × 0.40) of run-accumulated coins
       s.commitDeathAndEndStage();
-      expect(s.coins, 16);
+      // Salvage credits on top of the 100-coin starter wallet.
+      expect(s.coins, 116);
       s.dispose();
     });
 

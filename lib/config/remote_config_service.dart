@@ -79,8 +79,6 @@ const Map<String, Object> _enemyGlowPrimitiveDefaults = <String, Object>{
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-T? _asT<T>(dynamic v) => v is T ? v : null;
-
 int? _asInt(dynamic v) {
   if (v is int) return v;
   if (v is double) return v.toInt();
@@ -102,7 +100,7 @@ bool _asBool(dynamic v) {
   return false;
 }
 
-String? _asString(dynamic v) => v == null ? null : v.toString();
+String? _asString(dynamic v) => v?.toString();
 
 List<dynamic> _asList(dynamic v) =>
     v is List ? v : const <dynamic>[];
@@ -891,6 +889,31 @@ class RemoteConfigService {
     _stages = null;
     _monetization = null;
     _enemyGlow = null;
+  }
+
+  /// Seeds the challenge caches directly so unit tests can exercise the
+  /// challenge state machine without a live Firebase app. Populating these
+  /// caches makes the [challengeStages] / [challenges] getters short-circuit
+  /// before they ever touch [FirebaseRemoteConfig.instance] (which throws
+  /// `[core/no-app]` in the test harness). Passing empty collections — the
+  /// default — mirrors the production "RC has no ladder for this challenge"
+  /// path, where callers fall back to their formula defaults. Call
+  /// [debugResetForTest] in tearDown to clear seeded fixtures.
+  @visibleForTesting
+  void debugSeedChallengeConfig({
+    Map<String, List<StageConfig>> stages = const {},
+    List<ChallengeConfig> challenges = const [],
+  }) {
+    _stages = stages;
+    _challenges = challenges;
+  }
+
+  /// Restores the caches seeded by [debugSeedChallengeConfig] to their
+  /// uninitialised state so seeded fixtures don't leak between tests.
+  @visibleForTesting
+  void debugResetForTest() {
+    _clearCaches();
+    _initialized = false;
   }
 
   // ── Raw access (for debugging / passthrough) ──────────────────────────────

@@ -72,6 +72,16 @@ class ChallengeFormulas {
   // Completion reward computation
   // ---------------------------------------------------------------------------
 
+  /// Deterministic coin figure for the 100% milestone — the number the home
+  /// card previews AND the amount actually flown into the holder, so the
+  /// reveal animation always matches what the player was shown. This is the
+  /// `reward100` coin formula with the ±20% jitter intentionally omitted.
+  static int milestone100Coins({required int playerLevel}) {
+    final coinMult =
+        1 + playerLevel * ChallengeConstants.milestone100CoinLevelStep;
+    return (ChallengeConstants.milestone100BaseCoins * coinMult).floor();
+  }
+
   /// Computes the 100% milestone reward for [playerLevel]. Uses the
   /// `0.8..1.2` jitter from GDD §4.3.
   static Reward reward100({

@@ -93,8 +93,9 @@ void main() {
     test('empty SharedPreferences returns defaults', () async {
       final p = EconomyPersistence();
       final snap = await p.load();
-      expect(snap.coins, 0);
-      expect(snap.gems, 0);
+      // Brand-new player starter grant per Game Economy GDD v1.1 §3.
+      expect(snap.coins, 100);
+      expect(snap.gems, 10);
       expect(snap.level, 1);
       expect(snap.maxWorldReached, 1);
       expect(snap.unlockedLoadoutSlots, 3);
@@ -155,9 +156,9 @@ void main() {
       await prefs.setString('ss_state_v1', tampered);
 
       final reloaded = await p.load();
-      // Defaults — not 99,999,999 coins.
-      expect(reloaded.coins, equals(0));
-      expect(reloaded.gems, equals(0));
+      // Defaults (GDD v1.1 §3) — not 99,999,999 coins.
+      expect(reloaded.coins, equals(100));
+      expect(reloaded.gems, equals(10));
       expect(reloaded.level, equals(1));
     });
 
@@ -169,7 +170,8 @@ void main() {
       await prefs.remove('ss_state_v1_sig');
 
       final reloaded = await p.load();
-      expect(reloaded.coins, equals(0));
+      // A blob without its signature is discarded → defaults (GDD v1.1 §3).
+      expect(reloaded.coins, equals(100));
     });
   });
 }

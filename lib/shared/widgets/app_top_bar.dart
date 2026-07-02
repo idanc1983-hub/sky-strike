@@ -32,14 +32,24 @@ class AppTopBar extends StatelessWidget {
   /// affordance.
   final VoidCallback? _onTitleSecretHold;
 
+  /// Whether this bar's currency chips publish their on-screen centre to
+  /// [CurrencyAnchors] (the target reward-fly overlays aim at). True for the
+  /// persistent menu bars; **false** for transient in-game overlays (Pause /
+  /// Mission Failed / Stage + Biome Complete), whose bar sits at a different
+  /// position and would otherwise leave a stale anchor that mis-aims the next
+  /// fly once the player is back on a menu screen.
+  final bool _publishAnchor;
+
   const AppTopBar.full({
     super.key,
     bool forceShowCoin = true,
+    bool publishAnchor = true,
   })  : _variant = _Variant.full,
         _title = null,
         _onClose = null,
         _onTitleSecretHold = null,
-        _forceShowCoin = forceShowCoin;
+        _forceShowCoin = forceShowCoin,
+        _publishAnchor = publishAnchor;
 
   const AppTopBar.close({
     super.key,
@@ -49,7 +59,8 @@ class AppTopBar extends StatelessWidget {
         _title = null,
         _onClose = onClose,
         _onTitleSecretHold = null,
-        _forceShowCoin = forceShowCoin;
+        _forceShowCoin = forceShowCoin,
+        _publishAnchor = true;
 
   const AppTopBar.titleOnly({
     super.key,
@@ -60,7 +71,8 @@ class AppTopBar extends StatelessWidget {
         _title = title,
         _onClose = onClose,
         _onTitleSecretHold = onTitleSecretHold,
-        _forceShowCoin = false;
+        _forceShowCoin = false,
+        _publishAnchor = false;
 
   @override
   Widget build(BuildContext context) {
@@ -125,6 +137,7 @@ class AppTopBar extends StatelessWidget {
               asset: 'assets/ui/icon_coin.png',
               placeholderLabel: 'coin',
               placeholderColor: AppColors.amber,
+              publishAnchor: _publishAnchor,
             ),
             const SizedBox(width: 8),
           ],
@@ -134,6 +147,7 @@ class AppTopBar extends StatelessWidget {
             asset: 'assets/ui/icon_gem.png',
             placeholderLabel: 'gem',
             placeholderColor: const Color(0xFF7BB8FF),
+            publishAnchor: _publishAnchor,
           ),
         ],
       ),
@@ -204,12 +218,17 @@ class _CurrencyChip extends StatefulWidget {
   final String placeholderLabel;
   final Color placeholderColor;
 
+  /// Whether this chip publishes its centre to [CurrencyAnchors] (see
+  /// [AppTopBar] — false for transient in-game overlays).
+  final bool publishAnchor;
+
   const _CurrencyChip({
     required this.kind,
     required this.amount,
     required this.asset,
     required this.placeholderLabel,
     required this.placeholderColor,
+    this.publishAnchor = true,
   });
 
   @override
@@ -246,9 +265,22 @@ class _CurrencyChipState extends State<_CurrencyChip> {
   /// covered routes and off-screen [IndexedStack] tabs must not overwrite
   /// the anchor with a stale position.
   void _reportAnchor() {
+    // Transient in-game overlays must not publish — their bar sits at a
+    // different position and would leave a stale anchor that mis-aims the
+    // next reward fly on the menu screens.
+    if (!widget.publishAnchor) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
+      final route = ModalRoute.of(context);
+      if (route == null || !route.isCurrent) return;
+      // Don't publish while a route above is sliding away. On a pop the
+      // revealed page parallax-slides back from an offset, so the bar sits at
+      // a transient (left-shifted) position; capturing it there mis-aims the
+      // reward fly that fires the instant we land. Skip until the covering
+      // route's animation is fully dismissed, leaving the last settled anchor
+      // in place (which is exactly where the withheld holder still sits).
+      final sec = route.secondaryAnimation;
+      if (sec != null && sec.status != AnimationStatus.dismissed) return;
       final box = _key.currentContext?.findRenderObject() as RenderBox?;
       if (box == null || !box.hasSize) return;
       final center =

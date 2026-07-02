@@ -6,7 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import '../config/enemy_glow_config.dart';
 import '../config/remote_config_service.dart';
-import '../economy/constants/challenge_constants.dart';
+import '../economy/services/challenge_formulas.dart';
 import '../economy/services/challenge_prize_parser.dart';
 import '../economy/state/challenge_state.dart';
 import '../economy/state/economy_state.dart';
@@ -145,14 +145,12 @@ const Map<String, String> _kLobbyIconAssets = {
       'assets/ui/home/monetization/snake_starascent_lobby.png',
 };
 
-/// Deterministic preview of the 100% milestone reward in coins. Uses the
-/// same `baseCoins × (1 + level × step)` formula as `ChallengeFormulas`
-/// but skips the random 0.8–1.2 jitter so the home screen shows a stable
-/// number (the actual award still jitters on claim).
-int _previewMilestoneCoins(int playerLevel) {
-  final mult = 1 + playerLevel * ChallengeConstants.milestone100CoinLevelStep;
-  return (ChallengeConstants.milestone100BaseCoins * mult).floor();
-}
+/// Deterministic preview of the 100% milestone reward in coins. Delegates to
+/// the single source of truth in [ChallengeFormulas] — the exact coin amount
+/// the player is awarded on claim — so the card, the claim, and the reveal
+/// animation can never disagree.
+int _previewMilestoneCoins(int playerLevel) =>
+    ChallengeFormulas.milestone100Coins(playerLevel: playerLevel);
 
 // ---------------------------------------------------------------------------
 // Enemy state

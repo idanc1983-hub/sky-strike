@@ -139,7 +139,7 @@ void main() {
       );
     });
 
-    test('skips malformed enemy entries without crashing', () {
+    test('skips non-map entries and tags tag-less maps positionally', () {
       final cfg = LevelConfig.fromLevelsMap(
         world: 1,
         stage: 1,
@@ -150,16 +150,20 @@ void main() {
             'waves': 5,
             'enemies': <dynamic>[
               {'tag': 'enemy_1', 'count': 5, 'power': 1.0},
-              'not-a-map', // skipped
-              {'count': 3}, // missing tag → skipped
+              'not-a-map', // not a Map → skipped
+              {'count': 3}, // no explicit tag → positional tag enemy_3
               {'tag': 'enemy_2', 'count': 4, 'power': 2.0},
             ],
           },
         },
       );
       expect(cfg, isNotNull);
-      expect(cfg!.enemies.length, 2);
-      expect(cfg.enemies.map((e) => e.tag), containsAll(['enemy_1', 'enemy_2']));
+      // Only the non-Map entry is dropped; the tag-less map survives with the
+      // positional tag derived from its index (enemy_${i + 1}), matching the
+      // production RC format where enemies are stored without a `tag` field.
+      expect(cfg!.enemies.length, 3);
+      expect(cfg.enemies.map((e) => e.tag),
+          containsAll(['enemy_1', 'enemy_3', 'enemy_2']));
     });
   });
 

@@ -1,7 +1,7 @@
 name: skystrike
 description: Sky Strike — Aerial Combat Mobile Game
 publish_to: 'none'
-version: 2.1.0+14
+version: 2.1.0+16
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -45,7 +45,6 @@ flutter:
     - assets/ui/home/monetization/
     - assets/ui/challenges/
     - assets/bullets/
-    - assets/themes/
     - assets/mock_backend/
     - assets/config/
     - assets/remote_config_defaults/

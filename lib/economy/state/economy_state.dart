@@ -488,11 +488,7 @@ class EconomyState extends ChangeNotifier {
     if (!view.isExpired(_now())) return;
 
     if (view.canClaim100) {
-      _applyReward(ChallengeFormulas.reward100(
-        playerLevel: _level,
-        maxWorldReached: _maxWorldReached,
-        rng: _rng,
-      ));
+      _grantChallengeMilestoneReward();
       _challenge100ClaimedThisCycle = true;
       _pendingMilestoneToast = '100';
     }
@@ -524,18 +520,37 @@ class EconomyState extends ChangeNotifier {
     _claiming100 = true;
     _challenge100ClaimedThisCycle = true;
     try {
-      final reward = ChallengeFormulas.reward100(
-        playerLevel: _level,
-        maxWorldReached: _maxWorldReached,
-        rng: _rng,
-      );
-      _applyReward(reward);
+      final reward = _grantChallengeMilestoneReward();
       _scheduleSync();
       notifyListeners();
       return reward;
     } finally {
       _claiming100 = false;
     }
+  }
+
+  /// Grants the 100% challenge-milestone reward. The coins are the
+  /// deterministic figure the home card previews
+  /// ([ChallengeFormulas.milestone100Coins]) and are flown into the holder so
+  /// the reveal animation matches exactly what the player was shown — the
+  /// ±20% jitter that [ChallengeFormulas.reward100] rolls is intentionally
+  /// dropped here. The milestone gems and power-up are bonuses the card never
+  /// advertises, so they're credited silently. Returns the granted reward.
+  Reward _grantChallengeMilestoneReward() {
+    final coins = ChallengeFormulas.milestone100Coins(playerLevel: _level);
+    final bonus = ChallengeFormulas.reward100(
+      playerLevel: _level,
+      maxWorldReached: _maxWorldReached,
+      rng: _rng,
+    );
+    // Power-up + gems are unadvertised → apply silently (no fly animation).
+    for (final id in bonus.powerUps) {
+      _powerUpInventory[id] = (_powerUpInventory[id] ?? 0) + 1;
+    }
+    if (bonus.gems > 0) _gems += bonus.gems;
+    // Only the previewed coins fly into the holder.
+    _grantCelebrated(coins: coins, kind: CelebrationKind.currency);
+    return Reward(coins: coins, gems: bonus.gems, powerUps: bonus.powerUps);
   }
 
   /// Consumes the pending milestone toast — UI calls this once it has
@@ -720,6 +735,18 @@ class EconomyState extends ChangeNotifier {
     _gems += amount;
     _scheduleSync();
     notifyListeners();
+  }
+
+  /// Credits [coins]/[gems] and reveals them with the fly-to-holder
+  /// celebration (display-lag), so a direct shop pack purchase shows the
+  /// same reward animation as the daily reward / chest flows instead of a
+  /// silent balance bump. [source] is reserved for analytics.
+  void grantCurrencyCelebration({
+    int coins = 0,
+    int gems = 0,
+    String source = 'unspecified',
+  }) {
+    _grantCelebrated(coins: coins, gems: gems);
   }
 
   // ---------------------------------------------------------------------------
@@ -1039,9 +1066,14 @@ class EconomyState extends ChangeNotifier {
     if (isFirstThreeStar) gems += EconomyConstants.gemFirstThreeStarClear;
     if (isFirstBoss) gems += EconomyConstants.gemFirstBossDefeat;
 
-    // Credit now, but fly the stage-clear coins/gems into the holder on the
-    // next menu screen (Home).
-    _grantCelebrated(coins: coins, gems: gems);
+    // Credit now, but fly ONLY the coins into the holder on the next menu
+    // screen (Home). The stage-clear overlay advertises coins only (see
+    // [_RewardRow] in game_screen) — the first-time milestone gems are not
+    // shown there, so they are credited silently rather than revealed by a
+    // fly animation the player was never promised. (The animation must show
+    // only what the preview promised.)
+    if (gems > 0) _gems += gems;
+    _grantCelebrated(coins: coins);
 
     // Drive Treasure Hunter challenge counter (gameplay coins only).
     if (_activeChallengeType == ChallengeType.treasure && coins > 0) {
@@ -1679,13 +1711,18 @@ class EconomyState extends ChangeNotifier {
   }
 
   void _applyIapReward(String productId) {
-    // Coins/gems are accumulated and credited via a single celebration so
-    // they fly into the holder; non-currency rewards apply immediately.
-    var grantedCoins = 0;
-    var grantedGems = 0;
+    // Only the currency the purchase UI actually advertised flies into the
+    // holder via the celebration; unadvertised bonuses are credited silently.
+    // Main-shop packs headline their gems, so those fly. Coin packs (the
+    // out-of-coins offer) advertise COINS only — their bundled bonus gems and
+    // power-ups must not appear in the reward animation, which is wired to
+    // show only what the player was shown.
+    var celebratedCoins = 0;
+    var celebratedGems = 0;
+    var silentGems = 0;
     final mainGems = IapCatalog.mainPackGems[productId];
     if (mainGems != null) {
-      grantedGems += mainGems;
+      celebratedGems += mainGems;
       final disc = IapCatalog.mainPackNextJetDiscount[productId];
       if (disc != null) {
         // Take the larger of the existing pending discount and the new
@@ -1699,8 +1736,9 @@ class EconomyState extends ChangeNotifier {
     }
     final coinPack = IapCatalog.coinPackCoins[productId];
     if (coinPack != null) {
-      grantedCoins += coinPack;
-      grantedGems += IapCatalog.coinPackGems[productId] ?? 0;
+      celebratedCoins += coinPack;
+      // Bonus gems bundled with a coin pack aren't advertised → credit silently.
+      silentGems += IapCatalog.coinPackGems[productId] ?? 0;
       final picks = PowerUpPicker.pickMany(
         count: IapCatalog.coinPackPowerUps[productId] ?? 0,
         maxWorldReached: _maxWorldReached,
@@ -1722,10 +1760,10 @@ class EconomyState extends ChangeNotifier {
       }
     }
     _packsPurchased.add(productId);
-    // Credits coins/gems (if any) + queues the fly celebration, and also
-    // schedules sync + notifies; the explicit calls below cover the
-    // non-currency mutations (removeAds, packs, power-ups).
-    _grantCelebrated(coins: grantedCoins, gems: grantedGems);
+    // Silent bonus gems are credited straight to the balance (no fly), then
+    // the advertised coins/gems fly via the celebration. Both notify + sync.
+    if (silentGems > 0) _gems += silentGems;
+    _grantCelebrated(coins: celebratedCoins, gems: celebratedGems);
     _scheduleSync();
     notifyListeners();
   }

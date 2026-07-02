@@ -657,14 +657,12 @@ class _PuLockedChip extends StatelessWidget {
 // ----- Section header (mock layout) -----------------------------------------
 class _DealsSectionHeader extends StatelessWidget {
   final String title;
-  final String? iconAsset;
   final Color iconColor;
   final String? subtitle;
 
   const _DealsSectionHeader({
     required this.title,
     required this.iconColor,
-    this.iconAsset,
     this.subtitle,
   });
 
@@ -693,20 +691,6 @@ class _DealsSectionHeader extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              if (iconAsset != null) ...[
-                const SizedBox(width: 6),
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: Image.asset(
-                    iconAsset!,
-                    fit: BoxFit.contain,
-                    // When the asset is missing in dev, render nothing
-                    // (no "P:" placeholder badge inside the title row).
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                  ),
-                ),
-              ],
             ],
           ),
           if (subtitle != null) ...[
@@ -834,23 +818,20 @@ class _PackCard extends StatelessWidget {
     final outcome = await economy.purchaseProduct(
       productId,
       onConfirmed: () {
-        if (isGem) {
-          economy.addGems(pack.amount, source: 'iap_$productId');
-        } else {
-          economy.addCoins(pack.amount, source: 'iap_$productId');
-        }
+        // Grant through a celebration so the coins/gems fly into the holder
+        // (the same reveal as the daily reward / chest flows) rather than a
+        // silent credit. The fly plays via the Shop's RewardCelebrationHost.
+        economy.grantCurrencyCelebration(
+          coins: isGem ? 0 : pack.amount,
+          gems: isGem ? pack.amount : 0,
+          source: 'iap_$productId',
+        );
       },
     );
     if (!context.mounted) return;
     switch (outcome.result) {
       case IapPurchaseResult.success:
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              '+${_formatNumber(pack.amount)} ${isGem ? 'gems' : 'coins'}',
-            ),
-          ),
-        );
+        // Reward flies into the holder via the celebration host — no toast.
         break;
       case IapPurchaseResult.cancelled:
         // Player backed out of the store sheet — stay silent.
@@ -1435,8 +1416,6 @@ class _PackEntry {
     required this.priceUsd,
     this.productId,
   });
-  factory _PackEntry.empty(String id) =>
-      _PackEntry(id: id, amount: 0, priceUsd: 0.0);
 }
 
 class _ChestEntry {
