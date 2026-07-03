@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../economy/state/economy_state.dart';
 import '../../screens/menu_popup.dart';
+import '../../state/notification_badge_controller.dart';
+import '../../ui/widgets/notification_badge.dart';
 import '../theme/app_colors.dart';
 import 'asset_placeholder.dart';
 import 'currency_anchors.dart';
@@ -167,9 +169,16 @@ class _MenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A red dot signals a free daily-gift reward is waiting to be claimed.
+    // Pure overlay — tap behaviour, size, and layout are untouched.
+    final showBadge =
+        context.watch<NotificationBadgeController>().showMenuBadge;
     return _ChipShell(
       onTap: onTap,
-      child: const Icon(Icons.menu, color: AppColors.greenPale, size: 20),
+      child: NotificationBadge(
+        show: showBadge,
+        child: const Icon(Icons.menu, color: AppColors.greenPale, size: 20),
+      ),
     );
   }
 }

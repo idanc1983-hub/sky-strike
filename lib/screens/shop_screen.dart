@@ -25,7 +25,6 @@ const _cGreenDarker = Color(0xFF27500A);
 const _cAmber = Color(0xFFEF9F27);
 const _cAmberDark = Color(0xFF854F0B);
 const _cAmberLight = Color(0xFFFAC775);
-const _cGemBg = Color(0xFF412402);
 
 /// Biome key → player world index (1..6). Used to gate power-up
 /// unlocks per the v2 `economy__shop_powerups__v1.power_ups[*].unlock_biome`
@@ -229,9 +228,9 @@ class _ChestsSection extends StatelessWidget {
   // Per-tier display copy. Names + one-line perks per redesign mock.
   // Prices come from remote config (`chest_prices.<id>.coin_price`).
   static const _chestCopy = <String, ({String name, String perk})>{
-    'basic_chest': (name: 'Basic', perk: 'Coins\n+\npower-ups'),
-    'unique_chest': (name: 'Rare', perk: '2x Coins\nbooster'),
-    'epic_chest': (name: 'Epic', perk: 'Epic jet\n+\ngem bonus'),
+    'basic_chest': (name: 'Basic', perk: 'Coins\n+\ngems'),
+    'unique_chest': (name: 'Rare', perk: 'More coins\n+\ngems'),
+    'epic_chest': (name: 'Epic', perk: 'Top coins\n+\nbig gems'),
   };
 
   @override
@@ -284,7 +283,6 @@ class _ChestsSection extends StatelessWidget {
       out.add(_ChestEntry(
         id: id,
         coinPrice: deal.coinPrice,
-        gemPrice: deal.gemPrice,
       ));
     }
     return out;
@@ -1140,35 +1138,16 @@ class _ChestPreviewSheet extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 16),
-            // Buy actions
-            Row(
-              children: [
-                Expanded(
-                  child: _BuyPill(
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      _ChestRowActions.buyWithCoins(context, chest, label);
-                    },
-                    child: Center(
-                      child: _CoinAmount(amount: chest.coinPrice),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _BuyPill(
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      _ChestRowActions.buyWithGems(context, chest, label);
-                    },
-                    color: _cGemBg,
-                    borderColor: _cAmber,
-                    child: Center(
-                      child: _GemAmount(amount: chest.gemPrice),
-                    ),
-                  ),
-                ),
-              ],
+            // Buy action — chests are purchased with coins only; gems are a
+            // reward, never a cost.
+            _BuyPill(
+              onTap: () {
+                Navigator.of(context).pop();
+                _ChestRowActions.buyWithCoins(context, chest, label);
+              },
+              child: Center(
+                child: _CoinAmount(amount: chest.coinPrice),
+              ),
             ),
           ],
         ),
@@ -1251,18 +1230,6 @@ class _ChestRowActions {
     _grantAndAnnounce(context, economy, chest, label);
   }
 
-  static void buyWithGems(
-      BuildContext context, _ChestEntry chest, String label) {
-    final economy = context.read<EconomyState>();
-    if (!economy.spendGems(chest.gemPrice)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Not enough gems')),
-      );
-      return;
-    }
-    _grantAndAnnounce(context, economy, chest, label);
-  }
-
   /// Resolves the chest payout from Remote Config and applies it to the
   /// wallet (and jet inventory for biome chests). Silently no-ops if RC
   /// has no definition for [chest.id].
@@ -1300,13 +1267,9 @@ class _ChestRowActions {
 class _BuyPill extends StatelessWidget {
   final VoidCallback onTap;
   final Widget child;
-  final Color color;
-  final Color borderColor;
   const _BuyPill({
     required this.onTap,
     required this.child,
-    this.color = _cGreen,
-    this.borderColor = _cGreen,
   });
 
   @override
@@ -1316,8 +1279,8 @@ class _BuyPill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: color,
-          border: Border.all(color: borderColor, width: 0.5),
+          color: _cGreen,
+          border: Border.all(color: _cGreen, width: 0.5),
           borderRadius: BorderRadius.circular(6),
         ),
         child: child,
@@ -1348,32 +1311,6 @@ class _CoinAmount extends StatelessWidget {
         ],
       );
 }
-
-class _GemAmount extends StatelessWidget {
-  final int amount;
-  const _GemAmount({required this.amount});
-
-  @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset('assets/ui/icon_gem.png',
-              width: 12,
-              height: 12,
-              errorBuilder: AssetPlaceholder.image(
-                  color: _cAmber, label: 'g', borderRadius: 2)),
-          const SizedBox(width: 3),
-          Text(
-            '$amount',
-            style: const TextStyle(
-                color: _cAmberLight,
-                fontSize: 11,
-                fontWeight: FontWeight.w700),
-          ),
-        ],
-      );
-}
-
 
 class _EmptyDataNote extends StatelessWidget {
   final String label;
@@ -1421,11 +1358,9 @@ class _PackEntry {
 class _ChestEntry {
   final String id;
   final int coinPrice;
-  final int gemPrice;
   const _ChestEntry({
     required this.id,
     required this.coinPrice,
-    required this.gemPrice,
   });
 }
 

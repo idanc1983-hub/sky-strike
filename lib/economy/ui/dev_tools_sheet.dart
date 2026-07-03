@@ -7,6 +7,7 @@ import '../../config/remote_config_service.dart';
 import '../../game/models.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_typography.dart';
+import '../../social/invite_state.dart';
 import '../../widgets/chest_open_overlay.dart';
 import '../../widgets/coins_burst_overlay.dart';
 import '../state/economy_state.dart';
@@ -156,10 +157,22 @@ class DevToolsSheet extends StatelessWidget {
                 subtitle:
                     'Sets streak day to 1, week to 0, longest to 0, clears '
                     'lastClaimDate so the next claim starts from Day 1. '
+                    'Also makes today claimable, so the MENU badge shows. '
                     'Use to re-test the ladder (including the Day 7 jet).',
                 onConfirmed: (economy) async =>
                     economy.debugResetDailyStreak(),
                 confirmLabel: 'RESET',
+              ),
+              const SizedBox(height: 10),
+              _DevAction(
+                title: 'Force invite reward',
+                subtitle:
+                    'Refills the invite daily allowance and clears any '
+                    'cooldown so the reward is available now — the Social tab '
+                    'badge shows and the Share CTA re-enables.',
+                onConfirmedCtx: (ctx) async =>
+                    ctx.read<InviteState>().debugForceAvailable(),
+                confirmLabel: 'FORCE',
               ),
               const SizedBox(height: 10),
               _DevAction(
@@ -197,15 +210,28 @@ class _DevAction extends StatefulWidget {
   final String subtitle;
   final String confirmLabel;
   final bool danger;
-  final Future<void> Function(EconomyState economy) onConfirmed;
+
+  /// Economy-scoped handler — receives the shared [EconomyState]. Used by the
+  /// majority of actions. Exactly one of [onConfirmed] / [onConfirmedCtx] must
+  /// be supplied.
+  final Future<void> Function(EconomyState economy)? onConfirmed;
+
+  /// Context-scoped handler for actions that touch state other than economy
+  /// (e.g. `context.read<InviteState>()`). Reads run synchronously before the
+  /// post-action await, so the context is used only while still mounted.
+  final Future<void> Function(BuildContext context)? onConfirmedCtx;
 
   const _DevAction({
     required this.title,
     required this.subtitle,
     required this.confirmLabel,
-    required this.onConfirmed,
+    this.onConfirmed,
+    this.onConfirmedCtx,
     this.danger = false,
-  });
+  }) : assert(
+          (onConfirmed == null) != (onConfirmedCtx == null),
+          'Provide exactly one of onConfirmed / onConfirmedCtx',
+        );
 
   @override
   State<_DevAction> createState() => _DevActionState();
@@ -242,7 +268,11 @@ class _DevActionState extends State<_DevAction> {
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
-    await widget.onConfirmed(context.read<EconomyState>());
+    if (widget.onConfirmedCtx != null) {
+      await widget.onConfirmedCtx!(context);
+    } else {
+      await widget.onConfirmed!(context.read<EconomyState>());
+    }
     if (!mounted) return;
     setState(() => _busy = false);
     messenger.showSnackBar(

@@ -2,28 +2,28 @@
   "definitions": [
     {
       "chest_id": "basic_chest",
-      "coin_min": 50,
-      "coin_max": 200,
-      "gem_min": 0,
-      "gem_max": 0,
+      "coin_min": 120,
+      "coin_max": 460,
+      "gem_min": 3,
+      "gem_max": 9,
       "jet_drop_chance": 0,
       "jet_id": null
     },
     {
       "chest_id": "unique_chest",
-      "coin_min": 200,
-      "coin_max": 400,
-      "gem_min": 3,
-      "gem_max": 6,
+      "coin_min": 450,
+      "coin_max": 1500,
+      "gem_min": 8,
+      "gem_max": 22,
       "jet_drop_chance": 0,
       "jet_id": null
     },
     {
       "chest_id": "epic_chest",
-      "coin_min": 700,
-      "coin_max": 1200,
-      "gem_min": 8,
-      "gem_max": 15,
+      "coin_min": 1300,
+      "coin_max": 4600,
+      "gem_min": 22,
+      "gem_max": 58,
       "jet_drop_chance": 0,
       "jet_id": null
     },

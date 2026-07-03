@@ -27,6 +27,8 @@ import 'screens/game_screen.dart';
 import 'screens/loading_screen.dart';
 import 'screens/main_shell.dart';
 import 'screens/splash_screen.dart';
+import 'social/invite_state.dart';
+import 'state/notification_badge_controller.dart';
 import 'shared/widgets/reward_celebration_host.dart';
 import 'services/ads/ads_service.dart' as platform_ads;
 import 'services/ads/consent_manager.dart';
@@ -155,6 +157,30 @@ Set<String> _collectStoreProductIds() {
   return ids;
 }
 
+/// Builds the app-lifetime [InviteState] from Remote Config. Lifted to the
+/// app root (rather than owned by the Social screen's InviteCard) so the
+/// Social nav badge can observe invite availability before the player ever
+/// opens that tab. Reward grants fly to the top-bar holder via [economy];
+/// analytics go to Firebase through the injected logger.
+InviteState _buildInviteState(EconomyState economy) {
+  return InviteState(
+    config: RemoteConfigService.I.invite,
+    onGrant: ({required int coins, required int gems}) =>
+        economy.grantCurrencyCelebration(
+      coins: coins,
+      gems: gems,
+      source: 'invite_reward',
+    ),
+    logEvent: (name, {params}) {
+      try {
+        FirebaseAnalytics.instance.logEvent(name: name, parameters: params);
+      } catch (e) {
+        debugPrint('[invite] analytics logEvent "$name" failed: $e');
+      }
+    },
+  );
+}
+
 /// Boots the platform ads stack: UMP consent → iOS ATT prompt →
 /// MobileAds SDK init. Fired from the splash screen the moment it
 /// dismisses, so the ATT system dialog lands on an interactive surface
@@ -269,8 +295,24 @@ class _SkyStrikeAppState extends State<SkyStrikeApp>
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<EconomyState>.value(
-      value: widget.economy,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<EconomyState>.value(value: widget.economy),
+        // Invite state is app-lifetime so its reward availability is
+        // observable before the Social tab is opened. The Social screen's
+        // InviteCard now reads this shared instance instead of owning its own.
+        ChangeNotifierProvider<InviteState>(
+          create: (_) => _buildInviteState(widget.economy),
+        ),
+        // Derives the two badge visibilities from the reward sources above.
+        // Depends on both, so it is listed after them.
+        ChangeNotifierProvider<NotificationBadgeController>(
+          create: (ctx) => NotificationBadgeController(
+            economy: widget.economy,
+            invite: ctx.read<InviteState>(),
+          ),
+        ),
+      ],
       child: MaterialApp(
         title: 'SkyStrike',
         debugShowCheckedModeBanner: false,

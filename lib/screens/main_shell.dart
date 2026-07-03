@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../state/notification_badge_controller.dart';
+import '../ui/widgets/notification_badge.dart';
 import 'home_screen.dart';
 import 'shop_screen.dart';
 import 'jets_screen.dart';
@@ -25,6 +28,9 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Red dot on the Social tab when a free invite reward is available.
+    final showSocialBadge =
+        context.watch<NotificationBadgeController>().showSocialBadge;
     return Scaffold(
       body: IndexedStack(
         index: _index,
@@ -47,25 +53,36 @@ class _MainShellState extends State<MainShell> {
         height: 60,
         selectedIndex: _index,
         onDestinationSelected: _onTabSelected,
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.home_outlined, color: _cNavInactive),
             selectedIcon: Icon(Icons.home_outlined, color: _cNavActive),
             label: 'Home',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.shopping_bag_outlined, color: _cNavInactive),
             selectedIcon: Icon(Icons.shopping_bag_outlined, color: _cNavActive),
             label: 'Shop',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: _JetNavIcon(color: _cNavInactive),
             selectedIcon: _JetNavIcon(color: _cNavActive),
             label: 'Jets',
           ),
+          // Social tab carries the invite-reward badge on both icon states so
+          // the dot stays visible whether or not the tab is selected. Active
+          // indicator (#3B6D11) and label (#639922) are preserved.
           NavigationDestination(
-            icon: Icon(Icons.emoji_events_outlined, color: _cNavInactive),
-            selectedIcon: Icon(Icons.emoji_events_outlined, color: _cNavActive),
+            icon: NotificationBadge(
+              show: showSocialBadge,
+              child: const Icon(Icons.emoji_events_outlined,
+                  color: _cNavInactive),
+            ),
+            selectedIcon: NotificationBadge(
+              show: showSocialBadge,
+              child:
+                  const Icon(Icons.emoji_events_outlined, color: _cNavActive),
+            ),
             label: 'Social',
           ),
         ],

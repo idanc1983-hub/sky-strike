@@ -78,18 +78,15 @@
   "chest_deals": [
     {
       "chest_id": "basic_chest",
-      "coin_price": 300,
-      "gem_price": 15
+      "coin_price": 300
     },
     {
       "chest_id": "unique_chest",
-      "coin_price": 1000,
-      "gem_price": 50
+      "coin_price": 1000
     },
     {
       "chest_id": "epic_chest",
-      "coin_price": 3000,
-      "gem_price": 150
+      "coin_price": 3000
     }
   ],
   "power_ups": [

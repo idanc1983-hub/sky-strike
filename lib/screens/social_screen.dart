@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../shared/theme/app_colors.dart';
 import '../shared/widgets/app_top_bar.dart';
+import '../social/invite_card.dart';
 
 /// Social tab — placeholder screen surfacing the unreleased Clans / Wars /
 /// Tournaments feature set. Per redesign mock (May 2026): shared top bar,
@@ -53,6 +54,9 @@ class SocialScreen extends StatelessWidget {
                     // Second "Coming soon" is intentional per mock — sits
                     // below the feature cards as a soft repeat reminder.
                     _ComingSoonLabel(),
+                    // The one live, actionable element on this screen. Renders
+                    // its own leading gap when enabled, nothing when disabled.
+                    InviteCard(),
                   ],
                 ),
               ),

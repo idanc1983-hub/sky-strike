@@ -22,6 +22,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 import 'enemy_glow_config.dart';
+import 'invite_config.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Parameter keys
@@ -63,6 +64,21 @@ class RcKeys {
   static const enemyGlowPulseAmplitude = 'enemy_glow__pulse_amplitude__v1';
   static const enemyGlowPulsePeriodMs = 'enemy_glow__pulse_period_ms__v1';
   static const enemyGlowColors = 'enemy_glow__colors__v1';
+
+  // Invite Friends — primitive-typed keys, defaults registered in code.
+  static const inviteEnabled = 'invite__enabled__v1';
+  static const inviteDailyCap = 'invite__daily_cap__v1';
+  static const inviteCooldownHours = 'invite__cooldown_hours__v1';
+  static const inviteRewardGems = 'invite__reward_gems__v1';
+  static const inviteRewardCoins = 'invite__reward_coins__v1';
+  static const inviteShareMessage = 'invite__share_message__v1';
+  static const inviteShareUrl = 'invite__share_url__v1';
+
+  // Notification badges — live kill-switches, primitive bools, defaults in code.
+  static const notificationsDailyRewardBadgeEnabled =
+      'notifications__daily_reward_badge_enabled__v1';
+  static const notificationsInviteRewardBadgeEnabled =
+      'notifications__invite_reward_badge_enabled__v1';
 }
 
 const Map<String, Object> _enemyGlowPrimitiveDefaults = <String, Object>{
@@ -73,6 +89,23 @@ const Map<String, Object> _enemyGlowPrimitiveDefaults = <String, Object>{
   RcKeys.enemyGlowPulsePeriodMs: 1200,
   RcKeys.enemyGlowColors:
       '{"1":"#EF9F27","2":"#EF9F27","3":"#EF9F27","4":"#45C4F0","5":"#EF9F27","6":"#EF9F27"}',
+};
+
+const Map<String, Object> _invitePrimitiveDefaults = <String, Object>{
+  RcKeys.inviteEnabled: true,
+  RcKeys.inviteDailyCap: 2,
+  RcKeys.inviteCooldownHours: 24,
+  RcKeys.inviteRewardGems: 10,
+  RcKeys.inviteRewardCoins: 150,
+  RcKeys.inviteShareMessage:
+      'Come fly with me in SKYSTRIKE — fast top-down aerial combat. Download free:',
+  RcKeys.inviteShareUrl:
+      'https://play.google.com/store/apps/details?id=com.skystrike.skystrike',
+};
+
+const Map<String, Object> _notificationsPrimitiveDefaults = <String, Object>{
+  RcKeys.notificationsDailyRewardBadgeEnabled: true,
+  RcKeys.notificationsInviteRewardBadgeEnabled: true,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -363,18 +396,15 @@ class CurrencyPack {
 class ChestDeal {
   final String chestId;
   final int coinPrice;
-  final int gemPrice;
 
   const ChestDeal({
     required this.chestId,
     required this.coinPrice,
-    required this.gemPrice,
   });
 
   factory ChestDeal.fromJson(Map<String, dynamic> j) => ChestDeal(
         chestId: _asString(j['chest_id']) ?? '',
         coinPrice: _asInt(j['coin_price']) ?? 0,
-        gemPrice: _asInt(j['gem_price']) ?? 0,
       );
 }
 
@@ -825,6 +855,7 @@ class RemoteConfigService {
   Map<String, List<StageConfig>>? _stages;
   MonetizationConfig? _monetization;
   EnemyGlowConfig? _enemyGlow;
+  InviteConfig? _invite;
 
   /// Initialize with sensible polling intervals.
   /// In debug builds we allow frequent fetches; in release we cache for 1h.
@@ -871,6 +902,8 @@ class RemoteConfigService {
       }
     }
     defaults.addAll(_enemyGlowPrimitiveDefaults);
+    defaults.addAll(_invitePrimitiveDefaults);
+    defaults.addAll(_notificationsPrimitiveDefaults);
     if (defaults.isNotEmpty) {
       await _rc.setDefaults(defaults);
     }
@@ -889,6 +922,7 @@ class RemoteConfigService {
     _stages = null;
     _monetization = null;
     _enemyGlow = null;
+    _invite = null;
   }
 
   /// Seeds the challenge caches directly so unit tests can exercise the
@@ -1001,6 +1035,48 @@ class RemoteConfigService {
       );
     } catch (_) {
       return _enemyGlow = EnemyGlowConfig.fallback;
+    }
+  }
+
+  /// Cached Invite Friends config. Rebuilt once per successful fetch
+  /// (cleared in [_clearCaches]); reads primitive `invite__*__v1` keys whose
+  /// defaults are registered in code via [_invitePrimitiveDefaults].
+  InviteConfig get invite {
+    final cached = _invite;
+    if (cached != null) return cached;
+    try {
+      return _invite = InviteConfig(
+        enabled: _rc.getBool(RcKeys.inviteEnabled),
+        dailyCap: _rc.getInt(RcKeys.inviteDailyCap),
+        cooldownHours: _rc.getInt(RcKeys.inviteCooldownHours),
+        rewardGems: _rc.getInt(RcKeys.inviteRewardGems),
+        rewardCoins: _rc.getInt(RcKeys.inviteRewardCoins),
+        shareMessage: _rc.getString(RcKeys.inviteShareMessage),
+        shareUrl: _rc.getString(RcKeys.inviteShareUrl),
+      );
+    } catch (_) {
+      return _invite = InviteConfig.fallback;
+    }
+  }
+
+  /// Live kill-switch for the home MENU daily-reward badge. Fails open (true)
+  /// if RC is unavailable — the badge only ever shows when a reward is actually
+  /// unclaimed, so an open default can't produce a false alert.
+  bool get dailyRewardBadgeEnabled {
+    try {
+      return _rc.getBool(RcKeys.notificationsDailyRewardBadgeEnabled);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Live kill-switch for the Social invite-reward badge. Fails open (true),
+  /// same reasoning as [dailyRewardBadgeEnabled].
+  bool get inviteRewardBadgeEnabled {
+    try {
+      return _rc.getBool(RcKeys.notificationsInviteRewardBadgeEnabled);
+    } catch (_) {
+      return true;
     }
   }
 
