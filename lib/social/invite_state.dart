@@ -17,18 +17,27 @@ typedef GrantReward = void Function({required int coins, required int gems});
 /// of Firebase and is unit-testable.
 typedef LogEvent = void Function(String name, {Map<String, Object>? params});
 
-/// Signature for presenting the OS share sheet. Defaults to [Share.share];
-/// injectable so tests can drive success / failure without a platform channel.
-typedef ShareFn = Future<void> Function(String text);
+/// Signature for presenting the OS share sheet. Defaults to [_shareText];
+/// injectable so tests can drive the [ShareResult] without a platform channel.
+typedef ShareFn = Future<ShareResult> Function(String text);
+
+/// Default [ShareFn]: hands plain text to the OS share sheet via share_plus and
+/// returns the resulting [ShareResult]. share_plus 11+ dropped the static
+/// `Share.share` in favour of the [SharePlus] instance API, so the call is
+/// wrapped here to keep the `(String) -> Future<ShareResult>` shape
+/// [InviteState] depends on.
+Future<ShareResult> _shareText(String text) =>
+    SharePlus.instance.share(ShareParams(text: text));
 
 /// Owns the Invite Friends feature state: a daily share allowance that grants a
-/// symbolic reward per share and enters a cooldown once exhausted.
+/// symbolic reward on each successful share, and enters a cooldown once
+/// exhausted.
 ///
 /// All tunables come from the resolved [InviteConfig] (Remote Config); nothing
 /// player-facing is hardcoded. State (`sharesUsed`, `cooldownEndsAt`) is
-/// persisted to SharedPreferences and reconciled against the wall clock on
-/// load, on app resume, and on every ticker tick — so a cooldown that elapses
-/// while the app is backgrounded still resets correctly.
+/// persisted to SharedPreferences and the cooldown is reconciled against the
+/// wall clock on load, on app resume, and on every ticker tick — so a cooldown
+/// that elapses while the app is backgrounded still resets correctly.
 class InviteState extends ChangeNotifier with WidgetsBindingObserver {
   static const _kSharesUsed = 'invite__shares_used__v1';
   static const _kCooldownEndsAt = 'invite__cooldown_ends_at__v1';
@@ -53,7 +62,7 @@ class InviteState extends ChangeNotifier with WidgetsBindingObserver {
   })  : _cfg = config,
         _onGrant = onGrant,
         _logEvent = logEvent,
-        _shareFn = shareFn ?? Share.share {
+        _shareFn = shareFn ?? _shareText {
     WidgetsBinding.instance.addObserver(this);
     _load();
   }
@@ -149,9 +158,11 @@ class InviteState extends ChangeNotifier with WidgetsBindingObserver {
 
   // ── Share flow ──────────────────────────────────────────────────────────────
 
-  /// Presents the OS share sheet and, on successful presentation, grants the
-  /// reward and decrements the daily allowance. Exactly one grant + one
-  /// decrement per completed share: the [_isSharing] guard plus awaiting the
+  /// Presents the OS share sheet and grants the reward immediately when the user
+  /// actually chose a share target ([ShareResultStatus.success]). A dismissed or
+  /// cancelled sheet grants nothing and consumes no allowance — this closes the
+  /// "reward for opening then cancelling the sheet" exploit. Exactly one grant +
+  /// one decrement per successful share: the [_isSharing] guard plus awaiting the
   /// share future make a double-grant impossible.
   Future<void> onSharePressed() async {
     if (!canShare) return;
@@ -160,18 +171,23 @@ class InviteState extends ChangeNotifier with WidgetsBindingObserver {
 
     try {
       _logEvent('invite_share_tapped');
-      // Grant on successful presentation (future completes without throwing).
-      // Android does not reliably report whether the user actually sent, and
-      // the reward is symbolic, so gating on completion is the right trade-off.
-      await _shareFn(_cfg.shareText);
+      final result = await _shareFn(_cfg.shareText);
+
+      // Only a completed share (a target was picked) earns the reward. On
+      // dismiss/cancel we bail before touching the wallet or the allowance, so
+      // the Share button simply stays available for another try.
+      if (result.status != ShareResultStatus.success) {
+        _logEvent('invite_share_dismissed',
+            params: {'status': result.status.name});
+        return;
+      }
 
       _onGrant(coins: rewardCoins, gems: rewardGems);
       sharesUsed += 1;
       await _persist();
 
       if (sharesUsed >= cap) {
-        cooldownEndsAt =
-            DateTime.now().add(Duration(hours: cooldownHours));
+        cooldownEndsAt = DateTime.now().add(Duration(hours: cooldownHours));
         await _persist();
         _startTicker();
         _logEvent('invite_cooldown_started',

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:skystrike/config/invite_config.dart';
 import 'package:skystrike/social/invite_state.dart';
@@ -9,11 +10,19 @@ const _cfg = InviteConfig(
   enabled: true,
   dailyCap: 2,
   cooldownHours: 24,
-  rewardGems: 10,
-  rewardCoins: 150,
+  rewardGems: 5,
+  rewardCoins: 50,
   shareMessage: 'Come fly with me',
   shareUrl: 'https://example.com/app',
+  iosShareUrl: 'https://example.com/ios-app',
 );
+
+/// A completed share (the user picked a target) — the only outcome that earns
+/// the reward.
+const _shareSuccess = ShareResult('mock.target', ShareResultStatus.success);
+
+/// A cancelled/dismissed share — earns nothing and consumes no allowance.
+const _shareDismissed = ShareResult('', ShareResultStatus.dismissed);
 
 /// Test rig: captures grants and analytics, and lets each test drive the
 /// share future's outcome.
@@ -24,9 +33,9 @@ class _Rig {
   final List<String> events = <String>[];
   final Map<String, Map<String, Object>?> lastParams = {};
 
-  // Default: share succeeds immediately.
-  Future<void> Function(String text) shareFn =
-      (_) async {};
+  // Default: share succeeds (a target was chosen).
+  Future<ShareResult> Function(String text) shareFn =
+      (_) async => _shareSuccess;
 
   InviteState build() => InviteState(
         config: _cfg,
@@ -61,7 +70,8 @@ void main() {
     s.dispose();
   });
 
-  test('single share grants once and keeps a remaining share', () async {
+  test('single share grants once immediately and keeps a remaining share',
+      () async {
     final rig = _Rig();
     final s = rig.build();
     await _settle();
@@ -69,13 +79,32 @@ void main() {
     await s.onSharePressed();
 
     expect(rig.grantCount, 1);
-    expect(rig.grantedCoins, 150);
-    expect(rig.grantedGems, 10);
+    expect(rig.grantedCoins, 50);
+    expect(rig.grantedGems, 5);
     expect(s.remaining, 1);
     expect(s.isOnCooldown, isFalse);
     expect(s.canShare, isTrue, reason: 'single-share user keeps their share');
-    expect(rig.events, containsAll(['invite_share_tapped', 'invite_share_completed']));
+    expect(rig.events,
+        containsAll(['invite_share_tapped', 'invite_share_completed']));
     expect(rig.events, isNot(contains('invite_cooldown_started')));
+    s.dispose();
+  });
+
+  test('a dismissed share grants nothing and keeps the allowance', () async {
+    final rig = _Rig();
+    rig.shareFn = (_) async => _shareDismissed;
+    final s = rig.build();
+    await _settle();
+
+    await s.onSharePressed();
+
+    expect(rig.grantCount, 0);
+    expect(rig.grantedCoins, 0);
+    expect(s.remaining, 2, reason: 'a cancelled sheet consumes no allowance');
+    expect(s.canShare, isTrue);
+    expect(rig.events, isNot(contains('invite_share_completed')));
+    expect(rig.events, contains('invite_share_dismissed'));
+    expect(rig.lastParams['invite_share_dismissed'], {'status': 'dismissed'});
     s.dispose();
   });
 
@@ -97,8 +126,8 @@ void main() {
     expect(rig.events, contains('invite_cooldown_started'));
     expect(rig.lastParams['invite_cooldown_started'], {'cooldown_hours': 24});
     expect(rig.lastParams['invite_share_completed'], {
-      'reward_gems': 10,
-      'reward_coins': 150,
+      'reward_gems': 5,
+      'reward_coins': 50,
       'shares_used': 2,
     });
     s.dispose();
@@ -106,14 +135,14 @@ void main() {
 
   test('concurrent double-tap grants exactly once', () async {
     final rig = _Rig();
-    final gate = Completer<void>();
+    final gate = Completer<ShareResult>();
     rig.shareFn = (_) => gate.future; // hold the first share in-flight
     final s = rig.build();
     await _settle();
 
     final first = s.onSharePressed();
     final second = s.onSharePressed(); // must no-op: canShare is false
-    gate.complete();
+    gate.complete(_shareSuccess);
     await Future.wait([first, second]);
 
     expect(rig.grantCount, 1);
@@ -177,14 +206,15 @@ void main() {
         enabled: false,
         dailyCap: 2,
         cooldownHours: 24,
-        rewardGems: 10,
-        rewardCoins: 150,
+        rewardGems: 5,
+        rewardCoins: 50,
         shareMessage: 'x',
         shareUrl: 'y',
+        iosShareUrl: 'z',
       ),
       onGrant: ({required int coins, required int gems}) {},
       logEvent: (name, {Map<String, Object>? params}) {},
-      shareFn: (_) async {},
+      shareFn: (_) async => _shareSuccess,
     );
     await _settle();
     expect(s.canShare, isFalse);

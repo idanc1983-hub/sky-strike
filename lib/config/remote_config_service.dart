@@ -73,6 +73,7 @@ class RcKeys {
   static const inviteRewardCoins = 'invite__reward_coins__v1';
   static const inviteShareMessage = 'invite__share_message__v1';
   static const inviteShareUrl = 'invite__share_url__v1';
+  static const inviteShareUrlIos = 'invite__share_url_ios__v1';
 
   // Notification badges — live kill-switches, primitive bools, defaults in code.
   static const notificationsDailyRewardBadgeEnabled =
@@ -95,12 +96,13 @@ const Map<String, Object> _invitePrimitiveDefaults = <String, Object>{
   RcKeys.inviteEnabled: true,
   RcKeys.inviteDailyCap: 2,
   RcKeys.inviteCooldownHours: 24,
-  RcKeys.inviteRewardGems: 10,
-  RcKeys.inviteRewardCoins: 150,
+  RcKeys.inviteRewardGems: 5,
+  RcKeys.inviteRewardCoins: 50,
   RcKeys.inviteShareMessage:
       'Come fly with me in SKYSTRIKE — fast top-down aerial combat. Download free:',
   RcKeys.inviteShareUrl:
       'https://play.google.com/store/apps/details?id=com.skystrike.skystrike',
+  RcKeys.inviteShareUrlIos: 'https://apps.apple.com/app/id6769123208',
 };
 
 const Map<String, Object> _notificationsPrimitiveDefaults = <String, Object>{
@@ -1053,6 +1055,7 @@ class RemoteConfigService {
         rewardCoins: _rc.getInt(RcKeys.inviteRewardCoins),
         shareMessage: _rc.getString(RcKeys.inviteShareMessage),
         shareUrl: _rc.getString(RcKeys.inviteShareUrl),
+        iosShareUrl: _rc.getString(RcKeys.inviteShareUrlIos),
       );
     } catch (_) {
       return _invite = InviteConfig.fallback;
